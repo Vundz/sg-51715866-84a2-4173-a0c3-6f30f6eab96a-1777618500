@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Sprout } from "lucide-react";
+import { Plus, Edit, Trash2, Sprout, X } from "lucide-react";
 import { PlantType, PlantVariety } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
 
@@ -16,35 +16,58 @@ export default function PlantTypesPage() {
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
   const [varieties, setVarieties] = useState<PlantVariety[]>([]);
   const [isAddTypeOpen, setIsAddTypeOpen] = useState(false);
-  const [isAddVarietyOpen, setIsAddVarietyOpen] = useState(false);
-  const [selectedTypeId, setSelectedTypeId] = useState<string>("");
   const [editingType, setEditingType] = useState<PlantType | null>(null);
-  const [editingVariety, setEditingVariety] = useState<PlantVariety | null>(null);
+  const [tempVarieties, setTempVarieties] = useState<Array<{id?: string; name: string; characteristics: string}>>([]);
 
   useEffect(() => {
     setPlantTypes(getStorageData<PlantType>(STORAGE_KEYS.PLANT_TYPES));
     setVarieties(getStorageData<PlantVariety>(STORAGE_KEYS.PLANT_VARIETIES));
   }, []);
 
+  const handleOpenDialog = (type?: PlantType) => {
+    if (type) {
+      setEditingType(type);
+      const typeVarieties = varieties.filter(v => v.plantTypeId === type.id);
+      setTempVarieties(typeVarieties.map(v => ({
+        id: v.id,
+        name: v.name,
+        characteristics: v.characteristics || ""
+      })));
+    } else {
+      setEditingType(null);
+      setTempVarieties([]);
+    }
+    setIsAddTypeOpen(true);
+  };
+
+  const handleAddVarietyField = () => {
+    setTempVarieties([...tempVarieties, { name: "", characteristics: "" }]);
+  };
+
+  const handleRemoveVarietyField = (index: number) => {
+    setTempVarieties(tempVarieties.filter((_, i) => i !== index));
+  };
+
+  const handleVarietyChange = (index: number, field: "name" | "characteristics", value: string) => {
+    const updated = [...tempVarieties];
+    updated[index][field] = value;
+    setTempVarieties(updated);
+  };
+
   const handleSavePlantType = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    const plantType: PlantType = editingType ? {
-      ...editingType,
-      name: formData.get("name") as string,
-      scientificName: formData.get("scientificName") as string,
-      category: formData.get("category") as string,
-      description: formData.get("description") as string,
-      growthDuration: Number(formData.get("growthDuration"))
-    } : {
-      id: generateId(),
+    const plantTypeId = editingType?.id || generateId();
+    
+    const plantType: PlantType = {
+      id: plantTypeId,
       name: formData.get("name") as string,
       scientificName: formData.get("scientificName") as string,
       category: formData.get("category") as string,
       description: formData.get("description") as string,
       growthDuration: Number(formData.get("growthDuration")),
-      createdAt: new Date().toISOString()
+      createdAt: editingType?.createdAt || new Date().toISOString()
     };
 
     const updatedTypes = editingType
@@ -53,35 +76,53 @@ export default function PlantTypesPage() {
     
     setPlantTypes(updatedTypes);
     setStorageData(STORAGE_KEYS.PLANT_TYPES, updatedTypes);
+
+    // Handle varieties
+    const existingVarietiesForType = varieties.filter(v => v.plantTypeId === plantTypeId);
+    const existingIds = new Set(existingVarietiesForType.map(v => v.id));
+    
+    // Filter valid varieties (with non-empty names)
+    const validVarieties = tempVarieties.filter(v => v.name.trim() !== "");
+    
+    const updatedVarieties = validVarieties.map(v => {
+      if (v.id) {
+        // Existing variety - update it
+        return {
+          id: v.id,
+          plantTypeId: plantTypeId,
+          name: v.name,
+          characteristics: v.characteristics,
+          createdAt: existingVarietiesForType.find(ev => ev.id === v.id)?.createdAt || new Date().toISOString()
+        };
+      } else {
+        // New variety
+        return {
+          id: generateId(),
+          plantTypeId: plantTypeId,
+          name: v.name,
+          characteristics: v.characteristics,
+          createdAt: new Date().toISOString()
+        };
+      }
+    });
+
+    // Remove varieties that were deleted
+    const updatedVarietyIds = new Set(updatedVarieties.map(v => v.id));
+    const varietiesToKeep = varieties.filter(v => 
+      v.plantTypeId !== plantTypeId || updatedVarietyIds.has(v.id)
+    );
+
+    const finalVarieties = [
+      ...varietiesToKeep.filter(v => v.plantTypeId !== plantTypeId),
+      ...updatedVarieties
+    ];
+
+    setVarieties(finalVarieties);
+    setStorageData(STORAGE_KEYS.PLANT_VARIETIES, finalVarieties);
+    
     setIsAddTypeOpen(false);
     setEditingType(null);
-  };
-
-  const handleSaveVariety = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    
-    const variety: PlantVariety = editingVariety ? {
-      ...editingVariety,
-      name: formData.get("name") as string,
-      characteristics: formData.get("characteristics") as string
-    } : {
-      id: generateId(),
-      plantTypeId: selectedTypeId,
-      name: formData.get("name") as string,
-      characteristics: formData.get("characteristics") as string,
-      createdAt: new Date().toISOString()
-    };
-
-    const updatedVarieties = editingVariety
-      ? varieties.map(v => v.id === editingVariety.id ? variety : v)
-      : [...varieties, variety];
-    
-    setVarieties(updatedVarieties);
-    setStorageData(STORAGE_KEYS.PLANT_VARIETIES, updatedVarieties);
-    setIsAddVarietyOpen(false);
-    setEditingVariety(null);
-    setSelectedTypeId("");
+    setTempVarieties([]);
   };
 
   const handleDeleteType = (id: string) => {
@@ -91,14 +132,6 @@ export default function PlantTypesPage() {
       setPlantTypes(updatedTypes);
       setVarieties(updatedVarieties);
       setStorageData(STORAGE_KEYS.PLANT_TYPES, updatedTypes);
-      setStorageData(STORAGE_KEYS.PLANT_VARIETIES, updatedVarieties);
-    }
-  };
-
-  const handleDeleteVariety = (id: string) => {
-    if (confirm("Are you sure you want to delete this variety?")) {
-      const updatedVarieties = varieties.filter(v => v.id !== id);
-      setVarieties(updatedVarieties);
       setStorageData(STORAGE_KEYS.PLANT_VARIETIES, updatedVarieties);
     }
   };
@@ -122,48 +155,105 @@ export default function PlantTypesPage() {
         
         <Dialog open={isAddTypeOpen} onOpenChange={setIsAddTypeOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => setEditingType(null)} className="bg-green-600 hover:bg-green-700">
+            <Button onClick={() => handleOpenDialog()} className="bg-green-600 hover:bg-green-700">
               <Plus className="w-4 h-4 mr-2" />
               Add Plant Type
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingType ? "Edit" : "Add New"} Plant Type</DialogTitle>
               <DialogDescription>
-                Enter the details for the plant type
+                Enter the details for the plant type and add varieties
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSavePlantType} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Plant Name *</Label>
-                  <Input id="name" name="name" defaultValue={editingType?.name} required />
+            <form onSubmit={handleSavePlantType} className="space-y-6">
+              <div className="space-y-4 border-b pb-4">
+                <h3 className="font-semibold text-lg">Plant Type Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Plant Name *</Label>
+                    <Input id="name" name="name" defaultValue={editingType?.name} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="scientificName">Scientific Name</Label>
+                    <Input id="scientificName" name="scientificName" defaultValue={editingType?.scientificName} />
+                  </div>
                 </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category *</Label>
+                    <Input id="category" name="category" defaultValue={editingType?.category} required placeholder="e.g., Vegetable, Herb, Flower" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="growthDuration">Growth Duration (days) *</Label>
+                    <Input id="growthDuration" name="growthDuration" type="number" defaultValue={editingType?.growthDuration} required />
+                  </div>
+                </div>
+                
                 <div className="space-y-2">
-                  <Label htmlFor="scientificName">Scientific Name</Label>
-                  <Input id="scientificName" name="scientificName" defaultValue={editingType?.scientificName} />
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea id="description" name="description" defaultValue={editingType?.description} rows={3} />
                 </div>
               </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category *</Label>
-                  <Input id="category" name="category" defaultValue={editingType?.category} required placeholder="e.g., Vegetable, Herb, Flower" />
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-lg">Varieties</h3>
+                  <Button type="button" size="sm" variant="outline" onClick={handleAddVarietyField}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Variety
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="growthDuration">Growth Duration (days) *</Label>
-                  <Input id="growthDuration" name="growthDuration" type="number" defaultValue={editingType?.growthDuration} required />
-                </div>
+
+                {tempVarieties.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    No varieties added. Click &quot;Add Variety&quot; to include varieties for this plant type.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {tempVarieties.map((variety, index) => (
+                      <div key={index} className="border rounded-lg p-4 space-y-3 bg-gray-50 dark:bg-gray-800">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Variety {index + 1}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRemoveVarietyField(index)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <Label>Variety Name *</Label>
+                            <Input
+                              value={variety.name}
+                              onChange={(e) => handleVarietyChange(index, "name", e.target.value)}
+                              placeholder="e.g., Cherry, Roma"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Characteristics</Label>
+                            <Input
+                              value={variety.characteristics}
+                              onChange={(e) => handleVarietyChange(index, "characteristics", e.target.value)}
+                              placeholder="e.g., Sweet, Early maturing"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea id="description" name="description" defaultValue={editingType?.description} rows={3} />
-              </div>
-              
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => { setIsAddTypeOpen(false); setEditingType(null); }}>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button type="button" variant="outline" onClick={() => { setIsAddTypeOpen(false); setEditingType(null); setTempVarieties([]); }}>
                   Cancel
                 </Button>
                 <Button type="submit" className="bg-green-600 hover:bg-green-700">
@@ -182,7 +272,7 @@ export default function PlantTypesPage() {
               <Sprout className="w-16 h-16 text-gray-400 mb-4" />
               <h3 className="text-xl font-semibold mb-2">No Plant Types Yet</h3>
               <p className="text-gray-600 dark:text-gray-400 mb-4">Get started by adding your first plant type</p>
-              <Button onClick={() => setIsAddTypeOpen(true)} className="bg-green-600 hover:bg-green-700">
+              <Button onClick={() => handleOpenDialog()} className="bg-green-600 hover:bg-green-700">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Plant Type
               </Button>
@@ -213,10 +303,7 @@ export default function PlantTypesPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => {
-                        setEditingType(type);
-                        setIsAddTypeOpen(true);
-                      }}
+                      onClick={() => handleOpenDialog(type)}
                     >
                       <Edit className="w-4 h-4" />
                     </Button>
@@ -233,53 +320,7 @@ export default function PlantTypesPage() {
               </CardHeader>
               
               <CardContent>
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-semibold text-lg">Varieties ({getVarietiesForType(type.id).length})</h4>
-                  <Dialog open={isAddVarietyOpen && selectedTypeId === type.id} onOpenChange={(open) => {
-                    setIsAddVarietyOpen(open);
-                    if (!open) setSelectedTypeId("");
-                  }}>
-                    <DialogTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedTypeId(type.id);
-                          setEditingVariety(null);
-                        }}
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Variety
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>{editingVariety ? "Edit" : "Add New"} Variety</DialogTitle>
-                        <DialogDescription>
-                          Add a variety for {type.name}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <form onSubmit={handleSaveVariety} className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="variety-name">Variety Name *</Label>
-                          <Input id="variety-name" name="name" defaultValue={editingVariety?.name} required />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="characteristics">Characteristics</Label>
-                          <Textarea id="characteristics" name="characteristics" defaultValue={editingVariety?.characteristics} rows={3} placeholder="Describe unique characteristics of this variety" />
-                        </div>
-                        <div className="flex justify-end gap-2">
-                          <Button type="button" variant="outline" onClick={() => { setIsAddVarietyOpen(false); setSelectedTypeId(""); setEditingVariety(null); }}>
-                            Cancel
-                          </Button>
-                          <Button type="submit" className="bg-green-600 hover:bg-green-700">
-                            {editingVariety ? "Update" : "Add"} Variety
-                          </Button>
-                        </div>
-                      </form>
-                    </DialogContent>
-                  </Dialog>
-                </div>
+                <h4 className="font-semibold text-lg mb-3">Varieties ({getVarietiesForType(type.id).length})</h4>
                 
                 {getVarietiesForType(type.id).length > 0 ? (
                   <Table>
@@ -287,7 +328,6 @@ export default function PlantTypesPage() {
                       <TableRow>
                         <TableHead>Variety Name</TableHead>
                         <TableHead>Characteristics</TableHead>
-                        <TableHead className="w-24">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -297,36 +337,13 @@ export default function PlantTypesPage() {
                           <TableCell className="text-sm text-gray-600 dark:text-gray-400">
                             {variety.characteristics || "No characteristics specified"}
                           </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setEditingVariety(variety);
-                                  setSelectedTypeId(type.id);
-                                  setIsAddVarietyOpen(true);
-                                }}
-                              >
-                                <Edit className="w-3 h-3" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-red-600 hover:text-red-700"
-                                onClick={() => handleDeleteVariety(variety.id)}
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 ) : (
                   <p className="text-center text-gray-500 py-4 text-sm">
-                    No varieties added yet. Click &quot;Add Variety&quot; to get started.
+                    No varieties added yet. Click &quot;Edit&quot; to add varieties.
                   </p>
                 )}
               </CardContent>
