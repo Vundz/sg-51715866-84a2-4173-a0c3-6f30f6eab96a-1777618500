@@ -3,8 +3,37 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Sprout, MapPin, Package, Droplets, BarChart3 } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { storage } from "@/lib/storage";
+import type { PlantType, Planting, Harvest } from "@/types";
 
 export default function HomePage() {
+  const [stats, setStats] = useState({
+    activePlantings: 0,
+    plantVarieties: 0,
+    recentHarvests: 0
+  });
+
+  useEffect(() => {
+    const plantTypes = storage.get<PlantType[]>("plantTypes") || [];
+    const plantings = storage.get<Planting[]>("plantings") || [];
+    const harvests = storage.get<Harvest[]>("harvests") || [];
+
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    const recentHarvestsCount = harvests.filter(h => {
+      const harvestDate = new Date(h.harvestDate);
+      return harvestDate >= firstDayOfMonth;
+    }).length;
+
+    setStats({
+      activePlantings: plantings.length,
+      plantVarieties: plantTypes.length,
+      recentHarvests: recentHarvestsCount
+    });
+  }, []);
+
   const modules = [
     {
       title: "Plant Types",
@@ -97,7 +126,7 @@ export default function HomePage() {
                 <CardTitle className="text-lg">Quick Stats</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-green-600">0</div>
+                <div className="text-3xl font-bold text-green-600">{stats.activePlantings}</div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Active Plantings</p>
               </CardContent>
             </Card>
@@ -107,7 +136,7 @@ export default function HomePage() {
                 <CardTitle className="text-lg">Total Varieties</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-blue-600">0</div>
+                <div className="text-3xl font-bold text-blue-600">{stats.plantVarieties}</div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Plant Varieties</p>
               </CardContent>
             </Card>
@@ -117,7 +146,7 @@ export default function HomePage() {
                 <CardTitle className="text-lg">Recent Harvests</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-amber-600">0</div>
+                <div className="text-3xl font-bold text-amber-600">{stats.recentHarvests}</div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">This Month</p>
               </CardContent>
             </Card>
