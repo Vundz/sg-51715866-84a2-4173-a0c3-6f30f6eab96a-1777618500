@@ -190,14 +190,13 @@ export default function PlantingsPage() {
                   <Label htmlFor="varietyId">Variety (Optional)</Label>
                   <Select 
                     name="varietyId" 
-                    defaultValue={editingPlanting?.varietyId}
+                    defaultValue={editingPlanting?.varietyId || undefined}
                     disabled={!selectedPlantType && !editingPlanting}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select variety" />
+                      <SelectValue placeholder="No variety selected" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No variety</SelectItem>
                       {filteredVarieties.map(variety => (
                         <SelectItem key={variety.id} value={variety.id}>{variety.name}</SelectItem>
                       ))}
