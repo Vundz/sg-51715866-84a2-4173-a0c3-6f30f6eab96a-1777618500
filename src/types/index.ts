@@ -53,10 +53,12 @@ export interface Harvest {
 
 export interface Treatment {
   id: string;
-  name: string;
-  type: "fungicide" | "pesticide" | "fertilizer";
-  manufacturer?: string;
-  activeIngredient?: string;
+  plantingId: string;
+  treatmentType: "fungicide" | "pesticide" | "fertilizer" | "other";
+  chemicalName: string;
+  applicationDate: string;
+  dosage: string;
+  notes?: string;
   createdAt: string;
 }
 
