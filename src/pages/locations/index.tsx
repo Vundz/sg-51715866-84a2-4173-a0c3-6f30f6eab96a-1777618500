@@ -28,15 +28,11 @@ export default function LocationsPage() {
     const location: Location = editingLocation ? {
       ...editingLocation,
       name: formData.get("name") as string,
-      greenhouse: formData.get("greenhouse") as string,
-      section: formData.get("section") as string,
       capacity: Number(formData.get("capacity")),
       notes: formData.get("notes") as string
     } : {
       id: generateId(),
       name: formData.get("name") as string,
-      greenhouse: formData.get("greenhouse") as string,
-      section: formData.get("section") as string,
       capacity: Number(formData.get("capacity")),
       currentOccupancy: 0,
       notes: formData.get("notes") as string,
@@ -77,10 +73,10 @@ export default function LocationsPage() {
         <div>
           <h1 className="text-4xl font-bold flex items-center gap-3">
             <MapPin className="w-10 h-10 text-purple-600" />
-            Greenhouse Locations
+            Locations
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Manage greenhouse sections and planting locations
+            Manage planting locations and capacity
           </p>
         </div>
         
@@ -95,7 +91,7 @@ export default function LocationsPage() {
             <DialogHeader>
               <DialogTitle>{editingLocation ? "Edit" : "Add New"} Location</DialogTitle>
               <DialogDescription>
-                Enter the details for the greenhouse location
+                Enter the details for the planting location
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSaveLocation} className="space-y-4">
@@ -103,17 +99,6 @@ export default function LocationsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="name">Location Name *</Label>
                   <Input id="name" name="name" defaultValue={editingLocation?.name} required placeholder="e.g., Section A-1" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="greenhouse">Greenhouse *</Label>
-                  <Input id="greenhouse" name="greenhouse" defaultValue={editingLocation?.greenhouse} required placeholder="e.g., Greenhouse 1" />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="section">Section</Label>
-                  <Input id="section" name="section" defaultValue={editingLocation?.section} placeholder="e.g., North Wing" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="capacity">Capacity (units) *</Label>
@@ -179,7 +164,7 @@ export default function LocationsPage() {
           <CardContent className="flex flex-col items-center justify-center py-12">
             <MapPin className="w-16 h-16 text-gray-400 mb-4" />
             <h3 className="text-xl font-semibold mb-2">No Locations Yet</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">Add your first greenhouse location to get started</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">Add your first planting location to get started</p>
             <Button onClick={() => setIsDialogOpen(true)} className="bg-purple-600 hover:bg-purple-700">
               <Plus className="w-4 h-4 mr-2" />
               Add Location
@@ -190,15 +175,13 @@ export default function LocationsPage() {
         <Card>
           <CardHeader>
             <CardTitle>All Locations</CardTitle>
-            <CardDescription>Manage your greenhouse locations and track capacity</CardDescription>
+            <CardDescription>Manage your planting locations and track capacity</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Greenhouse</TableHead>
-                  <TableHead>Section</TableHead>
+                  <TableHead>Location Name</TableHead>
                   <TableHead>Capacity</TableHead>
                   <TableHead>Occupancy</TableHead>
                   <TableHead>Status</TableHead>
@@ -211,8 +194,6 @@ export default function LocationsPage() {
                   return (
                     <TableRow key={location.id}>
                       <TableCell className="font-medium">{location.name}</TableCell>
-                      <TableCell>{location.greenhouse}</TableCell>
-                      <TableCell>{location.section || "-"}</TableCell>
                       <TableCell>{location.capacity} units</TableCell>
                       <TableCell>
                         {location.currentOccupancy} / {location.capacity}
