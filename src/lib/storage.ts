@@ -1,0 +1,25 @@
+
+export const STORAGE_KEYS = {
+  PLANT_TYPES: "khulisapp_plant_types",
+  PLANT_VARIETIES: "khulisapp_plant_varieties",
+  LOCATIONS: "khulisapp_locations",
+  PLANTINGS: "khulisapp_plantings",
+  HARVESTS: "khulisapp_harvests",
+  TREATMENTS: "khulisapp_treatments",
+  TREATMENT_APPLICATIONS: "khulisapp_treatment_applications"
+};
+
+export function getStorageData<T>(key: string): T[] {
+  if (typeof window === "undefined") return [];
+  const data = localStorage.getItem(key);
+  return data ? JSON.parse(data) : [];
+}
+
+export function setStorageData<T>(key: string, data: T[]): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+export function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
