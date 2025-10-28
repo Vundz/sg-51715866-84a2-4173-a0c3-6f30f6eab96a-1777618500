@@ -9,6 +9,25 @@ export const STORAGE_KEYS = {
   TREATMENT_APPLICATIONS: "khulisapp_treatment_applications"
 };
 
+function get<T>(key: string): T | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const item = localStorage.getItem(key);
+  return item ? JSON.parse(item) : null;
+}
+
+function set<T>(key: string, value: T): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(key, JSON.stringify(value));
+  }
+}
+
+export const storage = {
+  get,
+  set
+};
+
 export function getStorageData<T>(key: string): T[] {
   if (typeof window === "undefined") return [];
   const data = localStorage.getItem(key);

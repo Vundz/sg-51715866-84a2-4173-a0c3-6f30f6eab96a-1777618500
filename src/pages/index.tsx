@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Sprout, MapPin, Package, Droplets, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { storage } from "@/lib/storage";
+import { storage, STORAGE_KEYS } from "@/lib/storage";
 import type { PlantType, Planting, Harvest } from "@/types";
 
 export default function HomePage() {
@@ -15,9 +15,9 @@ export default function HomePage() {
   });
 
   useEffect(() => {
-    const plantTypes = storage.get<PlantType[]>("plantTypes") || [];
-    const plantings = storage.get<Planting[]>("plantings") || [];
-    const harvests = storage.get<Harvest[]>("harvests") || [];
+    const plantTypes = storage.get<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || [];
+    const plantings = storage.get<Planting[]>(STORAGE_KEYS.PLANTINGS) || [];
+    const harvests = storage.get<Harvest[]>(STORAGE_KEYS.HARVESTS) || [];
 
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
