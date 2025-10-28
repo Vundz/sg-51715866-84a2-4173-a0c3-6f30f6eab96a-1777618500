@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,13 +10,14 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Edit, Trash2, Droplets, Calendar, Leaf, AlertTriangle } from "lucide-react";
-import { Treatment, Planting, PlantType } from "@/types";
+import { Treatment, Planting, PlantType, PlantVariety } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
 
 export default function TreatmentsPage() {
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
+  const [varieties, setVarieties] = useState<PlantVariety[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTreatment, setEditingTreatment] = useState<Treatment | null>(null);
   const [isBulkMode, setIsBulkMode] = useState(false);
@@ -27,6 +27,7 @@ export default function TreatmentsPage() {
     setTreatments(getStorageData<Treatment>(STORAGE_KEYS.TREATMENTS));
     setPlantings(getStorageData<Planting>(STORAGE_KEYS.PLANTINGS));
     setPlantTypes(getStorageData<PlantType>(STORAGE_KEYS.PLANT_TYPES));
+    setVarieties(getStorageData<PlantVariety>(STORAGE_KEYS.PLANT_VARIETIES));
   }, []);
 
   const activePlantings = plantings.filter(p => p.status === "active");
@@ -110,11 +111,13 @@ export default function TreatmentsPage() {
 
   const getPlantingInfo = (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
-    if (!planting) return { plantType: "Unknown", plantingDate: "", location: "" };
+    if (!planting) return { plantType: "Unknown", variety: "", plantingDate: "", location: "" };
     
     const plantType = plantTypes.find(pt => pt.id === planting.plantTypeId);
+    const variety = planting.varietyId ? varieties.find(v => v.id === planting.varietyId) : null;
     return {
       plantType: plantType?.name || "Unknown",
+      variety: variety?.name || "",
       plantingDate: planting.plantingDate,
       location: planting.locationId
     };
@@ -228,6 +231,7 @@ export default function TreatmentsPage() {
                     ) : (
                       activePlantings.map(planting => {
                         const plantType = plantTypes.find(pt => pt.id === planting.plantTypeId);
+                        const variety = planting.varietyId ? varieties.find(v => v.id === planting.varietyId) : null;
                         return (
                           <div key={planting.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 dark:hover:bg-gray-900 rounded">
                             <Checkbox
@@ -237,6 +241,7 @@ export default function TreatmentsPage() {
                             />
                             <Label htmlFor={`planting-${planting.id}`} className="flex-1 cursor-pointer">
                               <span className="font-medium">{plantType?.name}</span>
+                              {variety && <span className="text-sm text-gray-600 dark:text-gray-400"> ({variety.name})</span>}
                               <span className="text-sm text-gray-500 ml-2">
                                 - {planting.quantity} units (Planted: {new Date(planting.plantingDate).toLocaleDateString()})
                               </span>
@@ -263,9 +268,10 @@ export default function TreatmentsPage() {
                     <SelectContent>
                       {activePlantings.map(planting => {
                         const plantType = plantTypes.find(pt => pt.id === planting.plantTypeId);
+                        const variety = planting.varietyId ? varieties.find(v => v.id === planting.varietyId) : null;
                         return (
                           <SelectItem key={planting.id} value={planting.id}>
-                            {plantType?.name} - {planting.quantity} units (Planted: {new Date(planting.plantingDate).toLocaleDateString()})
+                            {plantType?.name}{variety ? ` (${variety.name})` : ""} - {planting.quantity} units (Planted: {new Date(planting.plantingDate).toLocaleDateString()})
                           </SelectItem>
                         );
                       })}
@@ -410,7 +416,10 @@ export default function TreatmentsPage() {
                   
                   return (
                     <TableRow key={treatment.id}>
-                      <TableCell className="font-medium">{plantingInfo.plantType}</TableCell>
+                      <TableCell className="font-medium">
+                        {plantingInfo.plantType}
+                        {plantingInfo.variety && <span className="text-sm text-gray-600 dark:text-gray-400"> ({plantingInfo.variety})</span>}
+                      </TableCell>
                       <TableCell>
                         <Badge className={getTreatmentTypeColor(treatment.treatmentType)}>
                           {treatment.treatmentType}
