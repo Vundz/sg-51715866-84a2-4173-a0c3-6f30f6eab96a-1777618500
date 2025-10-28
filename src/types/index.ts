@@ -20,8 +20,6 @@ export interface PlantVariety {
 export interface Location {
   id: string;
   name: string;
-  greenhouse: string;
-  section?: string;
   capacity: number;
   currentOccupancy: number;
   notes?: string;
