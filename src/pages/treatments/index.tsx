@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,15 @@ export default function TreatmentsPage() {
   const [selectedPlantings, setSelectedPlantings] = useState<string[]>([]);
 
   useEffect(() => {
-    setTreatments(getStorageData<Treatment>(STORAGE_KEYS.TREATMENTS));
+    const storedTreatments = getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || [];
+    const migratedTreatments = storedTreatments.map(t => ({
+      ...t,
+      applicationMethod: t.applicationMethod || "other"
+    }));
+    setTreatments(migratedTreatments);
+    if (JSON.stringify(storedTreatments) !== JSON.stringify(migratedTreatments)) {
+        setStorageData(STORAGE_KEYS.TREATMENTS, migratedTreatments);
+    }
     setPlantings(getStorageData<Planting>(STORAGE_KEYS.PLANTINGS));
     setPlantTypes(getStorageData<PlantType>(STORAGE_KEYS.PLANT_TYPES));
     setVarieties(getStorageData<PlantVariety>(STORAGE_KEYS.PLANT_VARIETIES));
@@ -37,16 +46,18 @@ export default function TreatmentsPage() {
     const formData = new FormData(e.currentTarget);
     
     const treatmentType = formData.get("treatmentType") as "fungicide" | "pesticide" | "fertilizer" | "other";
+    const applicationMethod = formData.get("applicationMethod") as "spray" | "drench" | "granular" | "other";
     const chemicalName = formData.get("chemicalName") as string;
     const applicationDate = formData.get("applicationDate") as string;
     const dosage = formData.get("dosage") as string;
     const notes = formData.get("notes") as string;
 
     if (isBulkMode && selectedPlantings.length > 0) {
-      const newTreatments = selectedPlantings.map(plantingId => ({
+      const newTreatments: Treatment[] = selectedPlantings.map(plantingId => ({
         id: generateId(),
         plantingId,
         treatmentType,
+        applicationMethod,
         chemicalName,
         applicationDate,
         dosage,
@@ -65,6 +76,7 @@ export default function TreatmentsPage() {
         ...editingTreatment,
         plantingId,
         treatmentType,
+        applicationMethod,
         chemicalName,
         applicationDate,
         dosage,
@@ -73,6 +85,7 @@ export default function TreatmentsPage() {
         id: generateId(),
         plantingId,
         treatmentType,
+        applicationMethod,
         chemicalName,
         applicationDate,
         dosage,
@@ -191,7 +204,7 @@ export default function TreatmentsPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="treatmentType">Treatment Type *</Label>
                   <Select name="treatmentType" required defaultValue={editingTreatment?.treatmentType}>
@@ -206,7 +219,20 @@ export default function TreatmentsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-
+                <div className="space-y-2">
+                  <Label htmlFor="applicationMethod">Application Method *</Label>
+                  <Select name="applicationMethod" required defaultValue={editingTreatment?.applicationMethod || 'other'}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="spray">Spray</SelectItem>
+                      <SelectItem value="drench">Drench</SelectItem>
+                      <SelectItem value="granular">Granular</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="chemicalName">Chemical/Product Name *</Label>
                   <Input 
@@ -403,6 +429,7 @@ export default function TreatmentsPage() {
                 <TableRow>
                   <TableHead>Plant Type</TableHead>
                   <TableHead>Treatment Type</TableHead>
+                  <TableHead>Method</TableHead>
                   <TableHead>Chemical/Product</TableHead>
                   <TableHead>Application Date</TableHead>
                   <TableHead>Dosage</TableHead>
@@ -425,6 +452,7 @@ export default function TreatmentsPage() {
                           {treatment.treatmentType}
                         </Badge>
                       </TableCell>
+                      <TableCell className="capitalize">{treatment.applicationMethod}</TableCell>
                       <TableCell>{treatment.chemicalName}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
