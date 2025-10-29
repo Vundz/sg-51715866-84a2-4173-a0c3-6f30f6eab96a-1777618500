@@ -1,24 +1,24 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, MapPin } from "lucide-react";
-import { Location } from "@/types";
+import { Location, Planting } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
 
 export default function LocationsPage() {
   const [locations, setLocations] = useState<Location[]>([]);
+  const [plantings, setPlantings] = useState<Planting[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
 
   useEffect(() => {
-    setLocations(getStorageData<Location>(STORAGE_KEYS.LOCATIONS));
+    setLocations(getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || []);
+    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
   }, []);
 
   const handleSaveLocation = (e: React.FormEvent<HTMLFormElement>) => {
@@ -28,15 +28,11 @@ export default function LocationsPage() {
     const location: Location = editingLocation ? {
       ...editingLocation,
       name: formData.get("name") as string,
-      capacity: Number(formData.get("capacity")),
-      notes: formData.get("notes") as string
+      capacity: Number(formData.get("capacity"))
     } : {
       id: generateId(),
       name: formData.get("name") as string,
-      capacity: Number(formData.get("capacity")),
-      currentOccupancy: 0,
-      notes: formData.get("notes") as string,
-      createdAt: new Date().toISOString()
+      capacity: Number(formData.get("capacity"))
     };
 
     const updatedLocations = editingLocation
@@ -57,8 +53,15 @@ export default function LocationsPage() {
     }
   };
 
+  const getCurrentOccupancy = (locationId: string) => {
+    return plantings
+      .filter(p => p.locationId === locationId && p.status === 'active')
+      .reduce((sum, p) => sum + p.quantity, 0);
+  };
+
   const getOccupancyPercentage = (location: Location) => {
-    return location.capacity > 0 ? Math.round((location.currentOccupancy / location.capacity) * 100) : 0;
+    const occupancy = getCurrentOccupancy(location.id);
+    return location.capacity > 0 ? Math.round((occupancy / location.capacity) * 100) : 0;
   };
 
   const getOccupancyColor = (percentage: number) => {
@@ -66,6 +69,8 @@ export default function LocationsPage() {
     if (percentage >= 70) return "text-amber-600 bg-amber-50 dark:bg-amber-950";
     return "text-green-600 bg-green-50 dark:bg-green-950";
   };
+
+  const totalOccupancy = locations.reduce((sum, loc) => sum + getCurrentOccupancy(loc.id), 0);
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -98,17 +103,12 @@ export default function LocationsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Location Name *</Label>
-                  <Input id="name" name="name" defaultValue={editingLocation?.name} required placeholder="e.g., Section A-1" />
+                  <Input id="name" name="name" defaultValue={editingLocation?.name} required placeholder="e.g., Greenhouse A" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="capacity">Capacity (units) *</Label>
                   <Input id="capacity" name="capacity" type="number" defaultValue={editingLocation?.capacity} required min="1" />
                 </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea id="notes" name="notes" defaultValue={editingLocation?.notes} rows={3} placeholder="Additional information about this location" />
               </div>
               
               <div className="flex justify-end gap-2">
@@ -152,7 +152,7 @@ export default function LocationsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-blue-600">
-              {locations.reduce((sum, loc) => sum + loc.currentOccupancy, 0)}
+              {totalOccupancy}
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400">units in use</p>
           </CardContent>
@@ -190,13 +190,14 @@ export default function LocationsPage() {
               </TableHeader>
               <TableBody>
                 {locations.map((location) => {
+                  const occupancy = getCurrentOccupancy(location.id);
                   const occupancyPct = getOccupancyPercentage(location);
                   return (
                     <TableRow key={location.id}>
                       <TableCell className="font-medium">{location.name}</TableCell>
                       <TableCell>{location.capacity} units</TableCell>
                       <TableCell>
-                        {location.currentOccupancy} / {location.capacity}
+                        {occupancy} / {location.capacity}
                       </TableCell>
                       <TableCell>
                         <Badge className={getOccupancyColor(occupancyPct)}>

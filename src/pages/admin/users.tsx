@@ -295,7 +295,7 @@ export default function AdminUsersPage() {
                <div className="flex items-center space-x-2">
                 <Switch 
                     id="isActive"
-                    checked={formData.isActive}
+                    checked={formData.isActive !== false}
                     onCheckedChange={checked => setFormData({...formData, isActive: checked})}
                 />
                 <Label htmlFor="isActive">User Active</Label>
