@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, MapPin } from "lucide-react";
 import { Location, Planting } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
@@ -21,23 +21,23 @@ export default function LocationsPage() {
     setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
   }, []);
 
+  const getLocationOccupancy = (locationId: string) => {
+    return plantings
+      .filter(p => p.locationId === locationId && p.status === 'active')
+      .reduce((acc, p) => acc + p.quantity, 0);
+  };
+
   const handleSaveLocation = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
-    const location: Location = editingLocation ? {
-      ...editingLocation,
+    const locationData: Omit<Location, 'id'> = {
       name: formData.get("name") as string,
-      capacity: Number(formData.get("capacity"))
-    } : {
-      id: generateId(),
-      name: formData.get("name") as string,
-      capacity: Number(formData.get("capacity"))
+      capacity: parseInt(formData.get("capacity") as string, 10),
     };
 
     const updatedLocations = editingLocation
-      ? locations.map(l => l.id === editingLocation.id ? location : l)
-      : [...locations, location];
+      ? locations.map(loc => loc.id === editingLocation.id ? { ...loc, ...locationData } : loc)
+      : [...locations, { ...locationData, id: generateId() }];
     
     setLocations(updatedLocations);
     setStorageData(STORAGE_KEYS.LOCATIONS, updatedLocations);
@@ -46,31 +46,16 @@ export default function LocationsPage() {
   };
 
   const handleDeleteLocation = (id: string) => {
-    if (confirm("Are you sure you want to delete this location?")) {
-      const updatedLocations = locations.filter(l => l.id !== id);
-      setLocations(updatedLocations);
-      setStorageData(STORAGE_KEYS.LOCATIONS, updatedLocations);
-    }
+    if (!confirm("Are you sure you want to delete this location? This cannot be undone.")) return;
+    const updatedLocations = locations.filter(loc => loc.id !== id);
+    setLocations(updatedLocations);
+    setStorageData(STORAGE_KEYS.LOCATIONS, updatedLocations);
   };
 
-  const getCurrentOccupancy = (locationId: string) => {
-    return plantings
-      .filter(p => p.locationId === locationId && p.status === 'active')
-      .reduce((sum, p) => sum + p.quantity, 0);
+  const handleOpenDialog = (location: Location | null = null) => {
+    setEditingLocation(location);
+    setIsDialogOpen(true);
   };
-
-  const getOccupancyPercentage = (location: Location) => {
-    const occupancy = getCurrentOccupancy(location.id);
-    return location.capacity > 0 ? Math.round((occupancy / location.capacity) * 100) : 0;
-  };
-
-  const getOccupancyColor = (percentage: number) => {
-    if (percentage >= 90) return "text-red-600 bg-red-50 dark:bg-red-950";
-    if (percentage >= 70) return "text-amber-600 bg-amber-50 dark:bg-amber-950";
-    return "text-green-600 bg-green-50 dark:bg-green-950";
-  };
-
-  const totalOccupancy = locations.reduce((sum, loc) => sum + getCurrentOccupancy(loc.id), 0);
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -80,160 +65,89 @@ export default function LocationsPage() {
             <MapPin className="w-10 h-10 text-purple-600" />
             Locations
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Manage planting locations and capacity
-          </p>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">Manage your greenhouses and nursery locations.</p>
         </div>
-        
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setEditingLocation(null)} className="bg-purple-600 hover:bg-purple-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Location
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{editingLocation ? "Edit" : "Add New"} Location</DialogTitle>
-              <DialogDescription>
-                Enter the details for the planting location
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSaveLocation} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Location Name *</Label>
-                  <Input id="name" name="name" defaultValue={editingLocation?.name} required placeholder="e.g., Greenhouse A" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="capacity">Capacity (units) *</Label>
-                  <Input id="capacity" name="capacity" type="number" defaultValue={editingLocation?.capacity} required min="1" />
-                </div>
-              </div>
-              
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => { setIsDialogOpen(false); setEditingLocation(null); }}>
-                  Cancel
-                </Button>
-                <Button type="submit" className="bg-purple-600 hover:bg-purple-700">
-                  {editingLocation ? "Update" : "Create"} Location
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => handleOpenDialog()} className="bg-purple-600 hover:bg-purple-700">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Location
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-purple-200 dark:border-purple-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Total Locations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-purple-600">{locations.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-green-200 dark:border-green-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Total Capacity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-600">
-              {locations.reduce((sum, loc) => sum + loc.capacity, 0)}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingLocation ? "Edit" : "Add"} Location</DialogTitle>
+            <DialogDescription>
+              {editingLocation ? "Update the details of this location." : "Create a new location for your plantings."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveLocation} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Location Name</Label>
+              <Input id="name" name="name" defaultValue={editingLocation?.name} required />
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">units</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-blue-200 dark:border-blue-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Current Occupancy</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-blue-600">
-              {totalOccupancy}
+            <div className="space-y-2">
+              <Label htmlFor="capacity">Capacity</Label>
+              <Input id="capacity" name="capacity" type="number" defaultValue={editingLocation?.capacity} required />
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">units in use</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {locations.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <MapPin className="w-16 h-16 text-gray-400 mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No Locations Yet</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">Add your first planting location to get started</p>
-            <Button onClick={() => setIsDialogOpen(true)} className="bg-purple-600 hover:bg-purple-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Location
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>All Locations</CardTitle>
-            <CardDescription>Manage your planting locations and track capacity</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" className="bg-purple-600 hover:bg-purple-700">Save</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Nursery Locations</CardTitle>
+          <CardDescription>A list of all your greenhouse locations and their capacity.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Occupancy / Capacity</TableHead>
+                <TableHead>Utilization</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {locations.length === 0 ? (
                 <TableRow>
-                  <TableHead>Location Name</TableHead>
-                  <TableHead>Capacity</TableHead>
-                  <TableHead>Occupancy</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-24">Actions</TableHead>
+                  <TableCell colSpan={4} className="text-center h-24">No locations created yet.</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {locations.map((location) => {
-                  const occupancy = getCurrentOccupancy(location.id);
-                  const occupancyPct = getOccupancyPercentage(location);
+              ) : (
+                locations.map(location => {
+                  const occupancy = getLocationOccupancy(location.id);
+                  const utilization = location.capacity > 0 ? (occupancy / location.capacity) * 100 : 0;
                   return (
                     <TableRow key={location.id}>
                       <TableCell className="font-medium">{location.name}</TableCell>
-                      <TableCell>{location.capacity} units</TableCell>
+                      <TableCell>{occupancy} / {location.capacity}</TableCell>
                       <TableCell>
-                        {occupancy} / {location.capacity}
+                        <div className="flex items-center gap-2">
+                          <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                            <div className="bg-purple-600 h-2.5 rounded-full" style={{ width: `${utilization}%` }}></div>
+                          </div>
+                          <span className="text-sm font-medium">{utilization.toFixed(0)}%</span>
+                        </div>
                       </TableCell>
-                      <TableCell>
-                        <Badge className={getOccupancyColor(occupancyPct)}>
-                          {occupancyPct}% Full
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingLocation(location);
-                              setIsDialogOpen(true);
-                            }}
-                          >
-                            <Edit className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => handleDeleteLocation(location.id)}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                      <TableCell className="text-right">
+                        <div className="flex gap-1 justify-end">
+                          <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(location)}><Edit className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteLocation(location.id)}><Trash2 className="w-4 h-4" /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+                  )
+                })
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

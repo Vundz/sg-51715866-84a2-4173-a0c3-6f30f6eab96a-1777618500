@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,17 +13,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Edit, Trash2, TestTube2, ChevronsRight } from "lucide-react";
 import { Treatment, Planting, PlantType } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
-import { useAuth } from "@/contexts/AuthContext";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
 
 export default function TreatmentsPage() {
-  const { hasPermission } = useAuth();
-  const canCreate = hasPermission("treatments", "create");
-  const canEdit = hasPermission("treatments", "update");
-  const canDelete = hasPermission("treatments", "delete");
-  const canView = hasPermission("treatments", "read");
-
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
@@ -33,12 +24,10 @@ export default function TreatmentsPage() {
   const [selectedPlantingIds, setSelectedPlantingIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (canView) {
-      setTreatments(getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || []);
-      setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
-      setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
-    }
-  }, [canView]);
+    setTreatments(getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || []);
+    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
+    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
+  }, []);
 
   const activePlantings = plantings.filter(p => p.status === "active");
 
@@ -54,7 +43,6 @@ export default function TreatmentsPage() {
 
   const handleSaveTreatment = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!canCreate && !canEdit) return;
 
     const formData = new FormData(e.currentTarget);
     const targetPlantingIds = isBulkMode ? selectedPlantingIds : [formData.get("plantingIds") as string];
@@ -84,7 +72,7 @@ export default function TreatmentsPage() {
   };
   
   const handleDeleteTreatment = (id: string) => {
-    if (!canDelete || !confirm("Are you sure you want to delete this treatment record?")) return;
+    if (!confirm("Are you sure you want to delete this treatment record?")) return;
     const updatedTreatments = treatments.filter(t => t.id !== id);
     setTreatments(updatedTreatments);
     setStorageData(STORAGE_KEYS.TREATMENTS, updatedTreatments);
@@ -103,17 +91,6 @@ export default function TreatmentsPage() {
     );
   };
 
-  if (!canView) {
-    return (
-      <div className="max-w-7xl mx-auto space-y-8">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>You don't have permission to view treatments.</AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
@@ -125,18 +102,16 @@ export default function TreatmentsPage() {
           <p className="text-gray-600 dark:text-gray-400 mt-2">Log and manage all chemical and fertilizer applications.</p>
         </div>
         
-        {canCreate && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => handleOpenDialog(null, true)} disabled={activePlantings.length === 0}>
-                <ChevronsRight className="w-4 h-4 mr-2" />
-                Bulk Apply
-            </Button>
-            <Button onClick={() => handleOpenDialog()} className="bg-cyan-600 hover:bg-cyan-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Treatment
-            </Button>
-          </div>
-        )}
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => handleOpenDialog(null, true)} disabled={activePlantings.length === 0}>
+              <ChevronsRight className="w-4 h-4 mr-2" />
+              Bulk Apply
+          </Button>
+          <Button onClick={() => handleOpenDialog()} className="bg-cyan-600 hover:bg-cyan-700">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Treatment
+          </Button>
+        </div>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -205,8 +180,8 @@ export default function TreatmentsPage() {
                     <TableCell>{treatment.plantingIds.length} planting(s)</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-1 justify-end">
-                        {canEdit && <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(treatment)}><Edit className="w-4 h-4" /></Button>}
-                        {canDelete && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteTreatment(treatment.id)}><Trash2 className="w-4 h-4" /></Button>}
+                        <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(treatment)}><Edit className="w-4 h-4" /></Button>
+                        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteTreatment(treatment.id)}><Trash2 className="w-4 h-4" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
