@@ -28,7 +28,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (loggedInUser) {
         setUser(loggedInUser);
       } else {
-        // Session is invalid if user not found
         logout();
       }
     }
@@ -41,8 +40,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
 
     if (foundUser) {
-      // In a real app, you'd use a library like bcrypt to compare hashes
-      // For this demo, we'll use a simple comparison.
       if (foundUser.authMethod === 'password' && foundUser.passwordHash === password) {
         const expiresAt = new Date(new Date().getTime() + 24 * 60 * 60 * 1000); // 24-hour session
         const newSession: AuthSession = {
@@ -74,15 +71,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     module: keyof UserPermissions,
     right: keyof UserPermissions[keyof UserPermissions]
   ): boolean => {
+    if (user?.role === "Admin") return true; // Admin has all rights
     if (!user || !user.permissions) {
       return false;
     }
     const modulePermissions = user.permissions[module];
     if (!modulePermissions) {
-      return false; // Module not defined for user role
+      return false;
     }
     if (typeof modulePermissions === 'boolean') {
-      return modulePermissions; // Handle "all" or "none" for the module
+      return modulePermissions;
     }
     return modulePermissions[right] === true;
   };

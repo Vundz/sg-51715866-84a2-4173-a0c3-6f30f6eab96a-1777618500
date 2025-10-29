@@ -1,45 +1,33 @@
+import { getStorageData, setStorageData, STORAGE_KEYS } from "./storage";
+import { User, ALL_PERMISSIONS } from "@/types";
 
-import { User, UserPermissions } from "@/types";
-import { getStorageData, setStorageData, STORAGE_KEYS } from "@/lib/storage";
+export const initializeAdmin = () => {
+  if (typeof window === 'undefined') return;
 
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
-    .map(b => b.toString(16).padStart(2, "0"))
-    .join("");
-}
+  const users = getStorageData<User[]>(STORAGE_KEYS.USERS);
 
-const fullPermissions: UserPermissions = {
-  plantTypes: { create: true, read: true, update: true, delete: true },
-  plantings: { create: true, read: true, update: true, delete: true },
-  harvests: { create: true, read: true, update: true, delete: true },
-  locations: { create: true, read: true, update: true, delete: true },
-  treatments: { create: true, read: true, update: true, delete: true },
-  reports: { create: true, read: true, update: true, delete: true },
-  admin: { create: true, read: true, update: true, delete: true },
-};
-
-export async function initializeDefaultAdmin() {
-  const users = getStorageData<User[]>(STORAGE_KEYS.USERS) || [];
-  
-  if (users.length === 0) {
-    const defaultAdmin: User = {
-      id: crypto.randomUUID(),
-      email: "admin@khulisapp.com",
-      name: "Administrator",
-      authMethod: "password",
-      passwordHash: await hashPassword("admin123"),
-      role: "Super Admin",
-      permissions: fullPermissions,
+  if (!users || users.length === 0) {
+    const adminUser: User = {
+      id: 'admin_user_01',
+      name: 'Admin User',
+      email: 'admin@khulisapp.com',
+      role: 'Admin',
       isActive: true,
-      createdAt: new Date().toISOString(),
+      authMethod: 'password',
+      passwordHash: 'password123', // Default insecure password
+      permissions: ALL_PERMISSIONS.Admin,
     };
-
-    setStorageData(STORAGE_KEYS.USERS, [defaultAdmin]);
-    return true;
+    setStorageData<User[]>(STORAGE_KEYS.USERS, [adminUser]);
+    console.log('Default admin user created.');
+  } else {
+    // Ensure existing admin has full permissions if they were updated
+    const adminUser = users.find(u => u.role === 'Admin');
+    if (adminUser && JSON.stringify(adminUser.permissions) !== JSON.stringify(ALL_PERMISSIONS.Admin)) {
+      const updatedUsers = users.map(u => 
+        u.id === adminUser.id ? { ...u, permissions: ALL_PERMISSIONS.Admin } : u
+      );
+      setStorageData(STORAGE_KEYS.USERS, updatedUsers);
+      console.log('Admin user permissions updated.');
+    }
   }
-  
-  return false;
-}
+};
