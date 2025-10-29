@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -24,20 +23,16 @@ export default function TreatmentsPage() {
 
   useEffect(() => {
     const storedTreatments = getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || [];
-    const migratedTreatments = storedTreatments.map(t => ({
-      ...t,
-      applicationMethod: t.applicationMethod || "other",
-      dosage: t.dosage || 'N/A'
-    }));
-
-    if (JSON.stringify(storedTreatments) !== JSON.stringify(migratedTreatments)) {
-        setStorageData(STORAGE_KEYS.TREATMENTS, migratedTreatments);
-    }
-    setTreatments(migratedTreatments);
+    setTreatments(storedTreatments);
     
-    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
-    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
-    setVarieties(getStorageData<PlantVariety[]>(STORAGE_KEYS.PLANT_VARIETIES) || []);
+    const storedPlantings = getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || [];
+    setPlantings(storedPlantings);
+
+    const storedPlantTypes = getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || [];
+    setPlantTypes(storedPlantTypes);
+
+    const storedVarieties = getStorageData<PlantVariety[]>(STORAGE_KEYS.PLANT_VARIETIES) || [];
+    setVarieties(storedVarieties);
   }, []);
 
   const getPlantingDetails = (plantingId: string) => {
