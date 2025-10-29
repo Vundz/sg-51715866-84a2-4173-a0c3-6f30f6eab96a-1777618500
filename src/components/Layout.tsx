@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
 import { Toaster } from "@/components/ui/toaster";
-import { Header } from "@/components/Header";
+import Header from "@/components/Header";
 
 interface LayoutProps {
   children: ReactNode;

@@ -43,7 +43,7 @@ export default function PlantingsPage() {
       status: (formData.get("status") as Planting['status']) || 'active',
     };
     
-    const newPlanting = { ...plantingData, id: generateId(), remainingQuantity: plantingData.quantity };
+    const newPlanting = { ...plantingData, id: generateId("pln"), remainingQuantity: plantingData.quantity };
 
     const updatedPlantings = editingPlanting
       ? plantings.map(p => p.id === editingPlanting.id ? { ...p, ...plantingData, variety: plantType?.variety || '' } : p)

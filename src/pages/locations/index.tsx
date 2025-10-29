@@ -37,7 +37,7 @@ export default function LocationsPage() {
 
     const updatedLocations = editingLocation
       ? locations.map(loc => loc.id === editingLocation.id ? { ...loc, ...locationData } : loc)
-      : [...locations, { ...locationData, id: generateId() }];
+      : [...locations, { ...locationData, id: generateId("loc") }];
     
     setLocations(updatedLocations);
     setStorageData(STORAGE_KEYS.LOCATIONS, updatedLocations);

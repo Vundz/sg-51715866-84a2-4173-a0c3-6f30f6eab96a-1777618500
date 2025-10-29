@@ -71,7 +71,7 @@ export default function HarvestsPage() {
     
     const updatedHarvests = editingHarvest
       ? harvests.map(h => h.id === editingHarvest.id ? { ...h, ...harvestData } : h)
-      : [...harvests, { ...harvestData, id: generateId() }];
+      : [...harvests, { ...harvestData, id: generateId("har") }];
       
     setHarvests(updatedHarvests);
     setStorageData(STORAGE_KEYS.HARVESTS, updatedHarvests);

@@ -64,7 +64,7 @@ export default function TreatmentsPage() {
     
     const updatedTreatments = editingTreatment
       ? treatments.map(t => t.id === editingTreatment.id ? { ...t, ...treatmentData } : t)
-      : [...treatments, { ...treatmentData, id: generateId() }];
+      : [...treatments, { ...treatmentData, id: generateId("trt") }];
       
     setTreatments(updatedTreatments);
     setStorageData(STORAGE_KEYS.TREATMENTS, updatedTreatments);

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,7 +29,7 @@ export default function PlantTypesPage() {
 
     const updatedPlantTypes = editingPlantType
       ? plantTypes.map(pt => pt.id === editingPlantType.id ? { ...pt, ...plantTypeData } : pt)
-      : [...plantTypes, { ...plantTypeData, id: generateId() }];
+      : [...plantTypes, { ...plantTypeData, id: generateId("pt") }];
       
     setPlantTypes(updatedPlantTypes);
     setStorageData(STORAGE_KEYS.PLANT_TYPES, updatedPlantTypes);
