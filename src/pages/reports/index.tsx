@@ -4,11 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart, Calendar, Package, MapPin, Sprout, TrendingUp, AlertCircle, FileText } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { BarChart, Calendar, Package, MapPin, Sprout, TrendingUp, AlertCircle, FileText, ChevronDown, ChevronUp } from "lucide-react";
 import { Planting, Harvest, PlantType, PlantVariety, Location, Treatment } from "@/types";
 import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
 
@@ -19,6 +18,15 @@ export default function ReportsPage() {
   const [varieties, setVarieties] = useState<PlantVariety[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [treatments, setTreatments] = useState<Treatment[]>([]);
+
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    plantings: false,
+    upcoming: false,
+    harvests: false,
+    locationSummary: false,
+    locationDetail: false,
+    treatments: false
+  });
 
   const [plantingStartDate, setPlantingStartDate] = useState("");
   const [plantingEndDate, setPlantingEndDate] = useState("");
@@ -38,6 +46,13 @@ export default function ReportsPage() {
     setLocations(getStorageData<Location>(STORAGE_KEYS.LOCATIONS));
     setTreatments(getStorageData<Treatment>(STORAGE_KEYS.TREATMENTS));
   }, []);
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
 
   const getPlantTypeName = (plantTypeId: string) => {
     return plantTypes.find(pt => pt.id === plantTypeId)?.name || "Unknown";
@@ -204,538 +219,736 @@ export default function ReportsPage() {
   }, [plantings, treatments, plantTypes, varieties, locations]);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-bold flex items-center gap-3">
-            <BarChart className="w-10 h-10 text-purple-600" />
-            Reports & Analytics
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Comprehensive reports for your nursery operations
-          </p>
-        </div>
+    <div className="max-w-7xl mx-auto space-y-6 pb-12">
+      <div className="flex flex-col gap-3">
+        <h1 className="text-3xl md:text-4xl font-bold flex items-center gap-3">
+          <BarChart className="w-8 h-8 md:w-10 md:h-10 text-purple-600" />
+          Reports & Analytics
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400">
+          Comprehensive insights for your nursery operations
+        </p>
       </div>
 
-      <Tabs defaultValue="plantings" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="plantings">Plantings</TabsTrigger>
-          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-          <TabsTrigger value="harvests">Harvests</TabsTrigger>
-          <TabsTrigger value="location-summary">Location Summary</TabsTrigger>
-          <TabsTrigger value="location-detail">Location Detail</TabsTrigger>
-          <TabsTrigger value="treatments">Treatments</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="plantings" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sprout className="w-5 h-5" />
-                Plantings Report
-              </CardTitle>
-              <CardDescription>Filter and view planting records</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Start Date</Label>
-                  <Input 
-                    type="date" 
-                    value={plantingStartDate}
-                    onChange={(e) => setPlantingStartDate(e.target.value)}
-                  />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Card 
+          className="cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-l-green-500"
+          onClick={() => toggleSection("plantings")}
+        >
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                  <Sprout className="w-6 h-6 text-green-600 dark:text-green-400" />
                 </div>
-                <div className="space-y-2">
-                  <Label>End Date</Label>
-                  <Input 
-                    type="date" 
-                    value={plantingEndDate}
-                    onChange={(e) => setPlantingEndDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Variety</Label>
-                  <Select value={plantingVarietyFilter} onValueChange={setPlantingVarietyFilter}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Varieties</SelectItem>
-                      {varieties.map(v => (
-                        <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div>
+                  <CardTitle className="text-lg">Plantings Report</CardTitle>
+                  <CardDescription className="text-sm">View all plantings</CardDescription>
                 </div>
               </div>
+              {expandedSections.plantings ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <span className="text-3xl font-bold text-green-600">{filteredPlantings.length}</span>
+              <Badge variant="outline">Total Records</Badge>
+            </div>
+          </CardContent>
+        </Card>
 
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Showing {filteredPlantings.length} planting(s)
-                </p>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setPlantingStartDate("");
-                    setPlantingEndDate("");
-                    setPlantingVarietyFilter("all");
-                  }}
-                >
-                  Clear Filters
-                </Button>
+        <Card 
+          className="cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-l-orange-500"
+          onClick={() => toggleSection("upcoming")}
+        >
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
+                  <Calendar className="w-6 h-6 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Upcoming Harvests</CardTitle>
+                  <CardDescription className="text-sm">Ready soon</CardDescription>
+                </div>
               </div>
+              {expandedSections.upcoming ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <span className="text-3xl font-bold text-orange-600">{upcomingHarvests.length}</span>
+              <Badge variant="outline">Next {upcomingDaysThreshold} Days</Badge>
+            </div>
+          </CardContent>
+        </Card>
 
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Plant Type</TableHead>
-                    <TableHead>Variety</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Quantity</TableHead>
-                    <TableHead>Remaining</TableHead>
-                    <TableHead>Planting Date</TableHead>
-                    <TableHead>Expected Harvest</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredPlantings.map(planting => {
-                    const remaining = planting.remainingQuantity ?? planting.quantity;
-                    return (
-                      <TableRow key={planting.id}>
-                        <TableCell className="font-medium">
-                          {getPlantTypeName(planting.plantTypeId)}
-                        </TableCell>
-                        <TableCell>{getVarietyName(planting.varietyId)}</TableCell>
-                        <TableCell>{getLocationName(planting.locationId)}</TableCell>
-                        <TableCell>{planting.quantity}</TableCell>
-                        <TableCell>
-                          <span className={remaining === 0 ? "text-gray-400" : ""}>
-                            {remaining}
-                          </span>
-                        </TableCell>
-                        <TableCell>{new Date(planting.plantingDate).toLocaleDateString()}</TableCell>
-                        <TableCell>{new Date(planting.expectedHarvestDate).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          <Badge className={
-                            planting.status === "active" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
-                            planting.status === "closed" ? "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200" :
-                            planting.status === "harvested" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
-                            "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                          }>
-                            {planting.status}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {filteredPlantings.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center text-gray-500">
-                        No plantings found matching the selected filters
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <Card 
+          className="cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-l-blue-500"
+          onClick={() => toggleSection("harvests")}
+        >
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                  <Package className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Harvest Analysis</CardTitle>
+                  <CardDescription className="text-sm">Performance metrics</CardDescription>
+                </div>
+              </div>
+              {expandedSections.harvests ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <span className="text-3xl font-bold text-blue-600">{harvestsReport.length}</span>
+              <Badge variant="outline">Completed</Badge>
+            </div>
+          </CardContent>
+        </Card>
 
-        <TabsContent value="upcoming" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5" />
-                Upcoming Harvests
-              </CardTitle>
-              <CardDescription>Seedlings nearing harvest based on growth duration</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <Label>Show harvests within:</Label>
-                <Select value={upcomingDaysThreshold} onValueChange={setUpcomingDaysThreshold}>
-                  <SelectTrigger className="w-48">
+        <Card 
+          className="cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-l-purple-500"
+          onClick={() => toggleSection("locationSummary")}
+        >
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                  <MapPin className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Location Summary</CardTitle>
+                  <CardDescription className="text-sm">Capacity overview</CardDescription>
+                </div>
+              </div>
+              {expandedSections.locationSummary ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <span className="text-3xl font-bold text-purple-600">{locations.length}</span>
+              <Badge variant="outline">Locations</Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className="cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-l-teal-500"
+          onClick={() => toggleSection("locationDetail")}
+        >
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-teal-100 dark:bg-teal-900 rounded-lg">
+                  <TrendingUp className="w-6 h-6 text-teal-600 dark:text-teal-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Location Details</CardTitle>
+                  <CardDescription className="text-sm">By variety</CardDescription>
+                </div>
+              </div>
+              {expandedSections.locationDetail ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <span className="text-3xl font-bold text-teal-600">{locationDetail.length}</span>
+              <Badge variant="outline">Active Locations</Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className="cursor-pointer hover:shadow-lg transition-shadow border-l-4 border-l-red-500"
+          onClick={() => toggleSection("treatments")}
+        >
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
+                  <FileText className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Treatment Report</CardTitle>
+                  <CardDescription className="text-sm">Application history</CardDescription>
+                </div>
+              </div>
+              {expandedSections.treatments ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <span className="text-3xl font-bold text-red-600">{treatmentReport.length}</span>
+              <Badge variant="outline">Plantings Treated</Badge>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {expandedSections.plantings && (
+        <Card className="border-l-4 border-l-green-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sprout className="w-5 h-5" />
+              Plantings Report - Detailed View
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Start Date</Label>
+                <Input 
+                  type="date" 
+                  value={plantingStartDate}
+                  onChange={(e) => setPlantingStartDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>End Date</Label>
+                <Input 
+                  type="date" 
+                  value={plantingEndDate}
+                  onChange={(e) => setPlantingEndDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Variety</Label>
+                <Select value={plantingVarietyFilter} onValueChange={setPlantingVarietyFilter}>
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="3">Next 3 days</SelectItem>
-                    <SelectItem value="7">Next 7 days</SelectItem>
-                    <SelectItem value="14">Next 14 days</SelectItem>
-                    <SelectItem value="30">Next 30 days</SelectItem>
+                    <SelectItem value="all">All Varieties</SelectItem>
+                    {varieties.map(v => (
+                      <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+            </div>
 
-              <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Showing {filteredPlantings.length} planting(s)
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPlantingStartDate("");
+                  setPlantingEndDate("");
+                  setPlantingVarietyFilter("all");
+                }}
+              >
+                Clear Filters
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredPlantings.map(planting => {
+                const remaining = planting.remainingQuantity ?? planting.quantity;
+                return (
+                  <Card key={planting.id} className="hover:shadow-md transition-shadow">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <CardTitle className="text-base">
+                            {getPlantTypeName(planting.plantTypeId)}
+                          </CardTitle>
+                          <CardDescription className="text-sm mt-1">
+                            {getVarietyName(planting.varietyId)}
+                          </CardDescription>
+                        </div>
+                        <Badge className={
+                          planting.status === "active" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                          planting.status === "closed" ? "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200" :
+                          planting.status === "harvested" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
+                          "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                        }>
+                          {planting.status}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Location:</span>
+                        <span className="font-medium">{getLocationName(planting.locationId)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Planted:</span>
+                        <span className="font-medium">{planting.quantity}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Remaining:</span>
+                        <span className={`font-medium ${remaining === 0 ? "text-gray-400" : ""}`}>
+                          {remaining}
+                        </span>
+                      </div>
+                      <Separator className="my-2" />
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Planted Date:</span>
+                        <span className="font-medium">{new Date(planting.plantingDate).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Expected Harvest:</span>
+                        <span className="font-medium">{new Date(planting.expectedHarvestDate).toLocaleDateString()}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+              {filteredPlantings.length === 0 && (
+                <div className="col-span-full text-center py-12 text-gray-500">
+                  No plantings found matching the selected filters
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {expandedSections.upcoming && (
+        <Card className="border-l-4 border-l-orange-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              Upcoming Harvests - Detailed View
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              <Label>Show harvests within:</Label>
+              <Select value={upcomingDaysThreshold} onValueChange={setUpcomingDaysThreshold}>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="3">Next 3 days</SelectItem>
+                  <SelectItem value="7">Next 7 days</SelectItem>
+                  <SelectItem value="14">Next 14 days</SelectItem>
+                  <SelectItem value="30">Next 30 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {upcomingHarvests.length > 0 && (
+              <div className="bg-orange-50 dark:bg-orange-950 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+                <div className="flex items-center gap-2 text-orange-800 dark:text-orange-200">
                   <AlertCircle className="w-4 h-4" />
                   <span className="font-medium">{upcomingHarvests.length} planting(s) ready for harvest soon</span>
                 </div>
               </div>
+            )}
 
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Plant Type</TableHead>
-                    <TableHead>Variety</TableHead>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Quantity</TableHead>
-                    <TableHead>Remaining</TableHead>
-                    <TableHead>Planted Date</TableHead>
-                    <TableHead>Expected Harvest</TableHead>
-                    <TableHead>Days Until Harvest</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {upcomingHarvests.map(harvest => {
-                    const remaining = harvest.remainingQuantity ?? harvest.quantity;
-                    const urgencyColor = harvest.daysUntilHarvest <= 3 
-                      ? "text-red-600 font-bold" 
-                      : harvest.daysUntilHarvest <= 7 
-                      ? "text-orange-600 font-semibold" 
-                      : "text-green-600";
-                    
-                    return (
-                      <TableRow key={harvest.id}>
-                        <TableCell className="font-medium">{harvest.plantType}</TableCell>
-                        <TableCell>{harvest.variety}</TableCell>
-                        <TableCell>{harvest.location}</TableCell>
-                        <TableCell>{harvest.quantity}</TableCell>
-                        <TableCell>{remaining}</TableCell>
-                        <TableCell>{new Date(harvest.plantingDate).toLocaleDateString()}</TableCell>
-                        <TableCell>{harvest.expectedHarvestDate.toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          <span className={urgencyColor}>
-                            {harvest.daysUntilHarvest === 0 ? "Today" : 
-                             harvest.daysUntilHarvest === 1 ? "Tomorrow" :
-                             `${harvest.daysUntilHarvest} days`}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {upcomingHarvests.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center text-gray-500">
-                        No upcoming harvests in the selected timeframe
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="harvests" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="w-5 h-5" />
-                Harvest Analysis
-              </CardTitle>
-              <CardDescription>Compare harvested vs planted quantities</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Start Date</Label>
-                  <Input 
-                    type="date" 
-                    value={harvestStartDate}
-                    onChange={(e) => setHarvestStartDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>End Date</Label>
-                  <Input 
-                    type="date" 
-                    value={harvestEndDate}
-                    onChange={(e) => setHarvestEndDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Variety</Label>
-                  <Select value={harvestVarietyFilter} onValueChange={setHarvestVarietyFilter}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Varieties</SelectItem>
-                      {varieties.map(v => (
-                        <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Showing {harvestsReport.length} harvest(s)
-                </p>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setHarvestStartDate("");
-                    setHarvestEndDate("");
-                    setHarvestVarietyFilter("all");
-                  }}
-                >
-                  Clear Filters
-                </Button>
-              </div>
-
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Plant Type</TableHead>
-                    <TableHead>Variety</TableHead>
-                    <TableHead>Harvest Date</TableHead>
-                    <TableHead>Qty Planted</TableHead>
-                    <TableHead>Qty Harvested</TableHead>
-                    <TableHead>Variance</TableHead>
-                    <TableHead>Variance %</TableHead>
-                    <TableHead>Quality</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {harvestsReport.map(harvest => {
-                    const isPositive = harvest.variance >= 0;
-                    return (
-                      <TableRow key={harvest.id}>
-                        <TableCell className="font-medium">{harvest.plantType}</TableCell>
-                        <TableCell>{harvest.variety}</TableCell>
-                        <TableCell>{new Date(harvest.harvestDate).toLocaleDateString()}</TableCell>
-                        <TableCell>{harvest.plantedQty}</TableCell>
-                        <TableCell>{harvest.quantity}</TableCell>
-                        <TableCell>
-                          <span className={isPositive ? "text-green-600" : "text-red-600"}>
-                            {isPositive ? "+" : ""}{harvest.variance}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className={isPositive ? "text-green-600" : "text-red-600"}>
-                            {isPositive ? "+" : ""}{harvest.variancePercent}%
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={
-                            harvest.quality === "excellent" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
-                            harvest.quality === "good" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
-                            harvest.quality === "fair" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" :
-                            "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                          }>
-                            {harvest.quality}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {harvestsReport.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center text-gray-500">
-                        No harvests found matching the selected filters
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="location-summary" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="w-5 h-5" />
-                Location Capacity Summary
-              </CardTitle>
-              <CardDescription>Overview of space utilization per location</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Location</TableHead>
-                    <TableHead>Total Capacity</TableHead>
-                    <TableHead>Qty Planted</TableHead>
-                    <TableHead>Available Space</TableHead>
-                    <TableHead>Utilization %</TableHead>
-                    <TableHead>Active Plantings</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {locationSummary.map(location => {
-                    const utilization = parseFloat(location.utilizationPercent);
-                    const utilizationColor = utilization >= 90 
-                      ? "text-red-600 font-bold" 
-                      : utilization >= 70 
-                      ? "text-orange-600 font-semibold" 
-                      : "text-green-600";
-                    
-                    return (
-                      <TableRow key={location.id}>
-                        <TableCell className="font-medium">{location.name}</TableCell>
-                        <TableCell>{location.capacity}</TableCell>
-                        <TableCell>{location.totalPlanted}</TableCell>
-                        <TableCell>
-                          <span className={location.availableSpace <= 0 ? "text-red-600" : ""}>
-                            {location.availableSpace}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className={utilizationColor}>{location.utilizationPercent}%</span>
-                        </TableCell>
-                        <TableCell>{location.plantingCount}</TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {locationSummary.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-gray-500">
-                        No locations available
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="location-detail" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="w-5 h-5" />
-                Location Details by Variety
-              </CardTitle>
-              <CardDescription>Varieties planted per location with expected harvest dates</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {locationDetail.map(location => (
-                <div key={location.location} className="space-y-3">
-                  <div className="flex items-center justify-between border-b pb-2">
-                    <h3 className="text-lg font-semibold">{location.location}</h3>
-                    <Badge variant="outline">Capacity: {location.capacity}</Badge>
-                  </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Plant Type</TableHead>
-                        <TableHead>Variety</TableHead>
-                        <TableHead>Quantity</TableHead>
-                        <TableHead>Planting Date</TableHead>
-                        <TableHead>Expected Harvest</TableHead>
-                        <TableHead>Days Until Harvest</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {location.plantings.map((planting, idx) => {
-                        const urgencyColor = planting.daysUntilHarvest <= 3 
-                          ? "text-red-600 font-bold" 
-                          : planting.daysUntilHarvest <= 7 
-                          ? "text-orange-600 font-semibold" 
-                          : "text-green-600";
-                        
-                        return (
-                          <TableRow key={idx}>
-                            <TableCell className="font-medium">{planting.plantType}</TableCell>
-                            <TableCell>{planting.variety}</TableCell>
-                            <TableCell>{planting.quantity}</TableCell>
-                            <TableCell>{new Date(planting.plantingDate).toLocaleDateString()}</TableCell>
-                            <TableCell>{new Date(planting.expectedHarvestDate).toLocaleDateString()}</TableCell>
-                            <TableCell>
-                              <span className={urgencyColor}>
-                                {planting.daysUntilHarvest <= 0 ? "Ready" : `${planting.daysUntilHarvest} days`}
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              ))}
-              {locationDetail.length === 0 && (
-                <div className="text-center text-gray-500 py-8">
-                  No active plantings in any location
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {upcomingHarvests.map(harvest => {
+                const remaining = harvest.remainingQuantity ?? harvest.quantity;
+                const urgencyClass = harvest.daysUntilHarvest <= 3 
+                  ? "border-red-500 bg-red-50 dark:bg-red-950" 
+                  : harvest.daysUntilHarvest <= 7 
+                  ? "border-orange-500 bg-orange-50 dark:bg-orange-950" 
+                  : "border-green-500";
+                
+                const urgencyTextClass = harvest.daysUntilHarvest <= 3 
+                  ? "text-red-600 dark:text-red-400" 
+                  : harvest.daysUntilHarvest <= 7 
+                  ? "text-orange-600 dark:text-orange-400" 
+                  : "text-green-600 dark:text-green-400";
+                
+                return (
+                  <Card key={harvest.id} className={`hover:shadow-md transition-shadow border-l-4 ${urgencyClass}`}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <CardTitle className="text-base">{harvest.plantType}</CardTitle>
+                          <CardDescription className="text-sm mt-1">{harvest.variety}</CardDescription>
+                        </div>
+                        <Badge variant="outline" className={urgencyTextClass}>
+                          {harvest.daysUntilHarvest === 0 ? "Today" : 
+                           harvest.daysUntilHarvest === 1 ? "Tomorrow" :
+                           `${harvest.daysUntilHarvest}d`}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Location:</span>
+                        <span className="font-medium">{harvest.location}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Quantity:</span>
+                        <span className="font-medium">{harvest.quantity}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Remaining:</span>
+                        <span className="font-medium">{remaining}</span>
+                      </div>
+                      <Separator className="my-2" />
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Planted:</span>
+                        <span className="font-medium">{new Date(harvest.plantingDate).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Expected:</span>
+                        <span className="font-medium">{harvest.expectedHarvestDate.toLocaleDateString()}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+              {upcomingHarvests.length === 0 && (
+                <div className="col-span-full text-center py-12 text-gray-500">
+                  No upcoming harvests in the selected timeframe
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-        <TabsContent value="treatments" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5" />
-                Treatment Report
-              </CardTitle>
-              <CardDescription>Treatments applied per planting</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {treatmentReport.map((report, idx) => (
-                <div key={idx} className="space-y-3">
-                  <div className="border-b pb-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold">
+      {expandedSections.harvests && (
+        <Card className="border-l-4 border-l-blue-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Harvest Analysis - Detailed View
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Start Date</Label>
+                <Input 
+                  type="date" 
+                  value={harvestStartDate}
+                  onChange={(e) => setHarvestStartDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>End Date</Label>
+                <Input 
+                  type="date" 
+                  value={harvestEndDate}
+                  onChange={(e) => setHarvestEndDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Variety</Label>
+                <Select value={harvestVarietyFilter} onValueChange={setHarvestVarietyFilter}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Varieties</SelectItem>
+                    {varieties.map(v => (
+                      <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Showing {harvestsReport.length} harvest(s)
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setHarvestStartDate("");
+                  setHarvestEndDate("");
+                  setHarvestVarietyFilter("all");
+                }}
+              >
+                Clear Filters
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {harvestsReport.map(harvest => {
+                const isPositive = harvest.variance >= 0;
+                return (
+                  <Card key={harvest.id} className="hover:shadow-md transition-shadow">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <CardTitle className="text-base">{harvest.plantType}</CardTitle>
+                          <CardDescription className="text-sm mt-1">{harvest.variety}</CardDescription>
+                        </div>
+                        <Badge className={
+                          harvest.quality === "excellent" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                          harvest.quality === "good" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" :
+                          harvest.quality === "fair" ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" :
+                          "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                        }>
+                          {harvest.quality}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Harvest Date:</span>
+                        <span className="font-medium">{new Date(harvest.harvestDate).toLocaleDateString()}</span>
+                      </div>
+                      <Separator className="my-2" />
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Planted:</span>
+                        <span className="font-medium">{harvest.plantedQty}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Harvested:</span>
+                        <span className="font-medium">{harvest.quantity}</span>
+                      </div>
+                      <Separator className="my-2" />
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Variance:</span>
+                        <span className={`font-bold ${isPositive ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                          {isPositive ? "+" : ""}{harvest.variance}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Variance %:</span>
+                        <span className={`font-bold ${isPositive ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                          {isPositive ? "+" : ""}{harvest.variancePercent}%
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+              {harvestsReport.length === 0 && (
+                <div className="col-span-full text-center py-12 text-gray-500">
+                  No harvests found matching the selected filters
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {expandedSections.locationSummary && (
+        <Card className="border-l-4 border-l-purple-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="w-5 h-5" />
+              Location Capacity Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {locationSummary.map(location => {
+                const utilization = parseFloat(location.utilizationPercent);
+                const utilizationClass = utilization >= 90 
+                  ? "border-red-500 bg-red-50 dark:bg-red-950" 
+                  : utilization >= 70 
+                  ? "border-orange-500 bg-orange-50 dark:bg-orange-950" 
+                  : "border-green-500";
+                
+                const utilizationTextClass = utilization >= 90 
+                  ? "text-red-600 dark:text-red-400" 
+                  : utilization >= 70 
+                  ? "text-orange-600 dark:text-orange-400" 
+                  : "text-green-600 dark:text-green-400";
+                
+                return (
+                  <Card key={location.id} className={`hover:shadow-md transition-shadow border-l-4 ${utilizationClass}`}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <CardTitle className="text-base">{location.name}</CardTitle>
+                        <Badge variant="outline" className={utilizationTextClass}>
+                          {location.utilizationPercent}%
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Capacity:</span>
+                        <span className="font-medium">{location.capacity}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Planted:</span>
+                        <span className="font-medium">{location.totalPlanted}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Available:</span>
+                        <span className={`font-medium ${location.availableSpace <= 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                          {location.availableSpace}
+                        </span>
+                      </div>
+                      <Separator className="my-2" />
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Active Plantings:</span>
+                        <span className="font-medium">{location.plantingCount}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+              {locationSummary.length === 0 && (
+                <div className="col-span-full text-center py-12 text-gray-500">
+                  No locations available
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {expandedSections.locationDetail && (
+        <Card className="border-l-4 border-l-teal-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5" />
+              Location Details by Variety
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {locationDetail.map(location => (
+              <div key={location.location} className="space-y-4">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <h3 className="text-lg font-semibold">{location.location}</h3>
+                  <Badge variant="outline">Capacity: {location.capacity}</Badge>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {location.plantings.map((planting, idx) => {
+                    const urgencyClass = planting.daysUntilHarvest <= 3 
+                      ? "border-red-500 bg-red-50 dark:bg-red-950" 
+                      : planting.daysUntilHarvest <= 7 
+                      ? "border-orange-500 bg-orange-50 dark:bg-orange-950" 
+                      : "border-green-500";
+                    
+                    const urgencyTextClass = planting.daysUntilHarvest <= 3 
+                      ? "text-red-600 dark:text-red-400" 
+                      : planting.daysUntilHarvest <= 7 
+                      ? "text-orange-600 dark:text-orange-400" 
+                      : "text-green-600 dark:text-green-400";
+                    
+                    return (
+                      <Card key={idx} className={`hover:shadow-md transition-shadow border-l-4 ${urgencyClass}`}>
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <CardTitle className="text-base">{planting.plantType}</CardTitle>
+                              <CardDescription className="text-sm mt-1">{planting.variety}</CardDescription>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Quantity:</span>
+                            <span className="font-medium">{planting.quantity}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Planted:</span>
+                            <span className="font-medium">{new Date(planting.plantingDate).toLocaleDateString()}</span>
+                          </div>
+                          <Separator className="my-2" />
+                          <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Expected Harvest:</span>
+                            <span className="font-medium">{new Date(planting.expectedHarvestDate).toLocaleDateString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Days Until:</span>
+                            <span className={`font-bold ${urgencyTextClass}`}>
+                              {planting.daysUntilHarvest <= 0 ? "Ready" : `${planting.daysUntilHarvest} days`}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {locationDetail.length === 0 && (
+              <div className="text-center py-12 text-gray-500">
+                No active plantings in any location
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {expandedSections.treatments && (
+        <Card className="border-l-4 border-l-red-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Treatment Report
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {treatmentReport.map((report, idx) => (
+              <Card key={idx} className="hover:shadow-md transition-shadow">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between flex-wrap gap-2">
+                    <div className="flex-1">
+                      <CardTitle className="text-base">
                         {report.planting.plantType}
                         {report.planting.variety && <span className="text-gray-600 dark:text-gray-400"> ({report.planting.variety})</span>}
-                      </h3>
-                      <Badge variant="outline">{report.treatments.length} treatment(s)</Badge>
+                      </CardTitle>
+                      <div className="flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-400 mt-2">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {report.planting.location}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {new Date(report.planting.plantingDate).toLocaleDateString()}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex gap-4 text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      <span>Location: {report.planting.location}</span>
-                      <span>Planted: {new Date(report.planting.plantingDate).toLocaleDateString()}</span>
-                    </div>
+                    <Badge variant="outline">{report.treatments.length} treatment(s)</Badge>
                   </div>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Treatment Type</TableHead>
-                        <TableHead>Product</TableHead>
-                        <TableHead>Application Date</TableHead>
-                        <TableHead>Dosage</TableHead>
-                        <TableHead>Notes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {report.treatments.map((treatment, tIdx) => (
-                        <TableRow key={tIdx}>
-                          <TableCell>
-                            <Badge className={
-                              treatment.treatmentType === "fertilizer" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
-                              treatment.treatmentType === "pesticide" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
-                              "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                            }>
-                              {treatment.treatmentType}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-medium">{treatment.chemicalName}</TableCell>
-                          <TableCell>{new Date(treatment.applicationDate).toLocaleDateString()}</TableCell>
-                          <TableCell>{treatment.dosage}</TableCell>
-                          <TableCell className="max-w-xs truncate">{treatment.notes || "-"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ))}
-              {treatmentReport.length === 0 && (
-                <div className="text-center text-gray-500 py-8">
-                  No treatments recorded for any plantings
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {report.treatments.map((treatment, tIdx) => (
+                      <div key={tIdx} className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg space-y-2">
+                        <div className="flex items-start justify-between">
+                          <span className="font-medium">{treatment.chemicalName}</span>
+                          <Badge className={
+                            treatment.treatmentType === "fertilizer" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
+                            treatment.treatmentType === "pesticide" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
+                            "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                          }>
+                            {treatment.treatmentType}
+                          </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <span className="text-gray-600 dark:text-gray-400">Date: </span>
+                            <span className="font-medium">{new Date(treatment.applicationDate).toLocaleDateString()}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-600 dark:text-gray-400">Dosage: </span>
+                            <span className="font-medium">{treatment.dosage}</span>
+                          </div>
+                        </div>
+                        {treatment.notes && (
+                          <div className="text-sm pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <span className="text-gray-600 dark:text-gray-400">Notes: </span>
+                            <span>{treatment.notes}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {treatmentReport.length === 0 && (
+              <div className="text-center py-12 text-gray-500">
+                No treatments recorded for any plantings
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
