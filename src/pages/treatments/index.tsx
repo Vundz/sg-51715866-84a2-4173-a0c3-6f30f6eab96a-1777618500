@@ -1,392 +1,221 @@
+
 import { useState, useEffect } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getStorageData, setStorageData, STORAGE_KEYS } from "@/lib/storage";
-import { Treatment, Planting, PlantType, PlantVariety } from "@/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Layout } from "@/components/Layout";
-import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Plus, Edit, Trash2, TestTube2, ChevronsRight } from "lucide-react";
+import { Treatment, Planting, PlantType } from "@/types";
+import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
+import { useAuth } from "@/contexts/AuthContext";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 export default function TreatmentsPage() {
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission("treatments", "create");
+  const canEdit = hasPermission("treatments", "update");
+  const canDelete = hasPermission("treatments", "delete");
+  const canView = hasPermission("treatments", "read");
+
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
-  const [varieties, setVarieties] = useState<PlantVariety[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTreatment, setEditingTreatment] = useState<Treatment | null>(null);
   const [isBulkMode, setIsBulkMode] = useState(false);
-  const [selectedPlantings, setSelectedPlantings] = useState<string[]>([]);
+  const [selectedPlantingIds, setSelectedPlantingIds] = useState<string[]>([]);
 
   useEffect(() => {
-    const storedTreatments = (getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || []).flat();
-    setTreatments(storedTreatments);
-    
-    const storedPlantings = (getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []).flat();
-    setPlantings(storedPlantings);
+    if (canView) {
+      setTreatments(getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || []);
+      setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
+      setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
+    }
+  }, [canView]);
 
-    const storedPlantTypes = (getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []).flat();
-    setPlantTypes(storedPlantTypes);
-
-    const storedVarieties = (getStorageData<PlantVariety[]>(STORAGE_KEYS.PLANT_VARIETIES) || []).flat();
-    setVarieties(storedVarieties);
-  }, []);
+  const activePlantings = plantings.filter(p => p.status === "active");
 
   const getPlantingDetails = (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
-    if (!planting) return { plantTypeName: "N/A", varietyName: "N/A" };
-    
     const plantType = plantTypes.find(pt => pt.id === planting?.plantTypeId);
-    const variety = varieties.find(v => v.id === planting?.varietyId);
-
     return {
-      plantTypeName: plantType?.name || "N/A",
-      varietyName: variety?.name || "N/A",
+      name: plantType?.name || "N/A",
+      variety: planting?.variety || "N/A",
+      datePlanted: planting?.datePlanted ? new Date(planting.datePlanted).toLocaleDateString() : "N/A",
     };
   };
 
-  const handleSave = (treatmentData: Omit<Treatment, "id" | "createdAt">) => {
-    let updatedTreatments: Treatment[];
-    if (isBulkMode) {
-      const newTreatments: Treatment[] = selectedPlantings.map(plantingId => ({
-        ...treatmentData,
-        id: crypto.randomUUID(),
-        plantingId: plantingId,
-        createdAt: new Date().toISOString(),
-      }));
-      updatedTreatments = [...treatments, ...newTreatments];
-    } else {
-      if (editingTreatment) {
-        updatedTreatments = treatments.map(t =>
-          t.id === editingTreatment.id ? { ...t, ...treatmentData, id: t.id, createdAt: t.createdAt } as Treatment : t
-        );
-      } else {
-        const newTreatment: Treatment = {
-          ...treatmentData,
-          id: crypto.randomUUID(),
-          createdAt: new Date().toISOString(),
-        };
-        updatedTreatments = [...treatments, newTreatment];
-      }
+  const handleSaveTreatment = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!canCreate && !canEdit) return;
+
+    const formData = new FormData(e.currentTarget);
+    const targetPlantingIds = isBulkMode ? selectedPlantingIds : [formData.get("plantingIds") as string];
+
+    if (targetPlantingIds.length === 0 || !targetPlantingIds[0]) {
+      alert("Please select at least one planting.");
+      return;
     }
 
+    const treatmentData: Omit<Treatment, "id"> = {
+      name: formData.get("name") as string,
+      type: formData.get("type") as "fungicide" | "pesticide" | "fertilizer",
+      applicationDate: formData.get("applicationDate") as string,
+      plantingIds: targetPlantingIds,
+      dosage: formData.get("dosage") as string,
+      applicationMethod: formData.get("applicationMethod") as "drench" | "spray" | "granular" | "other",
+      notes: formData.get("notes") as string,
+    };
+    
+    const updatedTreatments = editingTreatment
+      ? treatments.map(t => t.id === editingTreatment.id ? { ...t, ...treatmentData } : t)
+      : [...treatments, { ...treatmentData, id: generateId() }];
+      
     setTreatments(updatedTreatments);
     setStorageData(STORAGE_KEYS.TREATMENTS, updatedTreatments);
     setIsDialogOpen(false);
-    setEditingTreatment(null);
-    setIsBulkMode(false);
-    setSelectedPlantings([]);
+  };
+  
+  const handleDeleteTreatment = (id: string) => {
+    if (!canDelete || !confirm("Are you sure you want to delete this treatment record?")) return;
+    const updatedTreatments = treatments.filter(t => t.id !== id);
+    setTreatments(updatedTreatments);
+    setStorageData(STORAGE_KEYS.TREATMENTS, updatedTreatments);
   };
 
-  const handleEdit = (treatment: Treatment) => {
+  const handleOpenDialog = (treatment: Treatment | null = null, bulk = false) => {
     setEditingTreatment(treatment);
-    setIsDialogOpen(true);
-    setIsBulkMode(false);
-  };
-
-  const handleDelete = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this treatment?")) {
-      const updatedTreatments = treatments.filter(t => t.id !== id);
-      setTreatments(updatedTreatments);
-      setStorageData(STORAGE_KEYS.TREATMENTS, updatedTreatments);
-    }
-  };
-
-  const handleBulkApply = () => {
-    setIsBulkMode(true);
-    setEditingTreatment(null);
+    setIsBulkMode(bulk);
+    setSelectedPlantingIds(treatment ? treatment.plantingIds : []);
     setIsDialogOpen(true);
   };
-
+  
   const togglePlantingSelection = (plantingId: string) => {
-    setSelectedPlantings(prev =>
+    setSelectedPlantingIds(prev =>
       prev.includes(plantingId) ? prev.filter(id => id !== plantingId) : [...prev, plantingId]
     );
   };
 
+  if (!canView) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>You don't have permission to view treatments.</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   return (
-    <Layout>
-      <div className="p-4 md:p-6">
-        <header className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Treatments</h1>
+    <div className="max-w-7xl mx-auto space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-bold flex items-center gap-3">
+            <TestTube2 className="w-10 h-10 text-cyan-600" />
+            Treatments
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">Log and manage all chemical and fertilizer applications.</p>
+        </div>
+        
+        {canCreate && (
           <div className="flex gap-2">
-            <Button onClick={handleBulkApply} disabled={plantings.length === 0}>Bulk Apply</Button>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={() => { setEditingTreatment(null); setIsBulkMode(false); setIsDialogOpen(true); }}>Add Treatment</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{isBulkMode ? "Bulk Apply Treatment" : editingTreatment ? "Edit Treatment" : "Add Treatment"}</DialogTitle>
-                </DialogHeader>
-                <TreatmentForm
-                  plantings={plantings}
-                  onSubmit={handleSave}
-                  initialData={editingTreatment}
-                  isBulkMode={isBulkMode}
-                  selectedPlantings={selectedPlantings}
-                  togglePlantingSelection={togglePlantingSelection}
-                  getPlantingDetails={getPlantingDetails}
-                />
-              </DialogContent>
-            </Dialog>
+            <Button variant="outline" onClick={() => handleOpenDialog(null, true)} disabled={activePlantings.length === 0}>
+                <ChevronsRight className="w-4 h-4 mr-2" />
+                Bulk Apply
+            </Button>
+            <Button onClick={() => handleOpenDialog()} className="bg-cyan-600 hover:bg-cyan-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Treatment
+            </Button>
           </div>
-        </header>
+        )}
+      </div>
 
-        <Card>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Planting</TableHead>
-                  <TableHead>Treatment Type</TableHead>
-                  <TableHead>Chemical Name</TableHead>
-                  <TableHead>Application Method</TableHead>
-                  <TableHead>Date Applied</TableHead>
-                  <TableHead>Dosage</TableHead>
-                  <TableHead>Notes</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {treatments.length > 0 ? (
-                  treatments.map(treatment => {
-                    const { plantTypeName, varietyName } = getPlantingDetails(treatment.plantingId);
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{isBulkMode ? "Bulk Apply Treatment" : (editingTreatment ? "Edit" : "Add") + " Treatment"}</DialogTitle>
+            <DialogDescription>
+              {isBulkMode ? "Apply the same treatment to multiple plantings at once." : "Log a single treatment application."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveTreatment} className="space-y-4 pt-4">
+            {isBulkMode ? (
+              <div className="space-y-2">
+                <Label>Select Plantings *</Label>
+                <ScrollArea className="h-48 rounded-md border p-2">
+                  {activePlantings.map(p => {
+                    const details = getPlantingDetails(p.id);
                     return (
-                      <TableRow key={treatment.id}>
-                        <TableCell>{plantTypeName} - {varietyName}</TableCell>
-                        <TableCell>{treatment.treatmentType}</TableCell>
-                        <TableCell>{treatment.chemicalName}</TableCell>
-                        <TableCell>{treatment.applicationMethod}</TableCell>
-                        <TableCell>{new Date(treatment.applicationDate).toLocaleDateString()}</TableCell>
-                        <TableCell>{treatment.dosage}</TableCell>
-                        <TableCell>{treatment.notes}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => handleEdit(treatment)}>Edit</Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleDelete(treatment.id)}>Delete</Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center">No treatments found.</TableCell>
+                    <div key={p.id} className="flex items-center gap-2 mb-2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+                      <Checkbox id={`bulk-${p.id}`} checked={selectedPlantingIds.includes(p.id)} onCheckedChange={() => togglePlantingSelection(p.id)} />
+                      <Label htmlFor={`bulk-${p.id}`} className="font-normal w-full">{details.name} ({details.variety}) - Planted: {details.datePlanted}</Label>
+                    </div>
+                  )})}
+                </ScrollArea>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="plantingIds">Select Planting *</Label>
+                <Select name="plantingIds" required defaultValue={editingTreatment?.plantingIds[0]}>
+                  <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
+                  <SelectContent>
+                    {activePlantings.map(p => <SelectItem key={p.id} value={p.id}>{getPlantingDetails(p.id).name} ({getPlantingDetails(p.id).variety})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2"><Label htmlFor="name">Chemical/Fertilizer Name *</Label><Input id="name" name="name" defaultValue={editingTreatment?.name} required /></div>
+              <div className="space-y-2"><Label htmlFor="type">Treatment Type *</Label><Select name="type" required defaultValue={editingTreatment?.type}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="fungicide">Fungicide</SelectItem><SelectItem value="pesticide">Pesticide</SelectItem><SelectItem value="fertilizer">Fertilizer</SelectItem></SelectContent></Select></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2"><Label htmlFor="dosage">Dosage</Label><Input id="dosage" name="dosage" defaultValue={editingTreatment?.dosage} /></div>
+              <div className="space-y-2"><Label htmlFor="applicationMethod">Application Method</Label><Select name="applicationMethod" defaultValue={editingTreatment?.applicationMethod}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="drench">Drench</SelectItem><SelectItem value="spray">Spray</SelectItem><SelectItem value="granular">Granular</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+            </div>
+            <div className="space-y-2"><Label htmlFor="applicationDate">Application Date *</Label><Input id="applicationDate" name="applicationDate" type="date" defaultValue={editingTreatment?.applicationDate || new Date().toISOString().split('T')[0]} required /></div>
+            <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" name="notes" defaultValue={editingTreatment?.notes} /></div>
+            <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button><Button type="submit" className="bg-cyan-600 hover:bg-cyan-700">Save Treatment</Button></div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      
+      <Card>
+        <CardHeader><CardTitle>Treatment History</CardTitle><CardDescription>A log of all treatments applied.</CardDescription></CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Name</TableHead><TableHead>Type</TableHead><TableHead>Applied To</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {treatments.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="text-center h-24">No treatments recorded yet.</TableCell></TableRow>
+              ) : (
+                treatments.map(treatment => (
+                  <TableRow key={treatment.id}>
+                    <TableCell>{new Date(treatment.applicationDate).toLocaleDateString()}</TableCell>
+                    <TableCell className="font-medium">{treatment.name}</TableCell>
+                    <TableCell>{treatment.type}</TableCell>
+                    <TableCell>{treatment.plantingIds.length} planting(s)</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex gap-1 justify-end">
+                        {canEdit && <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(treatment)}><Edit className="w-4 h-4" /></Button>}
+                        {canDelete && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteTreatment(treatment.id)}><Trash2 className="w-4 h-4" /></Button>}
+                      </div>
+                    </TableCell>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
-    </Layout>
-  );
-}
-
-interface TreatmentFormProps {
-  plantings: Planting[];
-  onSubmit: (data: Omit<Treatment, "id" | "createdAt">) => void;
-  initialData?: Treatment | null;
-  isBulkMode?: boolean;
-  selectedPlantings?: string[];
-  togglePlantingSelection?: (plantingId: string) => void;
-  getPlantingDetails: (plantingId: string) => { plantTypeName: string, varietyName: string };
-}
-
-function TreatmentForm({
-  plantings,
-  onSubmit,
-  initialData,
-  isBulkMode = false,
-  selectedPlantings = [],
-  togglePlantingSelection = () => {},
-  getPlantingDetails,
-}: TreatmentFormProps) {
-  const [formData, setFormData] = useState({
-    plantingId: initialData?.plantingId || (plantings.length > 0 ? plantings[0].id : ""),
-    treatmentType: initialData?.treatmentType || "fungicide",
-    chemicalName: initialData?.chemicalName || "",
-    applicationMethod: initialData?.applicationMethod || "drench",
-    applicationDate: initialData?.applicationDate ? initialData.applicationDate.split('T')[0] : new Date().toISOString().split('T')[0],
-    dosage: initialData?.dosage || "",
-    notes: initialData?.notes || "",
-  });
-
-  useEffect(() => {
-    if (initialData) {
-      setFormData({
-        plantingId: initialData.plantingId,
-        treatmentType: initialData.treatmentType,
-        chemicalName: initialData.chemicalName,
-        applicationMethod: initialData.applicationMethod,
-        applicationDate: initialData.applicationDate.split('T')[0],
-        dosage: initialData.dosage,
-        notes: initialData.notes || "",
-      });
-    }
-  }, [initialData]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isBulkMode && selectedPlantings.length === 0) {
-      alert("Please select at least one planting for bulk application.");
-      return;
-    }
-    if (!isBulkMode && !formData.plantingId) {
-      alert("Please select a planting.");
-      return;
-    }
-    onSubmit(formData);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {isBulkMode ? (
-        <div>
-          <Label>Select Plantings for Bulk Application</Label>
-          <Card className="mt-2 max-h-60 overflow-y-auto">
-            <CardContent className="p-4">
-              {plantings.map(planting => {
-                const { plantTypeName, varietyName } = getPlantingDetails(planting.id);
-                return (
-                  <div key={planting.id} className="flex items-center gap-2 mb-2">
-                    <Checkbox
-                      id={`bulk-${planting.id}`}
-                      checked={selectedPlantings.includes(planting.id)}
-                      onCheckedChange={() => togglePlantingSelection(planting.id)}
-                    />
-                    <Label htmlFor={`bulk-${planting.id}`}>
-                      {plantTypeName} - {varietyName} (Planted: {new Date(planting.plantingDate).toLocaleDateString()})
-                    </Label>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-        </div>
-      ) : (
-        <div>
-          <Label htmlFor="plantingId">Planting</Label>
-          <Select
-            name="plantingId"
-            value={formData.plantingId}
-            onValueChange={value => handleSelectChange("plantingId", value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a planting" />
-            </SelectTrigger>
-            <SelectContent>
-              {plantings.map(planting => {
-                const { plantTypeName, varietyName } = getPlantingDetails(planting.id);
-                return (
-                  <SelectItem key={planting.id} value={planting.id}>
-                    {plantTypeName} - {varietyName}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
-      <div>
-        <Label htmlFor="treatmentType">Treatment Type</Label>
-        <Select
-          name="treatmentType"
-          value={formData.treatmentType}
-          onValueChange={value => handleSelectChange("treatmentType", value)}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select a treatment type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fungicide">Fungicide</SelectItem>
-            <SelectItem value="pesticide">Pesticide</SelectItem>
-            <SelectItem value="fertilizer">Fertilizer</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <Label htmlFor="chemicalName">Chemical/Fertilizer Name</Label>
-        <Input
-          id="chemicalName"
-          name="chemicalName"
-          value={formData.chemicalName}
-          onChange={handleChange}
-          required
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="applicationMethod">Application Method</Label>
-        <Select
-          name="applicationMethod"
-          value={formData.applicationMethod}
-          onValueChange={value => handleSelectChange("applicationMethod", value)}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select application method" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="drench">Drench</SelectItem>
-            <SelectItem value="spray">Spray</SelectItem>
-            <SelectItem value="granular">Granular</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <Label htmlFor="dosage">Dosage</Label>
-        <Input
-          id="dosage"
-          name="dosage"
-          value={formData.dosage}
-          onChange={handleChange}
-          required
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="applicationDate">Date Applied</Label>
-        <Input
-          id="applicationDate"
-          name="applicationDate"
-          type="date"
-          value={formData.applicationDate}
-          onChange={handleChange}
-          required
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="notes">Notes</Label>
-        <Input
-          id="notes"
-          name="notes"
-          value={formData.notes}
-          onChange={handleChange}
-        />
-      </div>
-
-      <div className="flex justify-end">
-        <Button type="submit">Save</Button>
-      </div>
-    </form>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

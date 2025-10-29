@@ -11,92 +11,92 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Edit, Trash2, Package, Calendar, TrendingUp, Archive, AlertTriangle } from "lucide-react";
-import { Harvest, Planting, PlantType, PlantVariety } from "@/types";
+import { Harvest, Planting, PlantType } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
+import { useAuth } from "@/contexts/AuthContext";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 export default function HarvestsPage() {
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission("harvests", "create");
+  const canEdit = hasPermission("harvests", "update");
+  const canDelete = hasPermission("harvests", "delete");
+  const canView = hasPermission("harvests", "read");
+
   const [harvests, setHarvests] = useState<Harvest[]>([]);
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
-  const [varieties, setVarieties] = useState<PlantVariety[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingHarvest, setEditingHarvest] = useState<Harvest | null>(null);
   const [selectedPlantingId, setSelectedPlantingId] = useState<string>("");
   const [closePlanting, setClosePlanting] = useState(false);
 
   useEffect(() => {
-    setHarvests(getStorageData<Harvest>(STORAGE_KEYS.HARVESTS));
-    const loadedPlantings = getStorageData<Planting>(STORAGE_KEYS.PLANTINGS);
-    
-    const plantingsWithRemaining = loadedPlantings.map(p => ({
-      ...p,
-      remainingQuantity: p.remainingQuantity ?? p.quantity
-    }));
-    
-    setPlantings(plantingsWithRemaining);
-    setStorageData(STORAGE_KEYS.PLANTINGS, plantingsWithRemaining);
-    
-    setPlantTypes(getStorageData<PlantType>(STORAGE_KEYS.PLANT_TYPES));
-    setVarieties(getStorageData<PlantVariety>(STORAGE_KEYS.PLANT_VARIETIES));
-  }, []);
+    if (canView) {
+      setHarvests(getStorageData<Harvest[]>(STORAGE_KEYS.HARVESTS) || []);
+      setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
+      setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
+    }
+  }, [canView]);
 
-  const activePlantings = plantings.filter(p => 
-    p.status === "active" && 
-    (p.remainingQuantity ?? p.quantity) > 0
-  );
-
+  const activePlantings = plantings.filter(p => p.status === "active");
   const selectedPlanting = plantings.find(p => p.id === selectedPlantingId);
-  const maxHarvestQuantity = selectedPlanting ? (selectedPlanting.remainingQuantity ?? selectedPlanting.quantity) : 0;
+  
+  const getRemainingQuantity = (plantingId: string) => {
+    const planting = plantings.find(p => p.id === plantingId);
+    if (!planting) return 0;
+    const totalHarvested = harvests
+      .filter(h => h.plantingId === plantingId)
+      .reduce((sum, h) => sum + h.quantityHarvested, 0);
+    return planting.quantity - totalHarvested;
+  };
 
-  const handleSavePlanting = (e: React.FormEvent<HTMLFormElement>) => {
+  const maxHarvestQuantity = selectedPlanting ? getRemainingQuantity(selectedPlanting.id) : 0;
+
+  const handleSaveHarvest = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
     const plantingId = formData.get("plantingId") as string;
-    const harvestQuantity = Number(formData.get("quantity"));
-    const quality = formData.get("quality") as "excellent" | "good" | "fair" | "poor";
+    const quantityHarvested = Number(formData.get("quantityHarvested"));
+    
+    if (quantityHarvested > maxHarvestQuantity && !editingHarvest) {
+      alert(`Cannot harvest more than the remaining quantity of ${maxHarvestQuantity}.`);
+      return;
+    }
 
-    const harvest: Harvest = editingHarvest ? {
-      ...editingHarvest,
+    const harvest: Omit<Harvest, "id"> = {
       plantingId,
       harvestDate: formData.get("harvestDate") as string,
-      quantity: harvestQuantity,
-      quality,
-      notes: formData.get("notes") as string
-    } : {
-      id: generateId(),
-      plantingId,
-      harvestDate: formData.get("harvestDate") as string,
-      quantity: harvestQuantity,
-      quality,
+      quantityHarvested,
+      quality: formData.get("quality") as "excellent" | "good" | "fair" | "poor",
       notes: formData.get("notes") as string,
-      createdAt: new Date().toISOString()
     };
 
+    const updatedHarvest: Harvest = editingHarvest 
+        ? { ...editingHarvest, ...harvest } 
+        : { ...harvest, id: generateId() };
+
     const updatedHarvests = editingHarvest
-      ? harvests.map(h => h.id === editingHarvest.id ? harvest : h)
-      : [...harvests, harvest];
+      ? harvests.map(h => h.id === editingHarvest.id ? updatedHarvest : h)
+      : [...harvests, updatedHarvest];
     
     setHarvests(updatedHarvests);
     setStorageData(STORAGE_KEYS.HARVESTS, updatedHarvests);
 
-    const planting = plantings.find(p => p.id === plantingId);
-    if (planting && !editingHarvest) {
-      const currentRemaining = planting.remainingQuantity ?? planting.quantity;
-      const newRemaining = Math.max(0, currentRemaining - harvestQuantity);
-      
-      const shouldClose = closePlanting || newRemaining === 0;
-      
-      const updatedPlanting = {
-        ...planting,
-        remainingQuantity: newRemaining,
-        status: shouldClose ? ("closed" as const) : planting.status
-      };
-      
-      const updatedPlantings = plantings.map(p => p.id === plantingId ? updatedPlanting : p);
-      setPlantings(updatedPlantings);
-      setStorageData(STORAGE_KEYS.PLANTINGS, updatedPlantings);
+    if (!editingHarvest) {
+        const planting = plantings.find(p => p.id === plantingId);
+        if (planting) {
+          const remainingAfter = getRemainingQuantity(plantingId) - quantityHarvested;
+          if (closePlanting || remainingAfter <= 0) {
+            const updatedPlanting = { ...planting, status: "closed" as const };
+            const updatedPlantings = plantings.map(p => p.id === plantingId ? updatedPlanting : p);
+            setPlantings(updatedPlantings);
+            setStorageData(STORAGE_KEYS.PLANTINGS, updatedPlantings);
+          }
+        }
     }
+
 
     setIsDialogOpen(false);
     setEditingHarvest(null);
@@ -105,65 +105,66 @@ export default function HarvestsPage() {
   };
 
   const handleDeleteHarvest = (id: string) => {
-    if (confirm("Are you sure you want to delete this harvest record?")) {
-      const harvest = harvests.find(h => h.id === id);
-      const updatedHarvests = harvests.filter(h => h.id !== id);
-      setHarvests(updatedHarvests);
-      setStorageData(STORAGE_KEYS.HARVESTS, updatedHarvests);
+    if (!canDelete || !confirm("Are you sure you want to delete this harvest record? This cannot be undone.")) return;
 
-      if (harvest) {
-        const planting = plantings.find(p => p.id === harvest.plantingId);
-        if (planting) {
-          const restoredRemaining = (planting.remainingQuantity ?? planting.quantity) + harvest.quantity;
-          const updatedPlanting = {
-            ...planting,
-            remainingQuantity: Math.min(restoredRemaining, planting.quantity),
-            status: "active" as const
-          };
-          const updatedPlantings = plantings.map(p => p.id === harvest.plantingId ? updatedPlanting : p);
-          setPlantings(updatedPlantings);
-          setStorageData(STORAGE_KEYS.PLANTINGS, updatedPlantings);
-        }
-      }
+    const harvestToDelete = harvests.find(h => h.id === id);
+    if (!harvestToDelete) return;
+    
+    const updatedHarvests = harvests.filter(h => h.id !== id);
+    setHarvests(updatedHarvests);
+    setStorageData(STORAGE_KEYS.HARVESTS, updatedHarvests);
+
+    const planting = plantings.find(p => p.id === harvestToDelete.plantingId);
+    if (planting && planting.status === "closed") {
+      const updatedPlanting = { ...planting, status: "active" as const };
+      const updatedPlantings = plantings.map(p => p.id === planting.id ? updatedPlanting : p);
+      setPlantings(updatedPlantings);
+      setStorageData(STORAGE_KEYS.PLANTINGS, updatedPlantings);
     }
   };
 
   const getPlantingInfo = (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
-    if (!planting) return { plantType: "Unknown", variety: "", plantingDate: "", quantity: 0, remainingQuantity: 0, status: "active" as const };
-    
-    const plantType = plantTypes.find(pt => pt.id === planting.plantTypeId);
-    const variety = planting.varietyId ? varieties.find(v => v.id === planting.varietyId) : null;
-    
+    const plantType = plantTypes.find(pt => pt.id === planting?.plantTypeId);
     return {
-      plantType: plantType?.name || "Unknown",
-      variety: variety?.name || "",
-      plantingDate: planting.plantingDate,
-      quantity: planting.quantity,
-      remainingQuantity: planting.remainingQuantity ?? planting.quantity,
-      status: planting.status
+      plantTypeName: plantType?.name || "Unknown",
+      variety: planting?.variety || "N/A",
+      originalQty: planting?.quantity || 0,
+      status: planting?.status || "active",
     };
   };
-
-  const getQualityColor = (quality: string) => {
-    switch (quality) {
-      case "excellent": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-      case "good": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
-      case "fair": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
-      case "poor": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
+  
+  const handleOpenDialog = (harvest?: Harvest) => {
+    if (harvest) {
+      if (!canEdit) {
+        alert("You don't have permission to edit harvests.");
+        return;
+      }
+      setEditingHarvest(harvest);
+      setSelectedPlantingId(harvest.plantingId);
+    } else {
+      if (!canCreate) {
+        alert("You don't have permission to create harvests.");
+        return;
+      }
+      setEditingHarvest(null);
+      setSelectedPlantingId("");
     }
+    setIsDialogOpen(true);
   };
 
-  const totalHarvestQuantity = harvests.reduce((sum, h) => sum + h.quantity, 0);
-  const averageYield = harvests.length > 0
-    ? Math.round(harvests.reduce((sum, h) => {
-        const plantingInfo = getPlantingInfo(h.plantingId);
-        return sum + (h.quantity / plantingInfo.quantity);
-      }, 0) / harvests.length * 100)
-    : 0;
-
-  const closedPlantings = plantings.filter(p => p.status === "closed").length;
+  if (!canView) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>You don't have permission to view harvests. Please contact your administrator.</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+  
+  const totalHarvestedQuantity = harvests.reduce((sum, h) => sum + h.quantityHarvested, 0);
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -173,316 +174,141 @@ export default function HarvestsPage() {
             <Package className="w-10 h-10 text-amber-600" />
             Harvests
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Record and track your harvest yields
-          </p>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">Record and track your harvest yields.</p>
         </div>
         
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) {
-            setEditingHarvest(null);
-            setSelectedPlantingId("");
-            setClosePlanting(false);
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setEditingHarvest(null)} className="bg-amber-600 hover:bg-amber-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Record Harvest
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{editingHarvest ? "Edit" : "Record New"} Harvest</DialogTitle>
-              <DialogDescription>
-                Enter the details for the harvest. You can close the planting if all seedlings have been dispatched.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSavePlanting} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="plantingId">Select Planting *</Label>
-                <Select 
-                  name="plantingId" 
-                  required 
-                  defaultValue={editingHarvest?.plantingId}
-                  onValueChange={setSelectedPlantingId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a planting to harvest" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activePlantings.map(planting => {
-                      const plantType = plantTypes.find(pt => pt.id === planting.plantTypeId);
-                      const variety = planting.varietyId ? varieties.find(v => v.id === planting.varietyId) : null;
-                      const remaining = planting.remainingQuantity ?? planting.quantity;
-                      
-                      return (
-                        <SelectItem key={planting.id} value={planting.id}>
-                          {plantType?.name}{variety ? ` (${variety.name})` : ""} - {remaining}/{planting.quantity} remaining (Planted: {new Date(planting.plantingDate).toLocaleDateString()})
+        {canCreate && (
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => handleOpenDialog()} className="bg-amber-600 hover:bg-amber-700">
+                <Plus className="w-4 h-4 mr-2" />
+                Record Harvest
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-xl">
+              <DialogHeader>
+                <DialogTitle>{editingHarvest ? "Edit" : "Record New"} Harvest</DialogTitle>
+                <DialogDescription>
+                  Enter the details for the harvest. You can close the planting if it's the final harvest.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSaveHarvest} className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="plantingId">Select Planting *</Label>
+                  <Select name="plantingId" required defaultValue={editingHarvest?.plantingId} onValueChange={setSelectedPlantingId} disabled={!!editingHarvest}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a planting" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activePlantings.map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {getPlantingInfo(p.id).plantTypeName} ({getPlantingInfo(p.id).variety}) - {getRemainingQuantity(p.id)} of {p.quantity} left
                         </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-                {activePlantings.length === 0 && (
-                  <p className="text-sm text-amber-600 flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" />
-                    No active plantings available. Please add plantings first.
-                  </p>
-                )}
-                {selectedPlanting && (
-                  <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Package className="w-4 h-4 text-blue-600" />
-                      <span className="font-medium">Available to harvest: {maxHarvestQuantity} units</span>
-                    </div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                      Original quantity: {selectedPlanting.quantity} units
-                    </p>
-                  </div>
-                )}
-              </div>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {activePlantings.length === 0 && !editingHarvest && <p className="text-sm text-amber-600 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />No active plantings available.</p>}
+                  {selectedPlanting && <div className="p-2 text-sm text-blue-800 bg-blue-100 dark:bg-blue-900 dark:text-blue-200 rounded-md mt-2">Max harvest quantity: {maxHarvestQuantity}</div>}
+                </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="harvestDate">Harvest Date *</Label>
-                  <Input 
-                    id="harvestDate" 
-                    name="harvestDate" 
-                    type="date" 
-                    defaultValue={editingHarvest?.harvestDate} 
-                    required 
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="harvestDate">Harvest Date *</Label>
+                    <Input id="harvestDate" name="harvestDate" type="date" defaultValue={editingHarvest?.harvestDate} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="quantityHarvested">Quantity Harvested *</Label>
+                    <Input id="quantityHarvested" name="quantityHarvested" type="number" defaultValue={editingHarvest?.quantityHarvested} required min="1" max={editingHarvest ? undefined : maxHarvestQuantity}/>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="quantity">Quantity Harvested *</Label>
-                  <Input 
-                    id="quantity" 
-                    name="quantity" 
-                    type="number" 
-                    defaultValue={editingHarvest?.quantity} 
-                    required 
-                    min="0.01"
-                    max={maxHarvestQuantity}
-                    step="0.01"
-                    disabled={!selectedPlantingId}
-                  />
-                  {selectedPlantingId && maxHarvestQuantity > 0 && (
-                    <p className="text-xs text-gray-500">Max: {maxHarvestQuantity} units</p>
-                  )}
+                  <Label htmlFor="quality">Quality *</Label>
+                  <Select name="quality" required defaultValue={editingHarvest?.quality}>
+                    <SelectTrigger><SelectValue placeholder="Select quality" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="excellent">Excellent</SelectItem>
+                      <SelectItem value="good">Good</SelectItem>
+                      <SelectItem value="fair">Fair</SelectItem>
+                      <SelectItem value="poor">Poor</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="quality">Quality *</Label>
-                <Select name="quality" required defaultValue={editingHarvest?.quality}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select quality" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="excellent">Excellent</SelectItem>
-                    <SelectItem value="good">Good</SelectItem>
-                    <SelectItem value="fair">Fair</SelectItem>
-                    <SelectItem value="poor">Poor</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {!editingHarvest && selectedPlantingId && (
-                <div className="p-4 bg-amber-50 dark:bg-amber-950 rounded-lg border border-amber-200 dark:border-amber-800 space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="closePlanting" 
-                      checked={closePlanting}
-                      onCheckedChange={(checked) => setClosePlanting(checked === true)}
-                    />
-                    <Label htmlFor="closePlanting" className="cursor-pointer font-medium flex items-center gap-2">
-                      <Archive className="w-4 h-4" />
-                      Close this planting after harvest
-                    </Label>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea id="notes" name="notes" defaultValue={editingHarvest?.notes} placeholder="Additional notes about this harvest" />
+                </div>
+                
+                {!editingHarvest && selectedPlantingId && (
+                  <div className="flex items-center space-x-2 pt-2">
+                    <Checkbox id="closePlanting" checked={closePlanting} onCheckedChange={(checked) => setClosePlanting(checked === true)} />
+                    <Label htmlFor="closePlanting">Close this planting after harvest</Label>
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 pl-6">
-                    Check this option to mark the planting as closed and archived. Use this when all seedlings have been dispatched, even if the quantity hasn't been fully depleted.
-                  </p>
+                )}
+                
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                  <Button type="submit" className="bg-amber-600 hover:bg-amber-700">{editingHarvest ? "Update" : "Record"} Harvest</Button>
                 </div>
-              )}
-              
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea 
-                  id="notes" 
-                  name="notes" 
-                  defaultValue={editingHarvest?.notes} 
-                  rows={3} 
-                  placeholder="Additional notes about this harvest"
-                />
-              </div>
-              
-              <div className="flex justify-end gap-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => { 
-                    setIsDialogOpen(false); 
-                    setEditingHarvest(null);
-                    setSelectedPlantingId("");
-                    setClosePlanting(false);
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" className="bg-amber-600 hover:bg-amber-700">
-                  {editingHarvest ? "Update" : "Record"} Harvest
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+              </form>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="border-amber-200 dark:border-amber-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Total Harvests</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-amber-600">{harvests.length}</div>
-          </CardContent>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+            <CardHeader className="pb-3"><CardTitle>Total Harvests</CardTitle></CardHeader>
+            <CardContent><div className="text-3xl font-bold text-amber-600">{harvests.length}</div></CardContent>
         </Card>
-
-        <Card className="border-green-200 dark:border-green-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Total Yield</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-600">{totalHarvestQuantity.toFixed(2)}</div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">units harvested</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-blue-200 dark:border-blue-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" />
-              Avg Yield Rate
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-blue-600">{averageYield}%</div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">of planted quantity</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-gray-200 dark:border-gray-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Archive className="w-4 h-4" />
-              Closed Plantings
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-600">{closedPlantings}</div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">archived</p>
-          </CardContent>
+        <Card>
+            <CardHeader className="pb-3"><CardTitle>Total Yield</CardTitle></CardHeader>
+            <CardContent>
+                <div className="text-3xl font-bold text-green-600">{totalHarvestedQuantity.toLocaleString()}</div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">units harvested</p>
+            </CardContent>
         </Card>
       </div>
 
-      {harvests.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Package className="w-16 h-16 text-gray-400 mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No Harvests Recorded</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">Record your first harvest to track yields</p>
-            <Button onClick={() => setIsDialogOpen(true)} className="bg-amber-600 hover:bg-amber-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Record Harvest
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Harvest Records</CardTitle>
-            <CardDescription>View and manage your harvest history</CardDescription>
-          </CardHeader>
-          <CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle>Harvest Records</CardTitle>
+          <CardDescription>A log of all your recorded harvests.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {harvests.length === 0 ? (
+            <div className="text-center py-12">
+              <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold mb-2">No Harvests Recorded</h3>
+              <p className="text-gray-600 dark:text-gray-400">Record your first harvest to track yields.</p>
+            </div>
+          ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Plant Type</TableHead>
+                  <TableHead>Plant</TableHead>
                   <TableHead>Harvest Date</TableHead>
-                  <TableHead>Quantity</TableHead>
-                  <TableHead>Remaining</TableHead>
+                  <TableHead>Qty Harvested</TableHead>
                   <TableHead>Quality</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead>Notes</TableHead>
-                  <TableHead className="w-24">Actions</TableHead>
+                  <TableHead className="w-24 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {harvests.map((harvest) => {
-                  const plantingInfo = getPlantingInfo(harvest.plantingId);
-                  
+                  const info = getPlantingInfo(harvest.plantingId);
                   return (
                     <TableRow key={harvest.id}>
-                      <TableCell className="font-medium">
-                        {plantingInfo.plantType}
-                        {plantingInfo.variety && <span className="text-sm text-gray-600 dark:text-gray-400"> ({plantingInfo.variety})</span>}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-gray-400" />
-                          {new Date(harvest.harvestDate).toLocaleDateString()}
-                        </div>
-                      </TableCell>
-                      <TableCell>{harvest.quantity} units</TableCell>
-                      <TableCell>
-                        <span className={plantingInfo.remainingQuantity === 0 ? "text-gray-400" : "font-medium"}>
-                          {plantingInfo.remainingQuantity}/{plantingInfo.quantity}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getQualityColor(harvest.quality)}>
-                          {harvest.quality}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {plantingInfo.status === "closed" ? (
-                          <Badge className="bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
-                            <Archive className="w-3 h-3 mr-1" />
-                            Closed
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                            Active
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {harvest.notes || "-"}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingHarvest(harvest);
-                              setIsDialogOpen(true);
-                            }}
-                          >
-                            <Edit className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => handleDeleteHarvest(harvest.id)}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                      <TableCell className="font-medium">{info.plantTypeName} ({info.variety})</TableCell>
+                      <TableCell>{new Date(harvest.harvestDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{harvest.quantityHarvested}</TableCell>
+                      <TableCell><Badge variant="outline">{harvest.quality}</Badge></TableCell>
+                      <TableCell className="max-w-xs truncate">{harvest.notes || "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-1 justify-end">
+                          {canEdit && <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(harvest)}><Edit className="w-4 h-4" /></Button>}
+                          {canDelete && <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700" onClick={() => handleDeleteHarvest(harvest.id)}><Trash2 className="w-4 h-4" /></Button>}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -490,9 +316,9 @@ export default function HarvestsPage() {
                 })}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

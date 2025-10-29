@@ -1,15 +1,14 @@
-
 import "@/styles/globals.css";
 import type { AppProps } from "next/app";
-import { Layout } from "@/components/Layout";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { ThemeProvider } from "@/contexts/ThemeProvider";
+import Layout from "@/components/Layout";
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <AuthProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <Layout>
         <Component {...pageProps} />
       </Layout>
-    </AuthProvider>
+    </ThemeProvider>
   );
 }
