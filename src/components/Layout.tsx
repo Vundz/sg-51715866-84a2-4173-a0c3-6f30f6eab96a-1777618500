@@ -2,10 +2,11 @@
 import { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { Home, Sprout, Package, BarChart3, MapPin, Droplets } from "lucide-react";
+import { Home, Sprout, Package, BarChart3, MapPin, Droplets, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ThemeSwitch } from "@/components/ThemeSwitch";
+import { QuickAccessMenu } from "@/components/QuickAccessMenu";
 
 interface LayoutProps {
   children: ReactNode;
@@ -20,7 +21,8 @@ export function Layout({ children }: LayoutProps) {
     { name: "Plantings", href: "/plantings", icon: Package },
     { name: "Harvests", href: "/harvests", icon: BarChart3 },
     { name: "Locations", href: "/locations", icon: MapPin },
-    { name: "Treatments", href: "/treatments", icon: Droplets }
+    { name: "Treatments", href: "/treatments", icon: Droplets },
+    { name: "Reports", href: "/reports", icon: FileText }
   ];
 
   return (
@@ -28,16 +30,17 @@ export function Layout({ children }: LayoutProps) {
       <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-50">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-8">
+            <div className="flex items-center space-x-4">
+              <QuickAccessMenu />
               <Link href="/" className="flex items-center space-x-2">
                 <Sprout className="w-6 h-6 text-green-600" />
-                <span className="text-xl font-bold">Khulisapp</span>
+                <span className="text-xl font-bold hidden sm:inline-block">Khulisapp</span>
               </Link>
               
               <div className="hidden md:flex space-x-1">
                 {navigation.map((item) => {
                   const Icon = item.icon;
-                  const isActive = router.pathname === item.href;
+                  const isActive = item.href === "/" ? router.pathname === item.href : router.pathname.startsWith(item.href);
                   return (
                     <Link key={item.href} href={item.href}>
                       <Button
