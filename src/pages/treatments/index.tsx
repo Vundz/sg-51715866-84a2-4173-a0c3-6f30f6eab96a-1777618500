@@ -22,16 +22,16 @@ export default function TreatmentsPage() {
   const [selectedPlantings, setSelectedPlantings] = useState<string[]>([]);
 
   useEffect(() => {
-    const storedTreatments = getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || [];
+    const storedTreatments = (getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || []).flat();
     setTreatments(storedTreatments);
     
-    const storedPlantings = getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || [];
+    const storedPlantings = (getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []).flat();
     setPlantings(storedPlantings);
 
-    const storedPlantTypes = getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || [];
+    const storedPlantTypes = (getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []).flat();
     setPlantTypes(storedPlantTypes);
 
-    const storedVarieties = getStorageData<PlantVariety[]>(STORAGE_KEYS.PLANT_VARIETIES) || [];
+    const storedVarieties = (getStorageData<PlantVariety[]>(STORAGE_KEYS.PLANT_VARIETIES) || []).flat();
     setVarieties(storedVarieties);
   }, []);
 
