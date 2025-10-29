@@ -183,11 +183,7 @@ export default function ReportsPage() {
 
   const treatmentReport = useMemo(() => {
     return plantings.map(planting => {
-      const plantingTreatments = treatments.filter(t => 
-        Array.isArray(t.plantingIds) 
-          ? t.plantingIds.includes(planting.id)
-          : t.plantingIds === planting.id
-      );
+      const plantingTreatments = treatments.filter(t => t.plantingId === planting.id);
       
       return {
         planting: {
@@ -198,7 +194,7 @@ export default function ReportsPage() {
         },
         treatments: plantingTreatments.map(t => ({
           treatmentType: t.treatmentType,
-          product: t.product,
+          productName: t.productName,
           applicationDate: t.applicationDate,
           dosage: t.dosage,
           notes: t.notes
@@ -721,7 +717,7 @@ export default function ReportsPage() {
                               {treatment.treatmentType}
                             </Badge>
                           </TableCell>
-                          <TableCell className="font-medium">{treatment.product}</TableCell>
+                          <TableCell className="font-medium">{treatment.productName}</TableCell>
                           <TableCell>{new Date(treatment.applicationDate).toLocaleDateString()}</TableCell>
                           <TableCell>{treatment.dosage}</TableCell>
                           <TableCell className="max-w-xs truncate">{treatment.notes || "-"}</TableCell>
