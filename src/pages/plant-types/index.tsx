@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +10,17 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Sprout, X } from "lucide-react";
 import { PlantType, PlantVariety } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
+import { useAuth } from "@/contexts/AuthContext";
+import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function PlantTypesPage() {
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission("plant-types", "create");
+  const canEdit = hasPermission("plant-types", "update");
+  const canDelete = hasPermission("plant-types", "delete");
+  const canView = hasPermission("plant-types", "read");
+
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
   const [varieties, setVarieties] = useState<PlantVariety[]>([]);
   const [isAddTypeOpen, setIsAddTypeOpen] = useState(false);
@@ -25,6 +33,14 @@ export default function PlantTypesPage() {
   }, []);
 
   const handleOpenDialog = (type?: PlantType) => {
+    if (type && !canEdit) {
+      alert("You don't have permission to edit plant types");
+      return;
+    }
+    if (!type && !canCreate) {
+      alert("You don't have permission to create plant types");
+      return;
+    }
     if (type) {
       setEditingType(type);
       const typeVarieties = varieties.filter(v => v.plantTypeId === type.id);
@@ -56,6 +72,16 @@ export default function PlantTypesPage() {
 
   const handleSavePlantType = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    if (editingType && !canEdit) {
+      alert("You don't have permission to edit plant types");
+      return;
+    }
+    if (!editingType && !canCreate) {
+      alert("You don't have permission to create plant types");
+      return;
+    }
+    
     const formData = new FormData(e.currentTarget);
     
     const plantTypeId = editingType?.id || generateId();
@@ -126,6 +152,10 @@ export default function PlantTypesPage() {
   };
 
   const handleDeleteType = (id: string) => {
+    if (!canDelete) {
+      alert("You don't have permission to delete plant types");
+      return;
+    }
     if (confirm("Are you sure? This will also delete all varieties of this plant type.")) {
       const updatedTypes = plantTypes.filter(t => t.id !== id);
       const updatedVarieties = varieties.filter(v => v.plantTypeId !== id);
@@ -139,6 +169,19 @@ export default function PlantTypesPage() {
   const getVarietiesForType = (typeId: string) => {
     return varieties.filter(v => v.plantTypeId === typeId);
   };
+
+  if (!canView) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            You don't have permission to view plant types. Please contact your administrator.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -154,12 +197,14 @@ export default function PlantTypesPage() {
         </div>
         
         <Dialog open={isAddTypeOpen} onOpenChange={setIsAddTypeOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog()} className="bg-green-600 hover:bg-green-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Plant Type
-            </Button>
-          </DialogTrigger>
+          {canCreate && (
+            <DialogTrigger asChild>
+              <Button onClick={() => handleOpenDialog()} className="bg-green-600 hover:bg-green-700">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Plant Type
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingType ? "Edit" : "Add New"} Plant Type</DialogTitle>
@@ -272,10 +317,12 @@ export default function PlantTypesPage() {
               <Sprout className="w-16 h-16 text-gray-400 mb-4" />
               <h3 className="text-xl font-semibold mb-2">No Plant Types Yet</h3>
               <p className="text-gray-600 dark:text-gray-400 mb-4">Get started by adding your first plant type</p>
-              <Button onClick={() => handleOpenDialog()} className="bg-green-600 hover:bg-green-700">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Plant Type
-              </Button>
+              {canCreate && (
+                <Button onClick={() => handleOpenDialog()} className="bg-green-600 hover:bg-green-700">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Plant Type
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -300,21 +347,25 @@ export default function PlantTypesPage() {
                   </div>
                   
                   <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleOpenDialog(type)}
-                    >
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-red-600 hover:text-red-700"
-                      onClick={() => handleDeleteType(type.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenDialog(type)}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 hover:text-red-700"
+                        onClick={() => handleDeleteType(type.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
