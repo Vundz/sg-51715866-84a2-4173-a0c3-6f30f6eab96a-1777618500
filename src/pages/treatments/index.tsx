@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,17 +25,20 @@ export default function TreatmentsPage() {
 
   useEffect(() => {
     const storedTreatments = getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || [];
-    const migratedTreatments = storedTreatments.map(t => ({
+    const migratedTreatments: Treatment[] = storedTreatments.map(t => ({
       ...t,
       applicationMethod: t.applicationMethod || "other"
     }));
     setTreatments(migratedTreatments);
-    if (JSON.stringify(storedTreatments) !== JSON.stringify(migratedTreatments)) {
-        setStorageData(STORAGE_KEYS.TREATMENTS, migratedTreatments);
+    
+    const needsMigration = storedTreatments.some(t => !t.applicationMethod);
+    if (needsMigration) {
+      setStorageData(STORAGE_KEYS.TREATMENTS, migratedTreatments);
     }
-    setPlantings(getStorageData<Planting>(STORAGE_KEYS.PLANTINGS));
-    setPlantTypes(getStorageData<PlantType>(STORAGE_KEYS.PLANT_TYPES));
-    setVarieties(getStorageData<PlantVariety>(STORAGE_KEYS.PLANT_VARIETIES));
+    
+    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
+    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
+    setVarieties(getStorageData<PlantVariety[]>(STORAGE_KEYS.PLANT_VARIETIES) || []);
   }, []);
 
   const activePlantings = plantings.filter(p => p.status === "active");
