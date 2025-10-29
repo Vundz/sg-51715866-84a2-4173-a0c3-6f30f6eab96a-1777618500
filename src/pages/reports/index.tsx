@@ -1,10 +1,8 @@
-
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { BarChart, Calendar, Package, MapPin, Sprout, TrendingUp, FileText, ArrowRight, Download } from "lucide-react";
+import { BarChart, Calendar, Package, MapPin, Sprout, TrendingUp, FileText as ReportIcon, ArrowRight } from "lucide-react";
 import { Planting, Harvest, PlantType, Location, Treatment } from "@/types";
 import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
 
@@ -16,11 +14,11 @@ export default function ReportsPage() {
   const [treatments, setTreatments] = useState<Treatment[]>([]);
 
   useEffect(() => {
-    setPlantings(getStorageData<Planting>(STORAGE_KEYS.PLANTINGS));
-    setHarvests(getStorageData<Harvest>(STORAGE_KEYS.HARVESTS));
-    setPlantTypes(getStorageData<PlantType>(STORAGE_KEYS.PLANT_TYPES));
-    setLocations(getStorageData<Location>(STORAGE_KEYS.LOCATIONS));
-    setTreatments(getStorageData<Treatment>(STORAGE_KEYS.TREATMENTS));
+    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
+    setHarvests(getStorageData<Harvest[]>(STORAGE_KEYS.HARVESTS) || []);
+    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
+    setLocations(getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || []);
+    setTreatments(getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || []);
   }, []);
 
   const upcomingHarvestsCount = plantings.filter(p => {
@@ -28,7 +26,7 @@ export default function ReportsPage() {
     const plantType = plantTypes.find(pt => pt.id === p.plantTypeId);
     if (!plantType?.growthDuration) return false;
     
-    const plantingDate = new Date(p.plantingDate);
+    const plantingDate = new Date(p.datePlanted);
     const expectedDate = new Date(plantingDate);
     expectedDate.setDate(expectedDate.getDate() + plantType.growthDuration);
     
@@ -110,7 +108,7 @@ export default function ReportsPage() {
       id: "treatments",
       title: "Treatment Report",
       description: "Application history and tracking",
-      icon: FileText,
+      icon: ReportIcon,
       iconBg: "bg-red-100 dark:bg-red-900",
       iconColor: "text-red-600 dark:text-red-400",
       borderColor: "border-l-red-500",
@@ -169,24 +167,6 @@ export default function ReportsPage() {
           );
         })}
       </div>
-
-      <Card className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950 dark:to-blue-950 border-purple-200 dark:border-purple-800">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Download className="w-5 h-5" />
-            Export Options
-          </CardTitle>
-          <CardDescription>
-            Each report includes export functionality for PDF, Excel, and CSV formats
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Click on any report above to view detailed data with filtering options and export capabilities.
-            All reports are designed to be mobile-friendly and print-ready.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

@@ -50,7 +50,7 @@ export default function HarvestsPage() {
       isClosed: closePlanting
     };
 
-    let updatedPlantings = [...plantings];
+    const updatedPlantings = [...plantings];
     const plantingToUpdate = updatedPlantings.find(p => p.id === plantingId);
 
     if (plantingToUpdate) {
@@ -87,7 +87,7 @@ export default function HarvestsPage() {
     const harvestToDelete = harvests.find(h => h.id === id);
     if (!harvestToDelete) return;
 
-    let updatedPlantings = [...plantings];
+    const updatedPlantings = [...plantings];
     const plantingToUpdate = updatedPlantings.find(p => p.id === harvestToDelete.plantingId);
     if (plantingToUpdate) {
         plantingToUpdate.remainingQuantity = (plantingToUpdate.remainingQuantity ?? plantingToUpdate.quantity) + harvestToDelete.quantityHarvested;

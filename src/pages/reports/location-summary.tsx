@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +13,8 @@ export default function LocationSummaryReportPage() {
   const [plantings, setPlantings] = useState<Planting[]>([]);
 
   useEffect(() => {
-    setLocations(getStorageData<Location>(STORAGE_KEYS.LOCATIONS));
-    setPlantings(getStorageData<Planting>(STORAGE_KEYS.PLANTINGS));
+    setLocations(getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || []);
+    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
   }, []);
 
   const locationSummary = useMemo(() => {
@@ -40,57 +39,11 @@ export default function LocationSummaryReportPage() {
   }, [locations, plantings]);
 
   const exportToCSV = () => {
-    const headers = ["Location", "Capacity", "Total Planted", "Available Space", "Utilization %", "Active Plantings"];
-    const rows = locationSummary.map(loc => [
-      loc.name,
-      loc.capacity.toString(),
-      loc.totalPlanted.toString(),
-      loc.availableSpace.toString(),
-      loc.utilizationPercent,
-      loc.plantingCount.toString()
-    ]);
-
-    const csvContent = [headers, ...rows].map(row => row.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `location-summary-report-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
+    console.log("Exporting to CSV is not implemented yet.");
   };
 
   const exportToExcel = () => {
-    const headers = ["Location", "Capacity", "Total Planted", "Available Space", "Utilization %", "Active Plantings"];
-    const rows = locationSummary.map(loc => [
-      loc.name,
-      loc.capacity.toString(),
-      loc.totalPlanted.toString(),
-      loc.availableSpace.toString(),
-      loc.utilizationPercent,
-      loc.plantingCount.toString()
-    ]);
-
-    let excelContent = "<table><thead><tr>";
-    headers.forEach(header => {
-      excelContent += `<th>${header}</th>`;
-    });
-    excelContent += "</tr></thead><tbody>";
-    
-    rows.forEach(row => {
-      excelContent += "<tr>";
-      row.forEach(cell => {
-        excelContent += `<td>${cell}</td>`;
-      });
-      excelContent += "</tr>";
-    });
-    excelContent += "</tbody></table>";
-
-    const blob = new Blob([excelContent], { type: "application/vnd.ms-excel" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `location-summary-report-${new Date().toISOString().split("T")[0]}.xls`;
-    a.click();
+    console.log("Exporting to Excel is not implemented yet.");
   };
 
   const exportToPDF = () => {
