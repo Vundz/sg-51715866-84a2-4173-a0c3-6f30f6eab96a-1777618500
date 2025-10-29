@@ -1,170 +1,215 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Sprout, MapPin, Package, Droplets, BarChart3 } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardDescription,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { TrendingUp, Package, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
-import type { PlantType, Planting, Harvest } from "@/types";
+import { Planting, Harvest, PlantType, Location } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
-import { useRouter } from "next/router";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
-export default function HomePage() {
-  const { isAuthenticated, user } = useAuth();
-  const router = useRouter();
-  
+export default function DashboardPage() {
+  const { user } = useAuth();
+
   const [stats, setStats] = useState({
     activePlantings: 0,
-    plantVarieties: 0,
-    recentHarvests: 0
+    totalHarvested: 0,
+    locationsAtCapacity: 0,
+    upcomingHarvests: 0,
   });
 
+  const [recentPlantings, setRecentPlantings] = useState<Planting[]>([]);
+  const [recentHarvests, setRecentHarvests] = useState<Harvest[]>([]);
+  const [lowStockPlantings, setLowStockPlantings] = useState<Planting[]>([]);
+
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push("/auth/login");
-    } else {
-      const plantTypes = getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || [];
-      const plantings = getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || [];
-      const harvests = getStorageData<Harvest[]>(STORAGE_KEYS.HARVESTS) || [];
+    const plantings = getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || [];
+    const harvests = getStorageData<Harvest[]>(STORAGE_KEYS.HARVESTS) || [];
+    const locations = getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || [];
+    const plantTypes = getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || [];
 
-      const now = new Date();
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      
-      const recentHarvestsCount = harvests.filter(h => {
-        const harvestDate = new Date(h.harvestDate);
-        return harvestDate >= firstDayOfMonth;
-      }).length;
+    const activePlantings = plantings.filter(p => p.status === 'active');
+    const totalHarvested = harvests.reduce((acc, h) => acc + h.quantityHarvested, 0);
 
-      setStats({
-        activePlantings: plantings.filter(p => p.status === "active").length,
-        plantVarieties: plantTypes.length,
-        recentHarvests: recentHarvestsCount
-      });
-    }
-  }, [isAuthenticated, router]);
+    const locationOccupancy = plantings.reduce<Record<string, number>>((acc, p) => {
+      acc[p.locationId] = (acc[p.locationId] || 0) + p.quantity;
+      return acc;
+    }, {});
 
-  if (!isAuthenticated) {
-    return null;
-  }
+    const locationsAtCapacity = locations.filter(loc => (locationOccupancy[loc.id] || 0) >= loc.capacity).length;
 
-  const modules = [
-    {
-      title: "Plant Types",
-      description: "Manage plant types and varieties",
-      icon: Sprout,
-      href: "/plant-types",
-      color: "text-green-600",
-      bgColor: "bg-green-50 dark:bg-green-950"
-    },
-    {
-      title: "Plantings",
-      description: "Track planting activities",
-      icon: Package,
-      href: "/plantings",
-      color: "text-blue-600",
-      bgColor: "bg-blue-50 dark:bg-blue-950"
-    },
-    {
-      title: "Harvests",
-      description: "Record harvest data",
-      icon: BarChart3,
-      href: "/harvests",
-      color: "text-amber-600",
-      bgColor: "bg-amber-50 dark:bg-amber-950"
-    },
-    {
-      title: "Locations",
-      description: "Manage greenhouse locations",
-      icon: MapPin,
-      href: "/locations",
-      color: "text-purple-600",
-      bgColor: "bg-purple-50 dark:bg-purple-950"
-    },
-    {
-      title: "Treatments",
-      description: "Track chemical applications",
-      icon: Droplets,
-      href: "/treatments",
-      color: "text-cyan-600",
-      bgColor: "bg-cyan-50 dark:bg-cyan-950"
-    }
-  ];
+    const upcoming = plantings.filter(p => {
+      const plantType = plantTypes.find(pt => pt.id === p.plantTypeId);
+      if (!plantType) return false;
+      const plantedDate = new Date(p.datePlanted);
+      const expectedHarvestDate = new Date(plantedDate.setDate(plantedDate.getDate() + plantType.growthDuration));
+      const daysRemaining = (expectedHarvestDate.getTime() - new Date().getTime()) / (1000 * 3600 * 24);
+      return daysRemaining > 0 && daysRemaining <= 14; // Within 2 weeks
+    });
+    
+    setStats({
+      activePlantings: activePlantings.length,
+      totalHarvested,
+      locationsAtCapacity,
+      upcomingHarvests: upcoming.length,
+    });
+    
+    const sortedPlantings = [...plantings].sort((a, b) => new Date(b.datePlanted).getTime() - new Date(a.datePlanted).getTime());
+    setRecentPlantings(sortedPlantings.slice(0, 5));
+    
+    const sortedHarvests = [...harvests].sort((a, b) => new Date(b.harvestDate).getTime() - new Date(a.harvestDate).getTime());
+    setRecentHarvests(sortedHarvests.slice(0, 5));
+
+    // Example: low stock is less than 20% of original quantity
+    const lowStock = plantings.map(p => {
+        const harvestedQty = harvests.filter(h => h.plantingId === p.id).reduce((sum, h) => sum + h.quantityHarvested, 0);
+        const remaining = p.quantity - harvestedQty;
+        return { ...p, remainingQuantity: remaining };
+    }).filter(p => p.status === 'active' && p.remainingQuantity < p.quantity * 0.2);
+
+    setLowStockPlantings(lowStock.slice(0,5));
+
+  }, []);
+
+  const StatCard = ({ title, value, icon, description }: { title: string, value: string | number, icon: React.ReactNode, description: string }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </CardContent>
+    </Card>
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-green-600 to-blue-600 dark:from-green-400 dark:to-blue-400 bg-clip-text text-transparent">
-              Welcome to Khulisapp
-            </h1>
-            <p className="text-xl text-muted-foreground mb-2">
-              Seedling Nursery Management System
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Logged in as: <strong>{user?.name}</strong> ({user?.role})
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {modules.map((module) => {
-              const Icon = module.icon;
-              return (
-                <Link key={module.href} href={module.href}>
-                  <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer border-2 hover:border-green-500">
-                    <CardHeader>
-                      <div className={`w-16 h-16 rounded-xl ${module.bgColor} flex items-center justify-center mb-4`}>
-                        <Icon className={`w-8 h-8 ${module.color}`} />
-                      </div>
-                      <CardTitle className="text-2xl">{module.title}</CardTitle>
-                      <CardDescription className="text-base">
-                        {module.description}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <Button variant="ghost" className="w-full group">
-                        Open Module
-                        <span className="ml-2 group-hover:translate-x-1 transition-transform">→</span>
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </Link>
-              );
-            })}
-          </div>
-
-          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="border-green-200 dark:border-green-800">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Quick Stats</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-green-600">{stats.activePlantings}</div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Active Plantings</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-blue-200 dark:border-blue-800">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Total Varieties</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-blue-600">{stats.plantVarieties}</div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Plant Varieties</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-amber-200 dark:border-amber-800">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Recent Harvests</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-amber-600">{stats.recentHarvests}</div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">This Month</p>
-              </CardContent>
-            </Card>
-          </div>
+    <div className="space-y-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+        <div>
+            <h1 className="text-3xl font-bold">Welcome, {user?.name || "User"}!</h1>
+            <p className="text-muted-foreground">Here is a summary of your nursery's operations.</p>
         </div>
+        <Link href="/reports">
+            <Button className="mt-4 sm:mt-0">View All Reports</Button>
+        </Link>
       </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Active Plantings" value={stats.activePlantings} icon={<Package className="h-4 w-4 text-muted-foreground" />} description="Total number of active batches." />
+        <StatCard title="Total Harvested" value={stats.totalHarvested.toLocaleString()} icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />} description="Total seedlings harvested to date." />
+        <StatCard title="Upcoming Harvests" value={stats.upcomingHarvests} icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} description="Batches ready for harvest in 14 days." />
+        <StatCard title="Locations at Capacity" value={stats.locationsAtCapacity} icon={<CheckCircle2 className="h-4 w-4 text-muted-foreground" />} description="Greenhouses that are fully occupied." />
+      </div>
+
+      <div className="grid gap-8 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Plantings</CardTitle>
+            <CardDescription>The five most recent planting batches.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Variety</TableHead>
+                  <TableHead>Quantity</TableHead>
+                  <TableHead>Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentPlantings.map(p => (
+                  <TableRow key={p.id}>
+                    <TableCell>{p.variety}</TableCell>
+                    <TableCell>{p.quantity}</TableCell>
+                    <TableCell>{new Date(p.datePlanted).toLocaleDateString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+         <Card>
+          <CardHeader>
+            <CardTitle>Recent Harvests</CardTitle>
+            <CardDescription>The five most recent harvests.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                    <TableHead>Planting Variety</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentHarvests.map(h => {
+                    const planting = getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS)?.find(p => p.id === h.plantingId);
+                    return (
+                        <TableRow key={h.id}>
+                            <TableCell>{planting?.variety || 'N/A'}</TableCell>
+                            <TableCell>{h.quantityHarvested}</TableCell>
+                            <TableCell>{new Date(h.harvestDate).toLocaleDateString()}</TableCell>
+                        </TableRow>
+                    )
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+
+       <Card>
+          <CardHeader>
+            <CardTitle className="text-red-600">Low Stock Alert</CardTitle>
+            <CardDescription>These active plantings have less than 20% of their stock remaining.</CardDescription>
+          </CardHeader>
+          <CardContent>
+             <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Variety</TableHead>
+                  <TableHead>Original Qty</TableHead>
+                  <TableHead>Remaining Qty</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>% Remaining</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lowStockPlantings.map(p => (
+                  <TableRow key={p.id}>
+                    <TableCell>{p.variety}</TableCell>
+                    <TableCell>{p.quantity}</TableCell>
+                    <TableCell>{(p as any).remainingQuantity}</TableCell>
+                    <TableCell>
+                      <Badge variant={p.status === 'active' ? 'default' : 'secondary'}>{p.status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                        <Progress value={((p as any).remainingQuantity / p.quantity) * 100} className="w-full" />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
     </div>
   );
 }
