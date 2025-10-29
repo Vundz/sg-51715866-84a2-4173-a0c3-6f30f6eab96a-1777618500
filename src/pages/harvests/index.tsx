@@ -9,45 +9,65 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit, Trash2, Package, Calendar, TrendingUp } from "lucide-react";
-import { Harvest, Planting, PlantType } from "@/types";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Edit, Trash2, Package, Calendar, TrendingUp, Archive, AlertTriangle } from "lucide-react";
+import { Harvest, Planting, PlantType, PlantVariety } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
 
 export default function HarvestsPage() {
   const [harvests, setHarvests] = useState<Harvest[]>([]);
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
+  const [varieties, setVarieties] = useState<PlantVariety[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingHarvest, setEditingHarvest] = useState<Harvest | null>(null);
+  const [selectedPlantingId, setSelectedPlantingId] = useState<string>("");
+  const [closePlanting, setClosePlanting] = useState(false);
 
   useEffect(() => {
     setHarvests(getStorageData<Harvest>(STORAGE_KEYS.HARVESTS));
-    setPlantings(getStorageData<Planting>(STORAGE_KEYS.PLANTINGS));
+    const loadedPlantings = getStorageData<Planting>(STORAGE_KEYS.PLANTINGS);
+    
+    const plantingsWithRemaining = loadedPlantings.map(p => ({
+      ...p,
+      remainingQuantity: p.remainingQuantity ?? p.quantity
+    }));
+    
+    setPlantings(plantingsWithRemaining);
+    setStorageData(STORAGE_KEYS.PLANTINGS, plantingsWithRemaining);
+    
     setPlantTypes(getStorageData<PlantType>(STORAGE_KEYS.PLANT_TYPES));
+    setVarieties(getStorageData<PlantVariety>(STORAGE_KEYS.PLANT_VARIETIES));
   }, []);
 
-  const activePlantings = plantings.filter(p => p.status === "active");
+  const activePlantings = plantings.filter(p => 
+    p.status === "active" && 
+    (p.remainingQuantity ?? p.quantity) > 0
+  );
 
-  const handleSaveHarvest = (e: React.FormEvent<HTMLFormElement>) => {
+  const selectedPlanting = plantings.find(p => p.id === selectedPlantingId);
+  const maxHarvestQuantity = selectedPlanting ? (selectedPlanting.remainingQuantity ?? selectedPlanting.quantity) : 0;
+
+  const handleSavePlanting = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
     const plantingId = formData.get("plantingId") as string;
-    const quantity = Number(formData.get("quantity"));
+    const harvestQuantity = Number(formData.get("quantity"));
     const quality = formData.get("quality") as "excellent" | "good" | "fair" | "poor";
 
     const harvest: Harvest = editingHarvest ? {
       ...editingHarvest,
       plantingId,
       harvestDate: formData.get("harvestDate") as string,
-      quantity,
+      quantity: harvestQuantity,
       quality,
       notes: formData.get("notes") as string
     } : {
       id: generateId(),
       plantingId,
       harvestDate: formData.get("harvestDate") as string,
-      quantity,
+      quantity: harvestQuantity,
       quality,
       notes: formData.get("notes") as string,
       createdAt: new Date().toISOString()
@@ -60,21 +80,28 @@ export default function HarvestsPage() {
     setHarvests(updatedHarvests);
     setStorageData(STORAGE_KEYS.HARVESTS, updatedHarvests);
 
-    if (!editingHarvest) {
-      const planting = plantings.find(p => p.id === plantingId);
-      if (planting) {
-        const updatedPlanting = {
-          ...planting,
-          status: "harvested" as const
-        };
-        const updatedPlantings = plantings.map(p => p.id === plantingId ? updatedPlanting : p);
-        setPlantings(updatedPlantings);
-        setStorageData(STORAGE_KEYS.PLANTINGS, updatedPlantings);
-      }
+    const planting = plantings.find(p => p.id === plantingId);
+    if (planting && !editingHarvest) {
+      const currentRemaining = planting.remainingQuantity ?? planting.quantity;
+      const newRemaining = Math.max(0, currentRemaining - harvestQuantity);
+      
+      const shouldClose = closePlanting || newRemaining === 0;
+      
+      const updatedPlanting = {
+        ...planting,
+        remainingQuantity: newRemaining,
+        status: shouldClose ? ("closed" as const) : planting.status
+      };
+      
+      const updatedPlantings = plantings.map(p => p.id === plantingId ? updatedPlanting : p);
+      setPlantings(updatedPlantings);
+      setStorageData(STORAGE_KEYS.PLANTINGS, updatedPlantings);
     }
 
     setIsDialogOpen(false);
     setEditingHarvest(null);
+    setSelectedPlantingId("");
+    setClosePlanting(false);
   };
 
   const handleDeleteHarvest = (id: string) => {
@@ -87,8 +114,10 @@ export default function HarvestsPage() {
       if (harvest) {
         const planting = plantings.find(p => p.id === harvest.plantingId);
         if (planting) {
+          const restoredRemaining = (planting.remainingQuantity ?? planting.quantity) + harvest.quantity;
           const updatedPlanting = {
             ...planting,
+            remainingQuantity: Math.min(restoredRemaining, planting.quantity),
             status: "active" as const
           };
           const updatedPlantings = plantings.map(p => p.id === harvest.plantingId ? updatedPlanting : p);
@@ -101,13 +130,18 @@ export default function HarvestsPage() {
 
   const getPlantingInfo = (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
-    if (!planting) return { plantType: "Unknown", plantingDate: "", quantity: 0 };
+    if (!planting) return { plantType: "Unknown", variety: "", plantingDate: "", quantity: 0, remainingQuantity: 0, status: "active" as const };
     
     const plantType = plantTypes.find(pt => pt.id === planting.plantTypeId);
+    const variety = planting.varietyId ? varieties.find(v => v.id === planting.varietyId) : null;
+    
     return {
       plantType: plantType?.name || "Unknown",
+      variety: variety?.name || "",
       plantingDate: planting.plantingDate,
-      quantity: planting.quantity
+      quantity: planting.quantity,
+      remainingQuantity: planting.remainingQuantity ?? planting.quantity,
+      status: planting.status
     };
   };
 
@@ -129,6 +163,8 @@ export default function HarvestsPage() {
       }, 0) / harvests.length * 100)
     : 0;
 
+  const closedPlantings = plantings.filter(p => p.status === "closed").length;
+
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
@@ -142,7 +178,14 @@ export default function HarvestsPage() {
           </p>
         </div>
         
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) {
+            setEditingHarvest(null);
+            setSelectedPlantingId("");
+            setClosePlanting(false);
+          }
+        }}>
           <DialogTrigger asChild>
             <Button onClick={() => setEditingHarvest(null)} className="bg-amber-600 hover:bg-amber-700">
               <Plus className="w-4 h-4 mr-2" />
@@ -153,29 +196,51 @@ export default function HarvestsPage() {
             <DialogHeader>
               <DialogTitle>{editingHarvest ? "Edit" : "Record New"} Harvest</DialogTitle>
               <DialogDescription>
-                Enter the details for the harvest
+                Enter the details for the harvest. You can close the planting if all seedlings have been dispatched.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSaveHarvest} className="space-y-4">
+            <form onSubmit={handleSavePlanting} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="plantingId">Select Planting *</Label>
-                <Select name="plantingId" required defaultValue={editingHarvest?.plantingId}>
+                <Select 
+                  name="plantingId" 
+                  required 
+                  defaultValue={editingHarvest?.plantingId}
+                  onValueChange={setSelectedPlantingId}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a planting to harvest" />
                   </SelectTrigger>
                   <SelectContent>
                     {activePlantings.map(planting => {
                       const plantType = plantTypes.find(pt => pt.id === planting.plantTypeId);
+                      const variety = planting.varietyId ? varieties.find(v => v.id === planting.varietyId) : null;
+                      const remaining = planting.remainingQuantity ?? planting.quantity;
+                      
                       return (
                         <SelectItem key={planting.id} value={planting.id}>
-                          {plantType?.name} - {planting.quantity} units (Planted: {new Date(planting.plantingDate).toLocaleDateString()})
+                          {plantType?.name}{variety ? ` (${variety.name})` : ""} - {remaining}/{planting.quantity} remaining (Planted: {new Date(planting.plantingDate).toLocaleDateString()})
                         </SelectItem>
                       );
                     })}
                   </SelectContent>
                 </Select>
                 {activePlantings.length === 0 && (
-                  <p className="text-sm text-amber-600">No active plantings available. Please add plantings first.</p>
+                  <p className="text-sm text-amber-600 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    No active plantings available. Please add plantings first.
+                  </p>
+                )}
+                {selectedPlanting && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Package className="w-4 h-4 text-blue-600" />
+                      <span className="font-medium">Available to harvest: {maxHarvestQuantity} units</span>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      Original quantity: {selectedPlanting.quantity} units
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -200,8 +265,13 @@ export default function HarvestsPage() {
                     defaultValue={editingHarvest?.quantity} 
                     required 
                     min="0.01"
+                    max={maxHarvestQuantity}
                     step="0.01"
+                    disabled={!selectedPlantingId}
                   />
+                  {selectedPlantingId && maxHarvestQuantity > 0 && (
+                    <p className="text-xs text-gray-500">Max: {maxHarvestQuantity} units</p>
+                  )}
                 </div>
               </div>
 
@@ -219,6 +289,25 @@ export default function HarvestsPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {!editingHarvest && selectedPlantingId && (
+                <div className="p-4 bg-amber-50 dark:bg-amber-950 rounded-lg border border-amber-200 dark:border-amber-800 space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="closePlanting" 
+                      checked={closePlanting}
+                      onCheckedChange={(checked) => setClosePlanting(checked === true)}
+                    />
+                    <Label htmlFor="closePlanting" className="cursor-pointer font-medium flex items-center gap-2">
+                      <Archive className="w-4 h-4" />
+                      Close this planting after harvest
+                    </Label>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 pl-6">
+                    Check this option to mark the planting as closed and archived. Use this when all seedlings have been dispatched, even if the quantity hasn't been fully depleted.
+                  </p>
+                </div>
+              )}
               
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
@@ -238,6 +327,8 @@ export default function HarvestsPage() {
                   onClick={() => { 
                     setIsDialogOpen(false); 
                     setEditingHarvest(null);
+                    setSelectedPlantingId("");
+                    setClosePlanting(false);
                   }}
                 >
                   Cancel
@@ -251,7 +342,7 @@ export default function HarvestsPage() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="border-amber-200 dark:border-amber-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Total Harvests</CardTitle>
@@ -283,6 +374,19 @@ export default function HarvestsPage() {
             <p className="text-sm text-gray-600 dark:text-gray-400">of planted quantity</p>
           </CardContent>
         </Card>
+
+        <Card className="border-gray-200 dark:border-gray-800">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Archive className="w-4 h-4" />
+              Closed Plantings
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-gray-600">{closedPlantings}</div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">archived</p>
+          </CardContent>
+        </Card>
       </div>
 
       {harvests.length === 0 ? (
@@ -310,8 +414,9 @@ export default function HarvestsPage() {
                   <TableHead>Plant Type</TableHead>
                   <TableHead>Harvest Date</TableHead>
                   <TableHead>Quantity</TableHead>
+                  <TableHead>Remaining</TableHead>
                   <TableHead>Quality</TableHead>
-                  <TableHead>Yield Rate</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Notes</TableHead>
                   <TableHead className="w-24">Actions</TableHead>
                 </TableRow>
@@ -319,13 +424,13 @@ export default function HarvestsPage() {
               <TableBody>
                 {harvests.map((harvest) => {
                   const plantingInfo = getPlantingInfo(harvest.plantingId);
-                  const yieldRate = plantingInfo.quantity > 0 
-                    ? Math.round((harvest.quantity / plantingInfo.quantity) * 100) 
-                    : 0;
                   
                   return (
                     <TableRow key={harvest.id}>
-                      <TableCell className="font-medium">{plantingInfo.plantType}</TableCell>
+                      <TableCell className="font-medium">
+                        {plantingInfo.plantType}
+                        {plantingInfo.variety && <span className="text-sm text-gray-600 dark:text-gray-400"> ({plantingInfo.variety})</span>}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Calendar className="w-3 h-3 text-gray-400" />
@@ -334,15 +439,26 @@ export default function HarvestsPage() {
                       </TableCell>
                       <TableCell>{harvest.quantity} units</TableCell>
                       <TableCell>
+                        <span className={plantingInfo.remainingQuantity === 0 ? "text-gray-400" : "font-medium"}>
+                          {plantingInfo.remainingQuantity}/{plantingInfo.quantity}
+                        </span>
+                      </TableCell>
+                      <TableCell>
                         <Badge className={getQualityColor(harvest.quality)}>
                           {harvest.quality}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <span className="font-medium">{yieldRate}%</span>
-                        <span className="text-xs text-gray-500 ml-1">
-                          ({harvest.quantity}/{plantingInfo.quantity})
-                        </span>
+                        {plantingInfo.status === "closed" ? (
+                          <Badge className="bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                            <Archive className="w-3 h-3 mr-1" />
+                            Closed
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            Active
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="max-w-xs truncate">
                         {harvest.notes || "-"}
