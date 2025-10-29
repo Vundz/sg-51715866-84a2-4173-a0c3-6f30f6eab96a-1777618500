@@ -1,13 +1,14 @@
 
 export const STORAGE_KEYS = {
-  PLANT_TYPES: "khulisapp_plant_types",
-  PLANT_VARIETIES: "khulisapp_plant_varieties",
-  LOCATIONS: "khulisapp_locations",
-  PLANTINGS: "khulisapp_plantings",
-  HARVESTS: "khulisapp_harvests",
-  TREATMENTS: "khulisapp_treatments",
-  TREATMENT_APPLICATIONS: "khulisapp_treatment_applications"
-};
+  PLANT_TYPES: "plantTypes",
+  PLANT_VARIETIES: "plantVarieties",
+  PLANTINGS: "plantings",
+  HARVESTS: "harvests",
+  LOCATIONS: "locations",
+  TREATMENTS: "treatments",
+  USERS: "users",
+  AUTH_SESSION: "authSession",
+} as const;
 
 function get<T>(key: string): T | null {
   if (typeof window === "undefined") {
