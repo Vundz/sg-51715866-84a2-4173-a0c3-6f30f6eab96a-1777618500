@@ -1,113 +1,119 @@
+export type PermissionAction = "create" | "read" | "update" | "delete";
+
+export type ModulePermissions = {
+  [key in PermissionAction]?: boolean;
+};
+
+export interface UserPermissions {
+  plantTypes: ModulePermissions;
+  plantings: ModulePermissions;
+  harvests: ModulePermissions;
+  locations: ModulePermissions;
+  treatments: ModulePermissions;
+  reports: ModulePermissions;
+  admin: ModulePermissions;
+}
+
+export type UserRole = "Admin" | "Manager" | "Viewer" | "Custom";
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
+  authMethod: "password" | "google";
+  passwordHash?: string;
+  permissions: UserPermissions;
+}
+
+export interface AuthSession {
+  sessionId: string;
+  userId: string;
+  createdAt: string;
+  expiresAt: string;
+}
 
 export interface PlantType {
   id: string;
   name: string;
-  scientificName?: string;
-  category: string;
-  description?: string;
+  variety: string;
   growthDuration: number;
-  createdAt: string;
-}
-
-export interface PlantVariety {
-  id: string;
-  plantTypeId: string;
-  name: string;
-  characteristics?: string;
-  createdAt: string;
 }
 
 export interface Location {
   id: string;
-  name: string;
+  name:string;
   capacity: number;
-  currentOccupancy: number;
-  notes?: string;
-  createdAt: string;
 }
 
 export interface Planting {
   id: string;
   plantTypeId: string;
-  varietyId: string;
+  variety: string;
   locationId: string;
   quantity: number;
-  remainingQuantity?: number;
-  plantingDate: string;
-  expectedHarvestDate: string;
-  status: "active" | "harvested" | "closed" | "failed";
-  notes?: string;
-  createdAt: string;
+  datePlanted: string;
+  status: "active" | "harvested" | "closed";
 }
 
 export interface Harvest {
   id: string;
   plantingId: string;
+  quantityHarvested: number;
   harvestDate: string;
-  quantity: number;
-  quality: "excellent" | "good" | "fair" | "poor";
-  notes?: string;
-  createdAt: string;
+  isClosed: boolean;
 }
 
 export interface Treatment {
   id: string;
-  plantingId: string;
-  treatmentType: "fungicide" | "pesticide" | "fertilizer" | "other";
-  chemicalName: string;
-  applicationMethod: string;
-  applicationDate: string;
-  dosage: string;
-  notes?: string;
-  createdAt: string;
-}
-
-export interface TreatmentApplication {
-  id: string;
-  treatmentId: string;
-  plantingIds: string[];
-  applicationDate: string;
-  dosage: string;
-  method: string;
-  applicator?: string;
-  notes?: string;
-  createdAt: string;
-}
-
-export interface User {
-  id: string;
-  email: string;
   name: string;
-  authMethod: "password" | "gmail";
-  passwordHash?: string;
-  role: string;
-  permissions: UserPermissions;
-  isActive: boolean;
-  createdAt: string;
-  lastLogin?: string;
+  type: "fungicide" | "pesticide" | "fertilizer";
+  applicationDate: string;
+  // plantingIds can be a single ID or an array for bulk applications
+  plantingIds: string[]; 
 }
 
-export interface UserPermissions {
-  plantTypes: ModulePermission;
-  plantings: ModulePermission;
-  harvests: ModulePermission;
-  locations: ModulePermission;
-  treatments: ModulePermission;
-  reports: ModulePermission;
-  admin: ModulePermission;
-}
+// Pre-defined permission sets for roles
+const fullAccess: ModulePermissions = { create: true, read: true, update: true, delete: true };
+const readOnly: ModulePermissions = { create: false, read: true, update: false, delete: false };
+const noAccess: ModulePermissions = { create: false, read: false, update: false, delete: false };
 
-export interface ModulePermission {
-  create: boolean;
-  read: boolean;
-  update: boolean;
-  delete: boolean;
-}
-
-export interface AuthSession {
-  userId: string;
-  email: string;
-  name: string;
-  permissions: UserPermissions;
-  expiresAt: string;
-}
+export const ALL_PERMISSIONS: Record<UserRole, UserPermissions> = {
+  Admin: {
+    plantTypes: { ...fullAccess },
+    plantings: { ...fullAccess },
+    harvests: { ...fullAccess },
+    locations: { ...fullAccess },
+    treatments: { ...fullAccess },
+    reports: { ...readOnly, create: true }, // Can generate/view reports
+    admin: { ...fullAccess },
+  },
+  Manager: {
+    plantTypes: { ...fullAccess },
+    plantings: { ...fullAccess },
+    harvests: { ...fullAccess },
+    locations: { create: true, read: true, update: true, delete: false },
+    treatments: { ...fullAccess },
+    reports: { ...readOnly, create: true },
+    admin: { ...readOnly },
+  },
+  Viewer: {
+    plantTypes: { ...readOnly },
+    plantings: { ...readOnly },
+    harvests: { ...readOnly },
+    locations: { ...readOnly },
+    treatments: { ...readOnly },
+    reports: { ...readOnly, create: true },
+    admin: { ...noAccess },
+  },
+  Custom: { // Custom roles start with Viewer permissions
+    plantTypes: { ...readOnly },
+    plantings: { ...readOnly },
+    harvests: { ...readOnly },
+    locations: { ...readOnly },
+    treatments: { ...readOnly },
+    reports: { ...readOnly, create: true },
+    admin: { ...noAccess },
+  }
+};

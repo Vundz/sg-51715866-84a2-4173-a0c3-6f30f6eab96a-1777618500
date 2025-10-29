@@ -1,150 +1,172 @@
-
 import { useState, useEffect } from "react";
-import { useRouter } from "next/router";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardDescription,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getStorageData, setStorageData, STORAGE_KEYS } from "@/lib/storage";
-import { User, UserPermissions, ModulePermission } from "@/types";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Edit, Trash2, UserPlus, AlertCircle } from "lucide-react";
+import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
+import { User, UserRole, PermissionAction, UserPermissions, ALL_PERMISSIONS } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
-import { initializeDefaultAdmin } from "@/lib/initializeAdmin";
-import { AlertCircle, Shield, UserPlus, Home } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert } from "@/components/ui/alert";
 
-export default function UsersManagementPage() {
+
+export default function AdminUsersPage() {
+  const { user: currentUser, hasPermission } = useAuth();
+  const canCreate = hasPermission("admin", "create");
+  const canEdit = hasPermission("admin", "update");
+  const canDelete = hasPermission("admin", "delete");
+  const canView = hasPermission("admin", "read");
+
   const [users, setUsers] = useState<User[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const { isAuthenticated, hasPermission, user: currentUser } = useAuth();
-  const router = useRouter();
+  const [formData, setFormData] = useState<Partial<User>>({});
+  const [userPermissions, setUserPermissions] = useState<UserPermissions>(ALL_PERMISSIONS.Viewer);
 
   useEffect(() => {
-    const initialize = async () => {
-      await initializeDefaultAdmin();
-      loadUsers();
-    };
-    initialize();
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated && !hasPermission("admin", "read")) {
-      router.push("/");
+    if (canView) {
+      const existingUsers = getStorageData<User[]>(STORAGE_KEYS.USERS) || [];
+      setUsers(existingUsers);
     }
-  }, [isAuthenticated, hasPermission, router]);
+  }, [canView]);
 
-  const loadUsers = () => {
-    const storedUsers = getStorageData<User[]>(STORAGE_KEYS.USERS) || [];
-    setUsers(storedUsers);
+  const handleOpenDialog = (user: User | null = null) => {
+    if (user) {
+      if (!canEdit) return;
+      setEditingUser(user);
+      setFormData(user);
+      setUserPermissions(user.permissions);
+    } else {
+      if (!canCreate) return;
+      setEditingUser(null);
+      setFormData({
+        name: "",
+        email: "",
+        role: "Viewer",
+        isActive: true,
+        authMethod: "password",
+      });
+      setUserPermissions(ALL_PERMISSIONS.Viewer);
+    }
+    setIsDialogOpen(true);
   };
 
-  const handleSave = async (userData: Omit<User, "id" | "createdAt" | "lastLogin">) => {
-    let updatedUsers: User[];
+  const handleRoleChange = (role: UserRole) => {
+    setFormData(prev => ({ ...prev, role }));
+    setUserPermissions(ALL_PERMISSIONS[role]);
+  };
 
+  const handlePermissionChange = (
+    module: keyof UserPermissions,
+    action: PermissionAction,
+    value: boolean
+  ) => {
+    setUserPermissions(prev => {
+      const newPerms = { ...prev };
+      if (typeof newPerms[module] === 'object') {
+        (newPerms[module] as Record<PermissionAction, boolean>)[action] = value;
+      }
+      return newPerms;
+    });
+  };
+
+  const handleSaveUser = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (editingUser && !canEdit) return;
+    if (!editingUser && !canCreate) return;
+
+    let updatedUsers: User[] = [];
     if (editingUser) {
       updatedUsers = users.map(u =>
         u.id === editingUser.id
-          ? { ...userData, id: u.id, createdAt: u.createdAt, lastLogin: u.lastLogin }
+          ? { ...editingUser, ...formData, permissions: userPermissions }
           : u
       );
     } else {
       const newUser: User = {
-        ...userData,
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
+        id: generateId("user"),
+        name: formData.name || "",
+        email: formData.email || "",
+        role: formData.role || "Viewer",
+        isActive: formData.isActive !== false,
+        authMethod: "password",
+        passwordHash: formData.passwordHash || "password123", // Demo password
+        permissions: userPermissions,
       };
       updatedUsers = [...users, newUser];
     }
-
     setUsers(updatedUsers);
     setStorageData(STORAGE_KEYS.USERS, updatedUsers);
     setIsDialogOpen(false);
-    setEditingUser(null);
   };
 
-  const handleEdit = (user: User) => {
-    setEditingUser(user);
-    setIsDialogOpen(true);
-  };
-
-  const handleDelete = (id: string) => {
-    if (currentUser?.id === id) {
-      alert("You cannot delete your own account.");
-      return;
-    }
-
-    if (window.confirm("Are you sure you want to delete this user?")) {
-      const updatedUsers = users.filter(u => u.id !== id);
-      setUsers(updatedUsers);
-      setStorageData(STORAGE_KEYS.USERS, updatedUsers);
-    }
-  };
-
-  const toggleUserStatus = (userId: string) => {
-    if (currentUser?.id === userId) {
-      alert("You cannot deactivate your own account.");
-      return;
-    }
-
-    const updatedUsers = users.map(u =>
-      u.id === userId ? { ...u, isActive: !u.isActive } : u
-    );
+  const handleDeleteUser = (userId: string) => {
+    if (!canDelete || userId === currentUser?.id) return;
+    const updatedUsers = users.filter(u => u.id !== userId);
     setUsers(updatedUsers);
     setStorageData(STORAGE_KEYS.USERS, updatedUsers);
   };
 
-  if (!isAuthenticated) {
-    return null;
+  if (!canView) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-8 p-4">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <p>You do not have permission to view this page.</p>
+        </Alert>
+      </div>
+    );
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="icon" onClick={() => router.push("/")}>
-            <Home className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Shield className="h-8 w-8" />
-              User Management
-            </h1>
-            <p className="text-muted-foreground mt-1">Manage user access and permissions</p>
-          </div>
+    <div className="max-w-7xl mx-auto space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">User Management</h1>
+          <p className="text-muted-foreground">
+            Manage users and their permissions for the application.
+          </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={() => { setEditingUser(null); setIsDialogOpen(true); }}>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Add User
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingUser ? "Edit User" : "Add New User"}</DialogTitle>
-            </DialogHeader>
-            <UserForm onSubmit={handleSave} initialData={editingUser} />
-          </DialogContent>
-        </Dialog>
+        {canCreate && (
+          <Button onClick={() => handleOpenDialog()}>
+            <UserPlus className="w-4 h-4 mr-2" />
+            Add User
+          </Button>
+        )}
       </div>
-
-      <Alert className="mb-6">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          Default admin credentials: <strong>admin@khulisapp.com</strong> / <strong>admin123</strong>
-          {" "}(Change password after first login)
-        </AlertDescription>
-      </Alert>
 
       <Card>
         <CardHeader>
-          <CardTitle>System Users</CardTitle>
+          <CardTitle>Users</CardTitle>
+          <CardDescription>
+            A list of all users in the system.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -153,298 +175,164 @@ export default function UsersManagementPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Auth Method</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Last Login</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.length > 0 ? (
-                users.map(user => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>{user.role}</TableCell>
-                    <TableCell>
-                      <Badge variant={user.authMethod === "gmail" ? "default" : "secondary"}>
-                        {user.authMethod === "gmail" ? "Gmail" : "Password"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={user.isActive}
-                          onCheckedChange={() => toggleUserStatus(user.id)}
-                          disabled={currentUser?.id === user.id}
-                        />
-                        <Badge variant={user.isActive ? "default" : "secondary"}>
-                          {user.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : "Never"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(user)}>
-                          Edit
-                        </Button>
+              {users.map(user => (
+                <TableRow key={user.id}>
+                  <TableCell className="font-medium">{user.name}</TableCell>
+                  <TableCell>{user.email}</TableCell>
+                  <TableCell>
+                    <Badge variant={user.role === 'Admin' ? 'destructive' : 'secondary'}>
+                      {user.role}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={user.isActive ? 'default' : 'outline'}>
+                      {user.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      {canEdit && (
                         <Button
-                          variant="destructive"
                           size="sm"
-                          onClick={() => handleDelete(user.id)}
-                          disabled={currentUser?.id === user.id}
+                          variant="outline"
+                          onClick={() => handleOpenDialog(user)}
                         >
-                          Delete
+                          <Edit className="w-4 h-4" />
                         </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center">
-                    No users found. The default admin will be created automatically.
+                      )}
+                      {canDelete && user.id !== currentUser?.id && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => handleDeleteUser(user.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
-              )}
+              ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
-    </div>
-  );
-}
 
-interface UserFormProps {
-  onSubmit: (data: Omit<User, "id" | "createdAt" | "lastLogin">) => void;
-  initialData?: User | null;
-}
-
-function UserForm({ onSubmit, initialData }: UserFormProps) {
-  const emptyPermissions: UserPermissions = {
-    plantTypes: { create: false, read: false, update: false, delete: false },
-    plantings: { create: false, read: false, update: false, delete: false },
-    harvests: { create: false, read: false, update: false, delete: false },
-    locations: { create: false, read: false, update: false, delete: false },
-    treatments: { create: false, read: false, update: false, delete: false },
-    reports: { create: false, read: false, update: false, delete: false },
-    admin: { create: false, read: false, update: false, delete: false },
-  };
-
-  const [formData, setFormData] = useState({
-    email: initialData?.email || "",
-    name: initialData?.name || "",
-    authMethod: (initialData?.authMethod || "password") as "password" | "gmail",
-    password: "",
-    role: initialData?.role || "",
-    permissions: initialData?.permissions || emptyPermissions,
-    isActive: initialData?.isActive ?? true,
-  });
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handlePermissionChange = (
-    module: keyof UserPermissions,
-    action: keyof ModulePermission,
-    value: boolean
-  ) => {
-    setFormData(prev => ({
-      ...prev,
-      permissions: {
-        ...prev.permissions,
-        [module]: {
-          ...prev.permissions[module],
-          [action]: value,
-        },
-      },
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.email || !formData.name || !formData.role) {
-      alert("Please fill in all required fields.");
-      return;
-    }
-
-    if (formData.authMethod === "password" && !initialData && !formData.password) {
-      alert("Please provide a password for password authentication.");
-      return;
-    }
-
-    let passwordHash: string | undefined;
-    if (formData.authMethod === "password" && formData.password) {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(formData.password);
-      const hash = await crypto.subtle.digest("SHA-256", data);
-      passwordHash = Array.from(new Uint8Array(hash))
-        .map(b => b.toString(16).padStart(2, "0"))
-        .join("");
-    }
-
-    onSubmit({
-      email: formData.email,
-      name: formData.name,
-      authMethod: formData.authMethod,
-      passwordHash: formData.authMethod === "password" ? passwordHash : undefined,
-      role: formData.role,
-      permissions: formData.permissions,
-      isActive: formData.isActive,
-    });
-  };
-
-  const moduleNames: { key: keyof UserPermissions; label: string }[] = [
-    { key: "plantTypes", label: "Plant Types" },
-    { key: "plantings", label: "Plantings" },
-    { key: "harvests", label: "Harvests" },
-    { key: "locations", label: "Locations" },
-    { key: "treatments", label: "Treatments" },
-    { key: "reports", label: "Reports" },
-    { key: "admin", label: "Admin" },
-  ];
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <Tabs defaultValue="basic" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="basic">Basic Information</TabsTrigger>
-          <TabsTrigger value="permissions">Permissions</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="basic" className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="name">Full Name *</Label>
-              <Input
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                required
-              />
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editingUser ? "Edit User" : "Add New User"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingUser
+                ? "Update user details and permissions."
+                : "Create a new user and set their role and permissions."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveUser} className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">User Details</h3>
+              <div>
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name || ""}
+                  onChange={e =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email || ""}
+                  onChange={e =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              {!editingUser && (
+                 <div>
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                    id="password"
+                    type="password"
+                    placeholder="Enter a temporary password"
+                    onChange={e =>
+                        setFormData({ ...formData, passwordHash: e.target.value })
+                    }
+                    required
+                    />
+                </div>
+              )}
+              <div>
+                <Label htmlFor="role">Role</Label>
+                 <Select
+                    value={formData.role}
+                    onValueChange={(value: UserRole) => handleRoleChange(value)}
+                >
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select a role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {Object.keys(ALL_PERMISSIONS).map(role => (
+                            <SelectItem key={role} value={role}>{role}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+              </div>
+               <div className="flex items-center space-x-2">
+                <Switch 
+                    id="isActive"
+                    checked={formData.isActive}
+                    onCheckedChange={checked => setFormData({...formData, isActive: checked})}
+                />
+                <Label htmlFor="isActive">User Active</Label>
+              </div>
             </div>
 
-            <div>
-              <Label htmlFor="email">Email *</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="role">Role *</Label>
-              <Input
-                id="role"
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                placeholder="e.g., Manager, Supervisor, Operator"
-                required
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="authMethod">Authentication Method</Label>
-              <Select
-                name="authMethod"
-                value={formData.authMethod}
-                onValueChange={value => handleSelectChange("authMethod", value)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="password">Password</SelectItem>
-                  <SelectItem value="gmail">Gmail</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {formData.authMethod === "password" && (
-            <div>
-              <Label htmlFor="password">
-                Password {!initialData && "*"}
-              </Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder={initialData ? "Leave blank to keep current" : "Enter password"}
-                required={!initialData}
-              />
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
-            <Switch
-              id="isActive"
-              checked={formData.isActive}
-              onCheckedChange={value => setFormData(prev => ({ ...prev, isActive: value }))}
-            />
-            <Label htmlFor="isActive">Account Active</Label>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="permissions" className="space-y-4">
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Configure module-level permissions for this user. Check the boxes to grant access.
-            </AlertDescription>
-          </Alert>
-
-          <div className="space-y-4">
-            {moduleNames.map(({ key, label }) => (
-              <Card key={key}>
-                <CardHeader>
-                  <CardTitle className="text-base">{label}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-4 gap-4">
-                    {(["create", "read", "update", "delete"] as const).map(action => (
-                      <div key={action} className="flex items-center gap-2">
-                        <Switch
-                          id={`${key}-${action}`}
-                          checked={formData.permissions[key][action]}
-                          onCheckedChange={value => handlePermissionChange(key, action, value)}
-                        />
-                        <Label htmlFor={`${key}-${action}`} className="capitalize">
-                          {action}
-                        </Label>
-                      </div>
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Permissions</h3>
+              <Card className="max-h-[400px] overflow-y-auto">
+                  <CardContent className="p-4 space-y-4">
+                     {Object.entries(userPermissions).map(([module, perms]) => (
+                        <div key={module}>
+                            <h4 className="font-semibold capitalize mb-2">{module.replace(/([A-Z])/g, ' $1')}</h4>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                {typeof perms === 'object' && Object.entries(perms).map(([action, allowed]) => (
+                                    <div key={action} className="flex items-center space-x-2">
+                                        <Switch
+                                            id={`${module}-${action}`}
+                                            checked={allowed}
+                                            onCheckedChange={value => handlePermissionChange(module as keyof UserPermissions, action as PermissionAction, value)}
+                                            disabled={formData.role !== 'Custom'}
+                                        />
+                                        <Label htmlFor={`${module}-${action}`} className="capitalize">{action}</Label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     ))}
-                  </div>
-                </CardContent>
+                  </CardContent>
               </Card>
-            ))}
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      <div className="flex justify-end">
-        <Button type="submit">Save User</Button>
-      </div>
-    </form>
+            </div>
+             <DialogFooter className="col-span-1 md:col-span-2">
+                <Button type="submit">Save User</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
