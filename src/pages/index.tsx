@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Sprout, MapPin, Package, Droplets, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { storage, STORAGE_KEYS } from "@/lib/storage";
+import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
 import type { PlantType, Planting, Harvest } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/router";
@@ -11,17 +11,7 @@ import { useRouter } from "next/router";
 export default function HomePage() {
   const { isAuthenticated, user } = useAuth();
   const router = useRouter();
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.push("/auth/login");
-    }
-  }, [isAuthenticated, router]);
-
-  if (!isAuthenticated) {
-    return null;
-  }
-
+  
   const [stats, setStats] = useState({
     activePlantings: 0,
     plantVarieties: 0,
@@ -29,24 +19,32 @@ export default function HomePage() {
   });
 
   useEffect(() => {
-    const plantTypes = storage.get<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || [];
-    const plantings = storage.get<Planting[]>(STORAGE_KEYS.PLANTINGS) || [];
-    const harvests = storage.get<Harvest[]>(STORAGE_KEYS.HARVESTS) || [];
+    if (!isAuthenticated) {
+      router.push("/auth/login");
+    } else {
+      const plantTypes = getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || [];
+      const plantings = getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || [];
+      const harvests = getStorageData<Harvest[]>(STORAGE_KEYS.HARVESTS) || [];
 
-    const now = new Date();
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    
-    const recentHarvestsCount = harvests.filter(h => {
-      const harvestDate = new Date(h.harvestDate);
-      return harvestDate >= firstDayOfMonth;
-    }).length;
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      const recentHarvestsCount = harvests.filter(h => {
+        const harvestDate = new Date(h.harvestDate);
+        return harvestDate >= firstDayOfMonth;
+      }).length;
 
-    setStats({
-      activePlantings: plantings.length,
-      plantVarieties: plantTypes.length,
-      recentHarvests: recentHarvestsCount
-    });
-  }, []);
+      setStats({
+        activePlantings: plantings.filter(p => p.status === "active").length,
+        plantVarieties: plantTypes.length,
+        recentHarvests: recentHarvestsCount
+      });
+    }
+  }, [isAuthenticated, router]);
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const modules = [
     {

@@ -16,10 +16,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function PlantTypesPage() {
   const { hasPermission } = useAuth();
-  const canCreate = hasPermission("plant-types", "create");
-  const canEdit = hasPermission("plant-types", "update");
-  const canDelete = hasPermission("plant-types", "delete");
-  const canView = hasPermission("plant-types", "read");
+  const canCreate = hasPermission("plantTypes", "create");
+  const canEdit = hasPermission("plantTypes", "update");
+  const canDelete = hasPermission("plantTypes", "delete");
+  const canView = hasPermission("plantTypes", "read");
 
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
   const [varieties, setVarieties] = useState<PlantVariety[]>([]);
