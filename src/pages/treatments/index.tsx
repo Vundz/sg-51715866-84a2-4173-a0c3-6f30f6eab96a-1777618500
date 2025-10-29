@@ -9,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { getStorageData, setStorageData, STORAGE_KEYS } from "@/lib/storage";
 import { Treatment, Planting, PlantType, PlantVariety } from "@/types";
 import { Checkbox } from "@/components/ui/checkbox";
-import Layout from "@/components/Layout";
+import { Layout } from "@/components/Layout";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function TreatmentsPage() {
   const [treatments, setTreatments] = useState<Treatment[]>([]);
@@ -25,7 +26,8 @@ export default function TreatmentsPage() {
     const storedTreatments = getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || [];
     const migratedTreatments = storedTreatments.map(t => ({
       ...t,
-      applicationMethod: t.applicationMethod || "other"
+      applicationMethod: t.applicationMethod || "other",
+      dosage: t.dosage || 'N/A'
     }));
 
     if (JSON.stringify(storedTreatments) !== JSON.stringify(migratedTreatments)) {
@@ -64,7 +66,7 @@ export default function TreatmentsPage() {
     } else {
       if (editingTreatment) {
         updatedTreatments = treatments.map(t =>
-          t.id === editingTreatment.id ? { ...t, ...treatmentData, id: t.id, createdAt: t.createdAt } : t
+          t.id === editingTreatment.id ? { ...t, ...treatmentData, id: t.id, createdAt: t.createdAt } as Treatment : t
         );
       } else {
         const newTreatment: Treatment = {
@@ -133,8 +135,6 @@ export default function TreatmentsPage() {
                   selectedPlantings={selectedPlantings}
                   togglePlantingSelection={togglePlantingSelection}
                   getPlantingDetails={getPlantingDetails}
-                  plantTypes={plantTypes}
-                  varieties={varieties}
                 />
               </DialogContent>
             </Dialog>
@@ -151,6 +151,7 @@ export default function TreatmentsPage() {
                   <TableHead>Chemical Name</TableHead>
                   <TableHead>Application Method</TableHead>
                   <TableHead>Date Applied</TableHead>
+                  <TableHead>Dosage</TableHead>
                   <TableHead>Notes</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -165,7 +166,8 @@ export default function TreatmentsPage() {
                         <TableCell>{treatment.treatmentType}</TableCell>
                         <TableCell>{treatment.chemicalName}</TableCell>
                         <TableCell>{treatment.applicationMethod}</TableCell>
-                        <TableCell>{new Date(treatment.dateApplied).toLocaleDateString()}</TableCell>
+                        <TableCell>{new Date(treatment.applicationDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{treatment.dosage}</TableCell>
                         <TableCell>{treatment.notes}</TableCell>
                         <TableCell>
                           <div className="flex gap-2">
@@ -178,7 +180,7 @@ export default function TreatmentsPage() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center">No treatments found.</TableCell>
+                    <TableCell colSpan={8} className="text-center">No treatments found.</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -190,18 +192,14 @@ export default function TreatmentsPage() {
   );
 }
 
-import { Card, CardContent } from "@/components/ui/card";
-
 interface TreatmentFormProps {
   plantings: Planting[];
-  onSubmit: (data: Omit<Treatment, "id" | "createdAt"> & { id?: string }) => void;
+  onSubmit: (data: Omit<Treatment, "id" | "createdAt">) => void;
   initialData?: Treatment | null;
   isBulkMode?: boolean;
   selectedPlantings?: string[];
   togglePlantingSelection?: (plantingId: string) => void;
   getPlantingDetails: (plantingId: string) => { plantTypeName: string, varietyName: string };
-  plantTypes: PlantType[];
-  varieties: PlantVariety[];
 }
 
 function TreatmentForm({
@@ -218,7 +216,8 @@ function TreatmentForm({
     treatmentType: initialData?.treatmentType || "fungicide",
     chemicalName: initialData?.chemicalName || "",
     applicationMethod: initialData?.applicationMethod || "drench",
-    dateApplied: initialData?.dateApplied ? initialData.dateApplied.split('T')[0] : new Date().toISOString().split('T')[0],
+    applicationDate: initialData?.applicationDate ? initialData.applicationDate.split('T')[0] : new Date().toISOString().split('T')[0],
+    dosage: initialData?.dosage || "",
     notes: initialData?.notes || "",
   });
 
@@ -229,7 +228,8 @@ function TreatmentForm({
         treatmentType: initialData.treatmentType,
         chemicalName: initialData.chemicalName,
         applicationMethod: initialData.applicationMethod,
-        dateApplied: initialData.dateApplied.split('T')[0],
+        applicationDate: initialData.applicationDate.split('T')[0],
+        dosage: initialData.dosage,
         notes: initialData.notes || "",
       });
     }
@@ -274,7 +274,7 @@ function TreatmentForm({
                       onCheckedChange={() => togglePlantingSelection(planting.id)}
                     />
                     <Label htmlFor={`bulk-${planting.id}`}>
-                      {plantTypeName} - {varietyName} (Planted: {new Date(planting.datePlanted).toLocaleDateString()})
+                      {plantTypeName} - {varietyName} (Planted: {new Date(planting.plantingDate).toLocaleDateString()})
                     </Label>
                   </div>
                 );
@@ -357,12 +357,23 @@ function TreatmentForm({
       </div>
 
       <div>
-        <Label htmlFor="dateApplied">Date Applied</Label>
+        <Label htmlFor="dosage">Dosage</Label>
         <Input
-          id="dateApplied"
-          name="dateApplied"
+          id="dosage"
+          name="dosage"
+          value={formData.dosage}
+          onChange={handleChange}
+          required
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="applicationDate">Date Applied</Label>
+        <Input
+          id="applicationDate"
+          name="applicationDate"
           type="date"
-          value={formData.dateApplied}
+          value={formData.applicationDate}
           onChange={handleChange}
           required
         />

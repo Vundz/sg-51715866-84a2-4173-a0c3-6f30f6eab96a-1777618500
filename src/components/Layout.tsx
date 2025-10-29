@@ -1,72 +1,66 @@
-
 import { ReactNode } from "react";
-import Link from "next/link";
-import { useRouter } from "next/router";
-import { Home, Sprout, Package, BarChart3, MapPin, Droplets, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { ThemeSwitch } from "@/components/ThemeSwitch";
-import { QuickAccessMenu } from "@/components/QuickAccessMenu";
+import { ThemeProvider } from "@/contexts/ThemeProvider";
+import { Toaster } from "@/components/ui/toaster";
+import { Sidebar } from "./ui/sidebar";
+import { useMobile } from "@/hooks/use-mobile";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Button } from "./ui/button";
+import { Menu } from "lucide-react";
+import { QuickAccessMenu } from "./QuickAccessMenu";
 
 interface LayoutProps {
   children: ReactNode;
 }
 
 export function Layout({ children }: LayoutProps) {
-  const router = useRouter();
+  const isMobile = useMobile();
 
-  const navigation = [
-    { name: "Dashboard", href: "/", icon: Home },
-    { name: "Plant Types", href: "/plant-types", icon: Sprout },
-    { name: "Plantings", href: "/plantings", icon: Package },
-    { name: "Harvests", href: "/harvests", icon: BarChart3 },
-    { name: "Locations", href: "/locations", icon: MapPin },
-    { name: "Treatments", href: "/treatments", icon: Droplets },
-    { name: "Reports", href: "/reports", icon: FileText }
-  ];
+  if (isMobile) {
+    return (
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <div className="flex flex-col min-h-screen">
+          <header className="sticky top-0 z-10 flex items-center justify-between p-4 bg-background border-b">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <Menu className="h-6 w-6" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 w-64">
+                <QuickAccessMenu />
+              </SheetContent>
+            </Sheet>
+            <h1 className="text-xl font-bold">Khulisapp</h1>
+          </header>
+          <main className="flex-1 p-4">{children}</main>
+        </div>
+        <Toaster />
+      </ThemeProvider>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <nav className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-50">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <QuickAccessMenu />
-              <Link href="/" className="flex items-center space-x-2">
-                <Sprout className="w-6 h-6 text-green-600" />
-                <span className="text-xl font-bold hidden sm:inline-block">Khulisapp</span>
-              </Link>
-              
-              <div className="hidden md:flex space-x-1">
-                {navigation.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = item.href === "/" ? router.pathname === item.href : router.pathname.startsWith(item.href);
-                  return (
-                    <Link key={item.href} href={item.href}>
-                      <Button
-                        variant="ghost"
-                        className={cn(
-                          "flex items-center space-x-2",
-                          isActive && "bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400"
-                        )}
-                      >
-                        <Icon className="w-4 h-4" />
-                        <span>{item.name}</span>
-                      </Button>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-            
-            <ThemeSwitch />
-          </div>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 flex flex-col">
+          <header className="sticky top-0 z-10 flex items-center h-16 px-6 bg-background border-b">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="mr-4">
+                  <Menu className="h-6 w-6" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 w-64">
+                <QuickAccessMenu />
+              </SheetContent>
+            </Sheet>
+            <h1 className="text-2xl font-bold">Khulisapp</h1>
+          </header>
+          <main className="flex-1 overflow-y-auto">{children}</main>
         </div>
-      </nav>
-
-      <main className="container mx-auto px-4 py-8">
-        {children}
-      </main>
-    </div>
+      </div>
+      <Toaster />
+    </ThemeProvider>
   );
 }
