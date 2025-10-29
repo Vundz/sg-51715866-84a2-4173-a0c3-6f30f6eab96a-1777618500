@@ -194,7 +194,7 @@ export default function ReportsPage() {
         },
         treatments: plantingTreatments.map(t => ({
           treatmentType: t.treatmentType,
-          productName: t.productName,
+          chemicalName: t.chemicalName,
           applicationDate: t.applicationDate,
           dosage: t.dosage,
           notes: t.notes
@@ -717,7 +717,7 @@ export default function ReportsPage() {
                               {treatment.treatmentType}
                             </Badge>
                           </TableCell>
-                          <TableCell className="font-medium">{treatment.productName}</TableCell>
+                          <TableCell className="font-medium">{treatment.chemicalName}</TableCell>
                           <TableCell>{new Date(treatment.applicationDate).toLocaleDateString()}</TableCell>
                           <TableCell>{treatment.dosage}</TableCell>
                           <TableCell className="max-w-xs truncate">{treatment.notes || "-"}</TableCell>
