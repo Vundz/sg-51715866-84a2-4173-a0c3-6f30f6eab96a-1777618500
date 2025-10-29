@@ -32,9 +32,10 @@ export interface Planting {
   varietyId: string;
   locationId: string;
   quantity: number;
+  remainingQuantity?: number;
   plantingDate: string;
   expectedHarvestDate: string;
-  status: "active" | "harvested" | "failed";
+  status: "active" | "harvested" | "closed" | "failed";
   notes?: string;
   createdAt: string;
 }
