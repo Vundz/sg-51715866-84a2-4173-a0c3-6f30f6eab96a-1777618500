@@ -53,7 +53,7 @@ export default function TreatmentsPage() {
     };
   };
 
-  const handleSave = (treatmentData: Omit<Treatment, "id" | "createdAt"> & { id?: string }) => {
+  const handleSave = (treatmentData: Omit<Treatment, "id" | "createdAt">) => {
     let updatedTreatments: Treatment[];
     if (isBulkMode) {
       const newTreatments: Treatment[] = selectedPlantings.map(plantingId => ({
