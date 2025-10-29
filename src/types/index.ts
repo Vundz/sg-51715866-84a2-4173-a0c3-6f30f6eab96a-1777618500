@@ -54,6 +54,7 @@ export interface Treatment {
   id: string;
   plantingId: string;
   treatmentType: "fungicide" | "pesticide" | "fertilizer" | "other";
+  applicationMethod: "spray" | "drench" | "granular" | "other";
   chemicalName: string;
   applicationDate: string;
   dosage: string;

@@ -43,7 +43,7 @@ export default function TreatmentsReportPage() {
         const treatmentDate = new Date(treatment.applicationDate);
         const matchesDate = (!startDate || treatmentDate >= new Date(startDate)) &&
                            (!endDate || treatmentDate <= new Date(endDate));
-        const matchesType = typeFilter === "all" || treatment.type === typeFilter;
+        const matchesType = typeFilter === "all" || treatment.treatmentType === typeFilter;
         
         return matchesDate && matchesType;
       })
@@ -66,7 +66,7 @@ export default function TreatmentsReportPage() {
     const rows = treatmentsReport.map(t => [
       t.plantType,
       t.variety,
-      t.type,
+      t.treatmentType,
       t.chemicalName,
       new Date(t.applicationDate).toLocaleDateString(),
       t.dosage,
@@ -88,7 +88,7 @@ export default function TreatmentsReportPage() {
     const rows = treatmentsReport.map(t => [
       t.plantType,
       t.variety,
-      t.type,
+      t.treatmentType,
       t.chemicalName,
       new Date(t.applicationDate).toLocaleDateString(),
       t.dosage,
@@ -222,11 +222,11 @@ export default function TreatmentsReportPage() {
                   <CardDescription className="text-sm mt-1">{treatment.variety}</CardDescription>
                 </div>
                 <Badge className={
-                  treatment.type === "fungicide" ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" :
-                  treatment.type === "pesticide" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
+                  treatment.treatmentType === "fungicide" ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200" :
+                  treatment.treatmentType === "pesticide" ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" :
                   "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
                 }>
-                  {treatment.type}
+                  {treatment.treatmentType}
                 </Badge>
               </div>
             </CardHeader>
