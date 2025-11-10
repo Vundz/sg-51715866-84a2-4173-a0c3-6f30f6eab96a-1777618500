@@ -192,7 +192,7 @@ export default function HarvestsPage() {
           </div>
           <div class="info-row">
             <span class="label">Batch:</span>
-            <span class="value">${details.id}</span>
+            <span class="value">${details.batchNumber || details.id}</span>
           </div>
           <div class="info-row">
             <span class="label">Quality:</span>

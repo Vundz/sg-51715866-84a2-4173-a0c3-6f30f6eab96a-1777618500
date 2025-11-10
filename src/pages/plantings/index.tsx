@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +11,17 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Sprout, ShoppingCart } from "lucide-react";
 import { Planting, PlantType, Location, Reservation } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
+
+// Generate batch number: first 2 chars of plant type + first 2 chars of variety + DDMMYY
+const generateBatchNumber = (plantTypeName: string, variety: string, datePlanted: string): string => {
+  const plantPrefix = plantTypeName.substring(0, 2).toUpperCase();
+  const varietyPrefix = variety.substring(0, 2).toUpperCase();
+  const date = new Date(datePlanted);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear()).substring(2);
+  return `${plantPrefix}${varietyPrefix}${day}${month}${year}`;
+};
 
 export default function PlantingsPage() {
   const [plantings, setPlantings] = useState<Planting[]>([]);
@@ -51,20 +61,28 @@ export default function PlantingsPage() {
     const formData = new FormData(e.currentTarget);
     const plantTypeId = formData.get("plantTypeId") as string;
     const plantType = getPlantTypeDetails(plantTypeId);
+    const datePlanted = formData.get("datePlanted") as string;
+    
+    const batchNumber = generateBatchNumber(
+      plantType?.name || '',
+      plantType?.variety || '',
+      datePlanted
+    );
     
     const plantingData: Omit<Planting, 'id'> = {
       plantTypeId,
       variety: plantType?.variety || '',
       locationId: formData.get("locationId") as string,
       quantity: parseInt(formData.get("quantity") as string),
-      datePlanted: formData.get("datePlanted") as string,
+      datePlanted,
+      batchNumber,
       status: (formData.get("status") as Planting['status']) || 'active',
     };
     
     const newPlanting = { ...plantingData, id: generateId("pln"), remainingQuantity: plantingData.quantity };
 
     const updatedPlantings = editingPlanting
-      ? plantings.map(p => p.id === editingPlanting.id ? { ...p, ...plantingData, variety: plantType?.variety || '' } : p)
+      ? plantings.map(p => p.id === editingPlanting.id ? { ...p, ...plantingData, variety: plantType?.variety || '', batchNumber } : p)
       : [...plantings, newPlanting];
 
     setPlantings(updatedPlantings);
@@ -184,6 +202,7 @@ export default function PlantingsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Batch #</TableHead>
                 <TableHead>Plant</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Total Qty</TableHead>
@@ -197,7 +216,7 @@ export default function PlantingsPage() {
             </TableHeader>
             <TableBody>
               {plantings.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center h-24">No plantings recorded yet.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center h-24">No plantings recorded yet.</TableCell></TableRow>
               ) : (
                 plantings.map(p => {
                   const plantType = getPlantTypeDetails(p.plantTypeId);
@@ -207,6 +226,9 @@ export default function PlantingsPage() {
                   
                   return (
                     <TableRow key={p.id}>
+                      <TableCell className="font-mono font-semibold text-sm">
+                        {p.batchNumber || 'N/A'}
+                      </TableCell>
                       <TableCell className="font-medium">
                         {plantType?.name || 'N/A'}
                         <br/>

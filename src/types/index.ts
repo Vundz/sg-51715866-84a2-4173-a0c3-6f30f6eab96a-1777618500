@@ -18,6 +18,7 @@ export interface Planting {
   locationId: string;
   quantity: number;
   datePlanted: string;
+  batchNumber?: string;
   status: "active" | "harvested" | "closed";
   remainingQuantity?: number;
 }
