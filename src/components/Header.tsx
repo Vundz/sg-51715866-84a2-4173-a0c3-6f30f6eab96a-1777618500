@@ -11,6 +11,7 @@ const navLinks = [
   { href: "/plantings", label: "Plantings" },
   { href: "/harvests", label: "Harvests" },
   { href: "/treatments", label: "Treatments" },
+  { href: "/reservations", label: "Reservations" },
   { href: "/reports", label: "Reports" },
 ];
 

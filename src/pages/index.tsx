@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Sprout, Package, MapPin, TestTube2, Calendar, TrendingUp } from "lucide-react";
-import { Planting, Harvest, Location, Treatment, PlantType } from "@/types";
+import { ArrowRight, Sprout, Package, MapPin, TestTube2, Calendar, TrendingUp, ShoppingCart } from "lucide-react";
+import { Planting, Harvest, Location, Treatment, PlantType, Reservation } from "@/types";
 import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
 
 export default function DashboardPage() {
@@ -16,6 +15,7 @@ export default function DashboardPage() {
     treatments: 0,
     upcomingHarvests: 0,
     plantTypes: 0,
+    activeReservations: 0,
   });
 
   useEffect(() => {
@@ -24,6 +24,7 @@ export default function DashboardPage() {
     const locations = getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || [];
     const treatments = getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || [];
     const plantTypes = getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || [];
+    const reservations = getStorageData<Reservation[]>(STORAGE_KEYS.RESERVATIONS) || [];
 
     const upcoming = plantings.filter(p => {
       if (p.status !== "active") return false;
@@ -42,16 +43,17 @@ export default function DashboardPage() {
       treatments: treatments.length,
       upcomingHarvests: upcoming,
       plantTypes: plantTypes.length,
+      activeReservations: reservations.filter(r => r.status === 'active').length,
     });
   }, []);
 
   const statCards = [
     { title: "Active Plantings", value: stats.activePlantings, icon: Sprout, href:"/plantings" },
+    { title: "Active Reservations", value: stats.activeReservations, icon: ShoppingCart, href: "/reservations" },
     { title: "Upcoming Harvests", value: stats.upcomingHarvests, icon: Calendar, href: "/reports/upcoming-harvests" },
     { title: "Total Harvests", value: stats.totalHarvests, icon: Package, href:"/harvests" },
     { title: "Locations", value: stats.locations, icon: MapPin, href:"/locations" },
     { title: "Plant Types", value: stats.plantTypes, icon: TrendingUp, href:"/plant-types" },
-    { title: "Treatments Logged", value: stats.treatments, icon: TestTube2, href: "/treatments" },
   ];
 
   return (
@@ -86,7 +88,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4">
             <Link href="/plantings"><Button className="w-full">New Planting</Button></Link>
-            <Link href="/harvests"><Button className="w-full">New Harvest</Button></Link>
+            <Link href="/reservations"><Button className="w-full">New Reservation</Button></Link>
             <Link href="/treatments"><Button className="w-full">Log Treatment</Button></Link>
             <Link href="/reports"><Button className="w-full" variant="outline">View Reports</Button></Link>
           </CardContent>
