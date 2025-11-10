@@ -10,14 +10,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Package } from "lucide-react";
-import { Harvest, Planting, PlantType } from "@/types";
+import { Plus, Edit, Trash2, Package, Printer } from "lucide-react";
+import { Harvest, Planting, PlantType, Location } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
 
 export default function HarvestsPage() {
   const [harvests, setHarvests] = useState<Harvest[]>([]);
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingHarvest, setEditingHarvest] = useState<Harvest | null>(null);
 
@@ -25,13 +26,220 @@ export default function HarvestsPage() {
     setHarvests(getStorageData<Harvest[]>(STORAGE_KEYS.HARVESTS) || []);
     setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
     setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
+    setLocations(getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || []);
   }, []);
 
   const getPlantingDetails = (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
     if (!planting) return null;
     const plantType = plantTypes.find(pt => pt.id === planting.plantTypeId);
-    return { ...planting, plantTypeName: plantType?.name || 'N/A' };
+    const location = locations.find(l => l.id === planting.locationId);
+    return { 
+      ...planting, 
+      plantTypeName: plantType?.name || 'N/A',
+      locationName: location?.name || 'N/A'
+    };
+  };
+
+  const handlePrintDispatchSlip = (harvest: Harvest) => {
+    const details = getPlantingDetails(harvest.plantingId);
+    if (!details) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow pop-ups to print dispatch slips');
+      return;
+    }
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Dispatch Slip - ${harvest.id}</title>
+        <style>
+          @media print {
+            @page {
+              size: 80mm auto;
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+            }
+          }
+          
+          body {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            padding: 10mm;
+            max-width: 80mm;
+            margin: 0 auto;
+          }
+          
+          .header {
+            text-align: center;
+            border-bottom: 2px dashed #000;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+          }
+          
+          .header h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: bold;
+          }
+          
+          .header h2 {
+            margin: 4px 0 0 0;
+            font-size: 14px;
+            font-weight: normal;
+          }
+          
+          .section {
+            margin-bottom: 12px;
+          }
+          
+          .section-title {
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+          }
+          
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+          }
+          
+          .label {
+            font-weight: bold;
+          }
+          
+          .value {
+            text-align: right;
+          }
+          
+          .highlight {
+            background: #000;
+            color: #fff;
+            padding: 4px 8px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+            margin: 8px 0;
+          }
+          
+          .footer {
+            border-top: 2px dashed #000;
+            padding-top: 8px;
+            margin-top: 12px;
+            text-align: center;
+            font-size: 10px;
+          }
+          
+          .notes {
+            border: 1px solid #000;
+            padding: 6px;
+            margin-top: 8px;
+            min-height: 40px;
+          }
+          
+          .barcode {
+            text-align: center;
+            font-size: 10px;
+            margin: 8px 0;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>DISPATCH SLIP</h1>
+          <h2>Seedlings Nursery</h2>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">Order Details</div>
+          <div class="info-row">
+            <span class="label">Dispatch ID:</span>
+            <span class="value">${harvest.id}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Date:</span>
+            <span class="value">${new Date(harvest.harvestDate).toLocaleDateString()}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Time:</span>
+            <span class="value">${new Date().toLocaleTimeString()}</span>
+          </div>
+        </div>
+        
+        <div class="highlight">
+          QUANTITY: ${harvest.quantityHarvested} UNITS
+        </div>
+        
+        <div class="section">
+          <div class="section-title">Product Information</div>
+          <div class="info-row">
+            <span class="label">Plant Type:</span>
+            <span class="value">${details.plantTypeName}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Variety:</span>
+            <span class="value">${details.variety}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Batch:</span>
+            <span class="value">${details.batchNumber}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Quality:</span>
+            <span class="value">${harvest.quality.toUpperCase()}</span>
+          </div>
+        </div>
+        
+        <div class="section">
+          <div class="section-title">Location Details</div>
+          <div class="info-row">
+            <span class="label">Greenhouse:</span>
+            <span class="value">${details.locationName}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Planting Date:</span>
+            <span class="value">${new Date(details.plantingDate).toLocaleDateString()}</span>
+          </div>
+        </div>
+        
+        ${harvest.notes ? `
+        <div class="section">
+          <div class="section-title">Notes</div>
+          <div class="notes">${harvest.notes}</div>
+        </div>
+        ` : ''}
+        
+        <div class="barcode">
+          <div style="font-size: 20px; letter-spacing: 2px;">||||| ${harvest.id.slice(-8)} |||||</div>
+        </div>
+        
+        <div class="footer">
+          <p>Packed by: _________________</p>
+          <p>Checked by: _________________</p>
+          <p style="margin-top: 8px;">Thank you for your business!</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
   };
 
   const handleSaveHarvest = (e: React.FormEvent<HTMLFormElement>) => {
@@ -54,7 +262,7 @@ export default function HarvestsPage() {
     const plantingToUpdate = updatedPlantings.find(p => p.id === plantingId);
 
     if (plantingToUpdate) {
-        if (editingHarvest) { // Reverting an edit
+        if (editingHarvest) {
             const originalHarvest = harvests.find(h => h.id === editingHarvest.id);
             if(originalHarvest) {
                 plantingToUpdate.remainingQuantity = (plantingToUpdate.remainingQuantity ?? plantingToUpdate.quantity) + originalHarvest.quantityHarvested - quantityHarvested;
@@ -192,7 +400,7 @@ export default function HarvestsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Harvest Log</CardTitle>
-          <CardDescription>A complete history of all recorded harvests.</CardDescription>
+          <CardDescription>A complete history of all recorded harvests with dispatch slip printing.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -227,6 +435,15 @@ export default function HarvestsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={() => handlePrintDispatchSlip(h)}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            title="Print Dispatch Slip"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(h)}><Edit className="w-4 h-4" /></Button>
                           <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteHarvest(h.id)}><Trash2 className="w-4 h-4" /></Button>
                         </div>
