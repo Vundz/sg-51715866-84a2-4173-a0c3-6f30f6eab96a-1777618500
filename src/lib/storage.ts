@@ -1,11 +1,10 @@
 export const STORAGE_KEYS = {
-  PLANT_TYPES: "plantTypes",
-  PLANTINGS: "plantings",
-  HARVESTS: "harvests",
-  LOCATIONS: "locations",
-  TREATMENTS: "treatments",
-  USERS: "users",
-  SESSION: "authSession", // Corrected from AUTH_SESSION
+  PLANT_TYPES: 'nursery_plant_types',
+  LOCATIONS: 'nursery_locations',
+  PLANTINGS: 'nursery_plantings',
+  HARVESTS: 'nursery_harvests',
+  TREATMENTS: 'nursery_treatments',
+  RESERVATIONS: 'nursery_reservations'
 } as const;
 
 type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];

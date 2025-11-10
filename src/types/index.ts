@@ -42,3 +42,18 @@ export interface Treatment {
   applicationMethod?: "drench" | "spray" | "granular" | "other";
   notes?: string;
 }
+
+export interface Reservation {
+  id: string;
+  plantingId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  quantityReserved: number;
+  reservationDate: string;
+  paymentStatus: "pending" | "partial" | "paid";
+  amountPaid?: number;
+  totalAmount?: number;
+  notes?: string;
+  status: "active" | "cancelled" | "completed";
+}
