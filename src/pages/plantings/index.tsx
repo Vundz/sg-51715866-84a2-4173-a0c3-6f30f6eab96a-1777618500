@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,14 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Sprout } from "lucide-react";
-import { Planting, PlantType, Location } from "@/types";
+import { Plus, Edit, Trash2, Sprout, ShoppingCart } from "lucide-react";
+import { Planting, PlantType, Location, Reservation } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
 
 export default function PlantingsPage() {
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPlanting, setEditingPlanting] = useState<Planting | null>(null);
 
@@ -23,10 +25,26 @@ export default function PlantingsPage() {
     setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
     setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
     setLocations(getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || []);
+    setReservations(getStorageData<Reservation[]>(STORAGE_KEYS.RESERVATIONS) || []);
   }, []);
 
   const getPlantTypeDetails = (plantTypeId: string) => plantTypes.find(pt => pt.id === plantTypeId);
   const getLocationName = (locationId: string) => locations.find(l => l.id === locationId)?.name || 'N/A';
+
+  const getReservedQuantity = (plantingId: string): number => {
+    const activeReservations = reservations.filter(r => r.plantingId === plantingId && r.status === 'active');
+    return activeReservations.reduce((sum, r) => sum + r.quantityReserved, 0);
+  };
+
+  const getAvailableQuantity = (planting: Planting): number => {
+    const reserved = getReservedQuantity(planting.id);
+    const remaining = planting.remainingQuantity ?? planting.quantity;
+    return Math.max(0, remaining - reserved);
+  };
+
+  const getReservationCount = (plantingId: string): number => {
+    return reservations.filter(r => r.plantingId === plantingId && r.status === 'active').length;
+  };
 
   const handleSavePlanting = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -56,6 +74,11 @@ export default function PlantingsPage() {
   };
 
   const handleDeletePlanting = (id: string) => {
+    const reservationCount = getReservationCount(id);
+    if (reservationCount > 0) {
+      alert(`Cannot delete this planting. It has ${reservationCount} active reservation(s). Please cancel the reservations first.`);
+      return;
+    }
     if (!confirm("Are you sure you want to delete this planting?")) return;
     const updatedPlantings = plantings.filter(p => p.id !== id);
     setPlantings(updatedPlantings);
@@ -163,7 +186,9 @@ export default function PlantingsPage() {
               <TableRow>
                 <TableHead>Plant</TableHead>
                 <TableHead>Location</TableHead>
-                <TableHead>Quantity</TableHead>
+                <TableHead>Total Qty</TableHead>
+                <TableHead>Reserved</TableHead>
+                <TableHead>Available</TableHead>
                 <TableHead>Date Planted</TableHead>
                 <TableHead>Expected Harvest</TableHead>
                 <TableHead>Status</TableHead>
@@ -172,15 +197,43 @@ export default function PlantingsPage() {
             </TableHeader>
             <TableBody>
               {plantings.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center h-24">No plantings recorded yet.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center h-24">No plantings recorded yet.</TableCell></TableRow>
               ) : (
                 plantings.map(p => {
                   const plantType = getPlantTypeDetails(p.plantTypeId);
+                  const reserved = getReservedQuantity(p.id);
+                  const available = getAvailableQuantity(p);
+                  const reservationCount = getReservationCount(p.id);
+                  
                   return (
                     <TableRow key={p.id}>
-                      <TableCell className="font-medium">{plantType?.name || 'N/A'}<br/><span className="text-xs text-gray-500">{p.variety}</span></TableCell>
+                      <TableCell className="font-medium">
+                        {plantType?.name || 'N/A'}
+                        <br/>
+                        <span className="text-xs text-gray-500">{p.variety}</span>
+                      </TableCell>
                       <TableCell>{getLocationName(p.locationId)}</TableCell>
-                      <TableCell>{p.quantity}</TableCell>
+                      <TableCell>{p.remainingQuantity ?? p.quantity}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className={reserved > 0 ? "font-medium text-blue-600" : ""}>{reserved}</span>
+                          {reservationCount > 0 && (
+                            <Link 
+                              href={`/reservations?planting=${p.id}`}
+                              className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                              title="View reservations"
+                            >
+                              <ShoppingCart className="w-3 h-3" />
+                              <span className="text-xs">({reservationCount})</span>
+                            </Link>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className={available === 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
+                          {available}
+                        </span>
+                      </TableCell>
                       <TableCell>{new Date(p.datePlanted).toLocaleDateString()}</TableCell>
                       <TableCell>{getExpectedHarvestDate(p)}</TableCell>
                       <TableCell>
@@ -197,7 +250,7 @@ export default function PlantingsPage() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  )
+                  );
                 })
               )}
             </TableBody>

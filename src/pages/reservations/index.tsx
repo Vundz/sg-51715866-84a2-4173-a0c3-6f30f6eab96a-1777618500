@@ -11,10 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Plus, Edit, X, ShoppingCart, CheckCircle2, AlertCircle } from "lucide-react";
+import { useRouter } from "next/router";
 import { Reservation, Planting, PlantType } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
 
 export default function ReservationsPage() {
+  const router = useRouter();
+  const { planting: plantingIdFilter } = router.query;
+  
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
@@ -117,6 +121,15 @@ export default function ReservationsPage() {
 
   const activePlantings = plantings.filter(p => p.status === 'active');
 
+  const filteredReservations = plantingIdFilter 
+    ? reservations.filter(r => r.plantingId === plantingIdFilter)
+    : reservations;
+
+  const getPlantingName = (plantingId: string) => {
+    const details = getPlantingDetails(plantingId);
+    return details ? `${details.plantType?.name} (${details.planting.variety})` : 'Unknown';
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
@@ -125,21 +138,42 @@ export default function ReservationsPage() {
             <ShoppingCart className="w-10 h-10 text-blue-600" />
             Reservations
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Manage customer orders and track reserved seedlings.</p>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
+            Manage customer orders and track reserved seedlings.
+            {plantingIdFilter && (
+              <span className="block text-sm mt-1">
+                Showing reservations for: <strong>{getPlantingName(plantingIdFilter as string)}</strong>
+              </span>
+            )}
+          </p>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="w-4 h-4 mr-2" />
-          New Reservation
-        </Button>
+        <div className="flex gap-2">
+          {plantingIdFilter && (
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/reservations')}
+            >
+              Show All
+            </Button>
+          )}
+          <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="w-4 h-4 mr-2" />
+            New Reservation
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">Active Reservations</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">
+              {plantingIdFilter ? 'Filtered' : 'Active'} Reservations
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{reservations.filter(r => r.status === 'active').length}</div>
+            <div className="text-3xl font-bold">
+              {filteredReservations.filter(r => r.status === 'active').length}
+            </div>
           </CardContent>
         </Card>
         
@@ -149,7 +183,7 @@ export default function ReservationsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {reservations.filter(r => r.status === 'active').reduce((sum, r) => sum + r.quantityReserved, 0)}
+              {filteredReservations.filter(r => r.status === 'active').reduce((sum, r) => sum + r.quantityReserved, 0)}
             </div>
             <p className="text-xs text-gray-500 mt-1">seedlings</p>
           </CardContent>
@@ -161,7 +195,7 @@ export default function ReservationsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {reservations.filter(r => r.status === 'active' && r.paymentStatus === 'pending').length}
+              {filteredReservations.filter(r => r.status === 'active' && r.paymentStatus === 'pending').length}
             </div>
           </CardContent>
         </Card>
@@ -351,12 +385,14 @@ export default function ReservationsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {reservations.length === 0 ? (
+              {filteredReservations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center h-24">No reservations yet.</TableCell>
+                  <TableCell colSpan={7} className="text-center h-24">
+                    {plantingIdFilter ? 'No reservations for this planting.' : 'No reservations yet.'}
+                  </TableCell>
                 </TableRow>
               ) : (
-                reservations.map(r => {
+                filteredReservations.map(r => {
                   const details = getPlantingDetails(r.plantingId);
                   return (
                     <TableRow key={r.id}>
