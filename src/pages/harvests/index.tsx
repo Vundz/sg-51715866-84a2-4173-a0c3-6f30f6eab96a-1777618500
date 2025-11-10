@@ -192,7 +192,7 @@ export default function HarvestsPage() {
           </div>
           <div class="info-row">
             <span class="label">Batch:</span>
-            <span class="value">${details.batchNumber}</span>
+            <span class="value">${details.id}</span>
           </div>
           <div class="info-row">
             <span class="label">Quality:</span>
@@ -208,7 +208,7 @@ export default function HarvestsPage() {
           </div>
           <div class="info-row">
             <span class="label">Planting Date:</span>
-            <span class="value">${new Date(details.plantingDate).toLocaleDateString()}</span>
+            <span class="value">${new Date(details.datePlanted).toLocaleDateString()}</span>
           </div>
         </div>
         
