@@ -23,9 +23,10 @@ interface User {
   created_at: string;
 }
 
+// Corrected Permission type to match DB schema
 interface Permission {
   id: string;
-  name: string;
+  action: string;
   description: string;
   module: string;
 }
@@ -81,13 +82,13 @@ export default function AdminUsersPage() {
       ]);
 
       setUsers(usersData);
-      setPermissions(permsData);
+      setPermissions(permsData as Permission[]); // Cast to corrected type
 
       // Load permissions for each user
       const permsMap: Record<string, string[]> = {};
       for (const user of usersData) {
-        const userPerms = await adminService.getUserPermissions(user.id);
-        permsMap[user.id] = userPerms.map(p => p.id);
+        const userPermsIds = await adminService.getUserPermissions(user.id);
+        permsMap[user.id] = userPermsIds;
       }
       setUserPermissions(permsMap);
     } catch (err) {
@@ -126,8 +127,8 @@ export default function AdminUsersPage() {
     setEditingUser(user);
     
     // Load user's current permissions
-    const userPerms = await adminService.getUserPermissions(user.id);
-    setSelectedPermissions(userPerms.map(p => p.id));
+    const userPermsIds = await adminService.getUserPermissions(user.id);
+    setSelectedPermissions(userPermsIds);
     
     setPermissionsDialogOpen(true);
     setError(null);
@@ -473,7 +474,7 @@ export default function AdminUsersPage() {
                         />
                         <div className="flex-1">
                           <Label htmlFor={perm.id} className="font-medium cursor-pointer">
-                            {perm.name}
+                            {perm.action}
                           </Label>
                           <p className="text-sm text-muted-foreground mt-1">
                             {perm.description}

@@ -3,8 +3,6 @@ import type { Database } from "@/integrations/supabase/types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type Permission = Database["public"]["Tables"]["permissions"]["Row"];
-type RolePermission = Database["public"]["Tables"]["role_permissions"]["Row"];
-type UserPermission = Database["public"]["Tables"]["user_permissions"]["Row"];
 
 export const adminService = {
   /**
@@ -139,7 +137,8 @@ export const adminService = {
       .eq("role", role);
 
     if (error) throw error;
-    return data;
+    // Simplify the returned structure
+    return data.map((rp: any) => rp.permissions).filter(Boolean);
   },
 
   /**
@@ -149,19 +148,12 @@ export const adminService = {
     const { data, error } = await supabase
       .from("user_permissions")
       .select(`
-        permission_id,
-        granted,
-        permissions (
-          id,
-          module,
-          action,
-          description
-        )
+        permission_id
       `)
       .eq("user_id", userId);
 
     if (error) throw error;
-    return data;
+    return data.map(p => p.permission_id);
   },
 
   /**
@@ -176,75 +168,94 @@ export const adminService = {
       .single();
 
     if (profileError) throw profileError;
+    if (!profile) return [];
 
-    // Get role permissions
-    const rolePerms = await this.getRolePermissions(profile.role);
-    const userPerms = await this.getUserPermissions(userId);
+    // Get role permissions and user permissions
+    const [rolePerms, userPermsIds] = await Promise.all([
+        this.getRolePermissions(profile.role),
+        this.getUserPermissions(userId),
+    ]);
 
-    // Combine permissions (user-specific overrides role)
-    const permissionMap = new Map();
+    const allPermissions = await this.getAllPermissions();
+    const permissionMap = new Map(allPermissions.map(p => [p.id, { ...p, granted: false, source: 'none' }]));
+
+    // Apply role permissions
+    rolePerms.forEach((p: Permission) => {
+        if(permissionMap.has(p.id)) {
+            const perm = permissionMap.get(p.id)!;
+            perm.granted = true;
+            perm.source = 'role';
+        }
+    });
+
+    // Apply user-specific permissions (these are overrides)
+    // For now, we assume user_permissions grant access. A more complex system could have explicit denies.
+    userPermsIds.forEach((pid: string) => {
+        if(permissionMap.has(pid)) {
+            const perm = permissionMap.get(pid)!;
+            perm.granted = true;
+            perm.source = 'user';
+        }
+    });
+
+    return Array.from(permissionMap.values()).filter(p => p.granted);
+  },
+  
+  /**
+   * Set all permissions for a user. This will replace all existing permissions.
+   */
+  async setUserPermissions(userId: string, permissionIds: string[]) {
+    // 1. Delete all existing permissions for the user
+    const { error: deleteError } = await supabase
+        .from('user_permissions')
+        .delete()
+        .eq('user_id', userId);
+
+    if (deleteError) throw deleteError;
+
+    // 2. Insert the new set of permissions
+    if (permissionIds.length > 0) {
+        const newPermissions = permissionIds.map(pid => ({
+            user_id: userId,
+            permission_id: pid,
+        }));
+
+        const { error: insertError } = await supabase
+            .from('user_permissions')
+            .insert(newPermissions);
+
+        if (insertError) throw insertError;
+    }
     
-    // Add role permissions
-    rolePerms.forEach((rp: any) => {
-      if (rp.permissions) {
-        permissionMap.set(rp.permissions.id, {
-          ...rp.permissions,
-          granted: true,
-          source: "role"
-        });
-      }
-    });
-
-    // Override with user-specific permissions
-    userPerms.forEach((up: any) => {
-      if (up.permissions) {
-        permissionMap.set(up.permissions.id, {
-          ...up.permissions,
-          granted: up.granted,
-          source: "user"
-        });
-      }
-    });
-
-    return Array.from(permissionMap.values());
-  },
-
-  /**
-   * Set user-specific permission
-   */
-  async setUserPermission(userId: string, permissionId: string, granted: boolean) {
-    const { data, error } = await supabase
-      .from("user_permissions")
-      .upsert({
-        user_id: userId,
-        permission_id: permissionId,
-        granted: granted
-      })
-      .select();
-
-    if (error) throw error;
-    return data;
-  },
-
-  /**
-   * Remove user-specific permission (revert to role default)
-   */
-  async removeUserPermission(userId: string, permissionId: string) {
-    const { error } = await supabase
-      .from("user_permissions")
-      .delete()
-      .eq("user_id", userId)
-      .eq("permission_id", permissionId);
-
-    if (error) throw error;
     return true;
   },
 
   /**
-   * Create default admin account
+   * Ensures the default admin account exists and is configured.
+   * Renamed from createDefaultAdmin for clarity.
    */
-  async createDefaultAdmin() {
+  async ensureDefaultAdmin() {
     try {
+      // Check if admin user exists in profiles
+      const { data: existingAdmin, error: findError } = await supabase
+        .from("profiles")
+        .select("id, role")
+        .eq("email", "admin@khulisapp.com")
+        .single();
+
+      if (findError && findError.code !== 'PGRST116') { // PGRST116 = 'exact one row not found'
+        throw findError;
+      }
+      
+      if (existingAdmin) {
+        // If user exists but is not admin, update them
+        if (existingAdmin.role !== 'admin') {
+          await this.updateUser(existingAdmin.id, { role: 'admin' });
+        }
+        return existingAdmin;
+      }
+
+      // If user does not exist, create them
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: "admin@khulisapp.com",
         password: "Spawniad8!",
@@ -256,41 +267,33 @@ export const adminService = {
       });
 
       if (authError) {
-        // If user already exists, try to update their role
+        // This case should be rare due to the check above, but handle it.
         if (authError.message.includes("already registered")) {
-          // Get user by email
-          const { data: users } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("email", "admin@khulisapp.com")
-            .single();
-
-          if (users) {
-            await this.updateUser(users.id, { role: "admin" });
-            return users;
-          }
+           console.warn("Auth user existed but profile was missing. Will attempt to recover.");
+           // Refetch to get the user ID, then update role.
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) await this.updateUser(user.id, { role: "admin", full_name: "System Administrator" });
+            return user;
         }
         throw authError;
       }
-
+      
       if (!authData.user) throw new Error("Failed to create admin user");
 
-      // Update profile with admin role
+      // Update profile with admin role, since signUp doesn't always trigger the profile hook fast enough
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .update({ 
-          full_name: "System Administrator",
-          role: "admin" 
-        })
+        .update({ role: "admin", full_name: "System Administrator" })
         .eq("id", authData.user.id)
         .select()
         .single();
-
+      
       if (profileError) throw profileError;
+
       return profileData;
     } catch (error) {
-      console.error("Error creating default admin:", error);
-      throw error;
+      console.error("Error ensuring default admin exists:", error);
+      // Don't re-throw, as it might block the UI from loading for non-admins.
     }
   },
 };
