@@ -1,10 +1,10 @@
-
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { authService } from "@/services/authService";
 import { adminService } from "@/services/adminService";
 import { User as SupabaseUser } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 
 interface UserProfile {
   id: string;

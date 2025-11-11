@@ -1,43 +1,19 @@
-import { useState, useEffect } from "react";
-import Link from "next/link";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeSwitch } from "./ThemeSwitch";
-import { Menu, Leaf, Home, MapPin, Sprout, PackageOpen, Package, FileText, Shield, LogOut, LogIn } from "lucide-react";
-import { adminService } from "@/services/adminService";
+import { Menu, Leaf, Home, MapPin, Sprout, PackageOpen, Package, FileText, Shield, LogOut, LogIn, Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { authService } from "@/services/authService";
 
 export function Header() {
   const router = useRouter();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userEmail, setUserEmail] = useState("");
-
-  useEffect(() => {
-    checkAdminStatus();
-    checkAuthStatus();
-  }, []);
-
-  const checkAdminStatus = async () => {
-    const adminStatus = await adminService.isAdmin();
-    setIsAdmin(adminStatus);
-  };
-
-  const checkAuthStatus = async () => {
-    const user = await authService.getCurrentUser();
-    setIsAuthenticated(!!user);
-    if (user) {
-      setUserEmail(user.email || "");
-    }
-  };
+  const { user, isAuthenticated, isAdmin, loading } = useAuth();
 
   const handleSignOut = async () => {
     try {
       await authService.signOut();
-      setIsAuthenticated(false);
-      setIsAdmin(false);
-      setUserEmail("");
       router.push("/login");
     } catch (error) {
       console.error("Error signing out:", error);
@@ -59,7 +35,7 @@ export function Header() {
   }
 
   return (
-    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center space-x-2">
@@ -89,9 +65,11 @@ export function Header() {
           <div className="flex items-center space-x-4">
             <ThemeSwitch />
             
-            {isAuthenticated ? (
+            {loading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : isAuthenticated ? (
               <div className="hidden md:flex items-center space-x-3">
-                <span className="text-sm text-muted-foreground">{userEmail}</span>
+                <span className="text-sm text-muted-foreground">{user?.email}</span>
                 <Button variant="outline" size="sm" onClick={handleSignOut}>
                   <LogOut className="h-4 w-4 mr-2" />
                   Sign Out
@@ -130,9 +108,13 @@ export function Header() {
                   })}
                   
                   <div className="pt-4 border-t">
-                    {isAuthenticated ? (
+                    {loading ? (
+                       <div className="flex justify-center">
+                         <Loader2 className="h-5 w-5 animate-spin" />
+                       </div>
+                    ) : isAuthenticated ? (
                       <div className="space-y-3">
-                        <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
+                        <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
                         <Button variant="outline" size="sm" onClick={handleSignOut} className="w-full">
                           <LogOut className="h-4 w-4 mr-2" />
                           Sign Out

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { User } from "@/types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type Permission = Database["public"]["Tables"]["permissions"]["Row"];
@@ -107,9 +108,28 @@ export const adminService = {
   /**
    * Check if current user is admin
    */
-  async isAdmin() {
-    const role = await this.getCurrentUserRole();
-    return role === "admin";
+  async isAdmin(userId: string): Promise<boolean> {
+    if (!userId) {
+      return false;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .single();
+
+      if (error) {
+        console.error("Error checking admin status:", error);
+        return false;
+      }
+
+      return data?.role === "admin";
+    } catch (error) {
+      console.error("Error in isAdmin:", error);
+      return false;
+    }
   },
 
   /**

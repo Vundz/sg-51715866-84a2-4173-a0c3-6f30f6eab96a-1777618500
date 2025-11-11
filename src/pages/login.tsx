@@ -1,4 +1,4 @@
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -7,16 +7,25 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { authService } from "@/services/authService";
-import { Leaf, AlertCircle, CheckCircle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Leaf, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { isAuthenticated, loading: authLoading, checkAuthStatus } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [initLoading, setInitLoading] = useState(false);
   const [initSuccess, setInitSuccess] = useState("");
+  
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      router.push("/");
+    }
+  }, [isAuthenticated, authLoading, router]);
+
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -25,6 +34,7 @@ export default function LoginPage() {
 
     try {
       await authService.signIn(email, password);
+      await checkAuthStatus();
       router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to sign in. Please check your credentials.");
@@ -58,6 +68,14 @@ export default function LoginPage() {
       setInitLoading(false);
     }
   };
+
+  if (authLoading || (!authLoading && isAuthenticated)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-green-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4">
