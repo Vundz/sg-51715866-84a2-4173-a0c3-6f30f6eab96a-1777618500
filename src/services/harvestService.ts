@@ -104,12 +104,12 @@ export const harvestService = {
   async getTotalHarvestedQuantity(plantingId: string) {
     const { data, error } = await supabase
       .from("harvests")
-      .select("quantity")
+      .select("quantity_harvested")
       .eq("planting_id", plantingId);
 
     if (error) throw error;
     
-    const total = data.reduce((sum, h) => sum + (h.quantity || 0), 0);
+    const total = data.reduce((sum, h) => sum + (h.quantity_harvested || 0), 0);
     return total;
   }
 };

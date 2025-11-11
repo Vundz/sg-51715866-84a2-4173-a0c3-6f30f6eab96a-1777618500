@@ -10,44 +10,43 @@ export const treatmentService = {
   async getTreatments() {
     const { data, error } = await supabase
       .from("treatments")
-      .select(`
-        *,
-        plantings!treatments_planting_id_fkey (
-          id,
-          batch_number,
-          plant_types!plantings_plant_type_id_fkey (
-            id,
-            name,
-            variety
-          ),
-          locations!plantings_location_id_fkey (
-            id,
-            name
-          )
-        )
-      `)
-      .order("application_date", { ascending: false });
+      .select(`*`)
+      .order("date_applied", { ascending: false });
 
     if (error) throw error;
-    return data as (Treatment & {
-      plantings: Database["public"]["Tables"]["plantings"]["Row"] & {
-        plant_types: Database["public"]["Tables"]["plant_types"]["Row"];
-        locations: Database["public"]["Tables"]["locations"]["Row"];
-      };
-    })[];
+
+    // Manually fetch plantings for each treatment
+    const treatmentsWithPlantings = await Promise.all(
+      data.map(async (treatment) => {
+        if (!treatment.planting_ids || treatment.planting_ids.length === 0) {
+          return { ...treatment, plantings: [] };
+        }
+        const { data: plantings, error: plantingsError } = await supabase
+          .from("plantings")
+          .select(`
+            id,
+            batch_number,
+            plant_types ( name, variety ),
+            locations ( name )
+          `)
+          .in("id", treatment.planting_ids);
+
+        if (plantingsError) {
+          console.error("Error fetching plantings for treatment:", treatment.id, plantingsError);
+          return { ...treatment, plantings: [] };
+        }
+
+        return { ...treatment, plantings: plantings || [] };
+      })
+    );
+
+    return treatmentsWithPlantings as any;
   },
 
   async getTreatmentById(id: string) {
     const { data, error } = await supabase
       .from("treatments")
-      .select(`
-        *,
-        plantings!treatments_planting_id_fkey (
-          *,
-          plant_types!plantings_plant_type_id_fkey (*),
-          locations!plantings_location_id_fkey (*)
-        )
-      `)
+      .select(`*`)
       .eq("id", id)
       .single();
 
@@ -102,8 +101,8 @@ export const treatmentService = {
     const { data, error } = await supabase
       .from("treatments")
       .select("*")
-      .eq("planting_id", plantingId)
-      .order("application_date", { ascending: false });
+      .contains("planting_ids", [plantingId])
+      .order("date_applied", { ascending: false });
 
     if (error) throw error;
     return data as Treatment[];
@@ -112,16 +111,9 @@ export const treatmentService = {
   async getTreatmentsByType(treatmentType: string) {
     const { data, error } = await supabase
       .from("treatments")
-      .select(`
-        *,
-        plantings!treatments_planting_id_fkey (
-          *,
-          plant_types!plantings_plant_type_id_fkey (*),
-          locations!plantings_location_id_fkey (*)
-        )
-      `)
+      .select(`*`)
       .eq("treatment_type", treatmentType)
-      .order("application_date", { ascending: false });
+      .order("date_applied", { ascending: false });
 
     if (error) throw error;
     return data;
