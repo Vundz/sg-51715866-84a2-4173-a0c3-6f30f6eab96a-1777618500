@@ -109,10 +109,13 @@ export const adminService = {
    */
   async isAdmin(userId: string): Promise<boolean> {
     if (!userId) {
+      console.log("isAdmin check: No userId provided");
       return false;
     }
 
     try {
+      console.log("isAdmin check: Checking admin status for user:", userId);
+      
       const { data, error } = await supabase
         .from("profiles")
         .select("role")
@@ -124,7 +127,10 @@ export const adminService = {
         return false;
       }
 
-      return data?.role === "admin";
+      const isAdminUser = data?.role === "admin";
+      console.log("isAdmin check result:", { userId, role: data?.role, isAdmin: isAdminUser });
+      
+      return isAdminUser;
     } catch (error) {
       console.error("Error in isAdmin:", error);
       return false;
