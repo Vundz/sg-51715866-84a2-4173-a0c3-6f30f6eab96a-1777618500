@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
+import { useAuth } from "@/contexts/AuthContext";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +40,8 @@ interface FormData {
 }
 
 export default function AdminUsersPage() {
+  const router = useRouter();
+  const { user, isAdmin, loading: authLoading } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [userPermissions, setUserPermissions] = useState<Record<string, string[]>>({});
@@ -56,10 +60,20 @@ export default function AdminUsersPage() {
     role: "user"
   });
 
+  // Route protection: redirect if not admin
   useEffect(() => {
-    loadData();
-    initializeDefaultAdmin();
-  }, []);
+    if (!authLoading && !isAdmin) {
+      console.log("Access denied: User is not admin", { user, isAdmin });
+      router.push("/");
+    }
+  }, [authLoading, isAdmin, router, user]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadData();
+      initializeDefaultAdmin();
+    }
+  }, [isAdmin]);
 
   const initializeDefaultAdmin = async () => {
     try {
@@ -238,6 +252,50 @@ export default function AdminUsersPage() {
     });
     return grouped;
   };
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white mx-auto"></div>
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Checking permissions...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Show access denied if not admin
+  if (!isAdmin) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <Card className="max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-600">
+                <AlertCircle className="h-6 w-6" />
+                Access Denied
+              </CardTitle>
+              <CardDescription>
+                You don't have permission to access this page. Admin privileges required.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <p className="text-sm">Current user: {user?.email || "Not signed in"}</p>
+                <p className="text-sm">Role: {user?.role || "No role"}</p>
+                <Button onClick={() => router.push("/")} className="w-full">
+                  Back to Dashboard
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
 
   if (loading) {
     return (
