@@ -163,4 +163,16 @@ export const authService = {
 
     if (error) throw error;
   },
+
+  /**
+   * Admin function to reset a user's password (requires service role)
+   * This should only be called from API routes with proper authentication
+   */
+  async adminResetPassword(userId: string, newPassword: string): Promise<void> {
+    // This requires the service role key, so it should only be called from API routes
+    const { error } = await supabase.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    });
+    if (error) throw error;
+  },
 };

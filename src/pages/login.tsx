@@ -1,6 +1,5 @@
 import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { authService } from "@/services/authService";
 import { useAuth } from "@/contexts/AuthContext";
-import { Leaf, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { Leaf, AlertCircle, CheckCircle, Loader2, CheckCircle2 } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,6 +18,8 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [initLoading, setInitLoading] = useState(false);
   const [initSuccess, setInitSuccess] = useState("");
+  const [initializingAdmin, setInitializingAdmin] = useState(false);
+  const [initMessage, setInitMessage] = useState<string | null>(null);
   
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -44,9 +45,9 @@ export default function LoginPage() {
   };
 
   const handleInitAdmin = async () => {
-    setInitLoading(true);
-    setError("");
-    setInitSuccess("");
+    setInitializingAdmin(true);
+    setInitMessage(null);
+    setError(null);
 
     try {
       const response = await fetch("/api/init-admin", {
@@ -56,16 +57,19 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        setInitSuccess(data.message || "Admin user initialized successfully! You can now sign in.");
-        setEmail("admin@khulisapp.com");
-        setPassword("Spawniad8!");
+        setInitMessage(data.message);
+        if (data.user?.credentials) {
+          setInitMessage(
+            `${data.message}\n\nCredentials:\nEmail: ${data.user.credentials.email}\nPassword: ${data.user.credentials.password}`
+          );
+        }
       } else {
         setError(data.error || "Failed to initialize admin user");
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to initialize admin user");
+    } catch (err: any) {
+      setError(err.message || "Failed to initialize admin user");
     } finally {
-      setInitLoading(false);
+      setInitializingAdmin(false);
     }
   };
 

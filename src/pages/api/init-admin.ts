@@ -1,72 +1,133 @@
-
 import type { NextApiRequest, NextApiResponse } from "next";
 import { supabase } from "@/integrations/supabase/client";
+import { createClient } from "@supabase/supabase-js";
+
+type ResponseData = {
+  message: string;
+  user?: any;
+  error?: string;
+};
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse
+  res: NextApiResponse<ResponseData>
 ) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({ message: "Method not allowed" });
   }
 
   try {
-    // Check if admin already exists
-    const { data: existingProfiles, error: checkError } = await supabase
-      .from("profiles")
-      .select("email")
-      .eq("email", "admin@khulisapp.com")
-      .single();
+    // Create admin client with service role key
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
 
-    if (existingProfiles) {
-      return res.status(200).json({ 
-        message: "Admin user already exists",
-        email: "admin@khulisapp.com" 
+    const adminEmail = "admin@khulisapp.com";
+    const adminPassword = "Admin123!";
+    const adminFullName = "System Administrator";
+
+    // Check if user already exists in auth.users
+    const { data: existingUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+    
+    if (listError) {
+      return res.status(500).json({ message: "Error checking users", error: listError.message });
+    }
+
+    const existingUser = existingUsers.users.find(u => u.email === adminEmail);
+
+    if (existingUser) {
+      // User exists - update password and ensure profile has admin role
+      await supabaseAdmin.auth.admin.updateUserById(existingUser.id, {
+        password: adminPassword,
+        email_confirm: true,
+      });
+
+      // Update profile role
+      const { error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .update({ 
+          role: "admin",
+          full_name: adminFullName 
+        })
+        .eq("id", existingUser.id);
+
+      if (profileError) {
+        return res.status(500).json({ 
+          message: "User updated but profile update failed", 
+          error: profileError.message 
+        });
+      }
+
+      return res.status(200).json({
+        message: "Admin user already exists and has been updated",
+        user: {
+          id: existingUser.id,
+          email: existingUser.email,
+          credentials: {
+            email: adminEmail,
+            password: adminPassword,
+          },
+        },
       });
     }
 
-    // Create admin user using Supabase Admin API
-    // Note: This requires SUPABASE_SERVICE_ROLE_KEY which should be set in environment
-    const adminEmail = "admin@khulisapp.com";
-    const adminPassword = "Spawniad8!";
-
-    const { data, error } = await supabase.auth.signUp({
+    // Create new admin user
+    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: adminEmail,
       password: adminPassword,
-      options: {
-        data: {
-          full_name: "System Administrator",
-        },
+      email_confirm: true,
+      user_metadata: {
+        full_name: adminFullName,
       },
     });
 
-    if (error) {
-      console.error("Error creating admin user:", error);
-      return res.status(500).json({ error: error.message });
+    if (createError) {
+      return res.status(500).json({ 
+        message: "Failed to create admin user", 
+        error: createError.message 
+      });
     }
 
-    // Update the profile to set admin role
-    if (data.user) {
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ role: "admin" })
-        .eq("id", data.user.id);
+    // Ensure profile has admin role (trigger should create it, but let's be sure)
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .upsert({ 
+        id: newUser.user.id,
+        email: adminEmail,
+        role: "admin",
+        full_name: adminFullName 
+      });
 
-      if (updateError) {
-        console.error("Error updating admin role:", updateError);
-        return res.status(500).json({ error: updateError.message });
-      }
+    if (profileError) {
+      return res.status(500).json({ 
+        message: "User created but profile update failed", 
+        error: profileError.message 
+      });
     }
 
     return res.status(200).json({
       message: "Admin user created successfully",
-      email: adminEmail,
-      note: "Please check your email to verify the account",
+      user: {
+        id: newUser.user.id,
+        email: newUser.user.email,
+        credentials: {
+          email: adminEmail,
+          password: adminPassword,
+        },
+      },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error in init-admin:", error);
-    return res.status(500).json({ 
-      error: error instanceof Error ? error.message : "Unknown error" 
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
     });
   }
 }
