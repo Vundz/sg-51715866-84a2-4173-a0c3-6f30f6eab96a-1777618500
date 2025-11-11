@@ -4,6 +4,12 @@ import type { Database } from "@/integrations/supabase/types";
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type Permission = Database["public"]["Tables"]["permissions"]["Row"];
 
+// Define a type for the object that includes the granted status and source
+type EffectivePermission = Permission & {
+  granted: boolean;
+  source: "role" | "user" | "none";
+};
+
 export const adminService = {
   /**
    * Get all users (admin only)
@@ -177,7 +183,7 @@ export const adminService = {
     ]);
 
     const allPermissions = await this.getAllPermissions();
-    const permissionMap = new Map(allPermissions.map(p => [p.id, { ...p, granted: false, source: 'none' }]));
+    const permissionMap = new Map<string, EffectivePermission>(allPermissions.map(p => [p.id, { ...p, granted: false, source: 'none' }]));
 
     // Apply role permissions
     rolePerms.forEach((p: Permission) => {

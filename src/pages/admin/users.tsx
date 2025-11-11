@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,7 +81,7 @@ export default function AdminUsersPage() {
       ]);
 
       setUsers(usersData);
-      setPermissions(permsData as Permission[]); // Cast to corrected type
+      setPermissions(permsData as unknown as Permission[]); // Cast to corrected type
 
       // Load permissions for each user
       const permsMap: Record<string, string[]> = {};
