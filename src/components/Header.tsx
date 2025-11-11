@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Mountain } from "lucide-react";
+import { Menu, Mountain, Shield } from "lucide-react";
 import { ThemeSwitch } from "./ThemeSwitch";
+import { useState, useEffect } from "react";
+import { adminService } from "@/services/adminService";
 
 const navLinks = [
   { href: "/", label: "Dashboard" },
@@ -16,6 +18,21 @@ const navLinks = [
 ];
 
 export default function Header() {
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    checkAdminStatus();
+  }, []);
+
+  const checkAdminStatus = async () => {
+    try {
+      const adminStatus = await adminService.isAdmin();
+      setIsAdmin(adminStatus);
+    } catch (error) {
+      console.error("Error checking admin status:", error);
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center">
@@ -34,6 +51,15 @@ export default function Header() {
                 {label}
               </Link>
             ))}
+            {isAdmin && (
+              <Link
+                href="/admin/users"
+                className="transition-colors hover:text-foreground/80 text-foreground/60 flex items-center gap-1"
+              >
+                <Shield className="h-4 w-4" />
+                Admin
+              </Link>
+            )}
           </nav>
         </div>
 
@@ -63,6 +89,15 @@ export default function Header() {
                         {label}
                     </Link>
                 ))}
+                {isAdmin && (
+                  <Link
+                    href="/admin/users"
+                    className="flex w-full items-center py-2 text-lg font-semibold gap-2"
+                  >
+                    <Shield className="h-5 w-5" />
+                    Admin
+                  </Link>
+                )}
             </div>
           </SheetContent>
         </Sheet>
