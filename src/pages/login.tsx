@@ -1,4 +1,3 @@
-
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -8,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { authService } from "@/services/authService";
-import { Leaf, AlertCircle } from "lucide-react";
+import { Leaf, AlertCircle, CheckCircle } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,6 +15,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [initLoading, setInitLoading] = useState(false);
+  const [initSuccess, setInitSuccess] = useState("");
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -29,6 +30,32 @@ export default function LoginPage() {
       setError(err instanceof Error ? err.message : "Failed to sign in. Please check your credentials.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleInitAdmin = async () => {
+    setInitLoading(true);
+    setError("");
+    setInitSuccess("");
+
+    try {
+      const response = await fetch("/api/init-admin", {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setInitSuccess(data.message || "Admin user initialized successfully! You can now sign in.");
+        setEmail("admin@khulisapp.com");
+        setPassword("Spawniad8!");
+      } else {
+        setError(data.error || "Failed to initialize admin user");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to initialize admin user");
+    } finally {
+      setInitLoading(false);
     }
   };
 
@@ -52,6 +79,15 @@ export default function LoginPage() {
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            {initSuccess && (
+              <Alert className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <AlertDescription className="text-green-800 dark:text-green-200">
+                  {initSuccess}
+                </AlertDescription>
               </Alert>
             )}
 
@@ -88,14 +124,37 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Default Admin Credentials:</p>
-            <p className="font-mono text-xs mt-1">
-              admin@khulisapp.com / Spawniad8!
-            </p>
+          <div className="mt-6 space-y-3">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  First time setup
+                </span>
+              </div>
+            </div>
+
+            <Button 
+              type="button" 
+              variant="outline" 
+              className="w-full" 
+              onClick={handleInitAdmin}
+              disabled={initLoading}
+            >
+              {initLoading ? "Initializing..." : "Initialize Admin Account"}
+            </Button>
+
+            <div className="text-center text-xs text-muted-foreground">
+              <p className="mb-1">Click above to create default admin account</p>
+              <p className="font-mono">
+                admin@khulisapp.com / Spawniad8!
+              </p>
+            </div>
           </div>
 
-          <div className="mt-4 text-center text-sm">
+          <div className="mt-6 text-center text-sm">
             <Link href="/" className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300">
               Back to Home
             </Link>
