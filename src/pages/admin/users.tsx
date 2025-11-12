@@ -178,9 +178,9 @@ export default function AdminUsersPage() {
 
   const groupPermissionsByModule = () => {
     return permissions.reduce((acc, perm) => {
-      const module = perm.module || "general";
-      if (!acc[module]) acc[module] = [];
-      acc[module].push(perm);
+      const permModule = perm.module || "general";
+      if (!acc[permModule]) acc[permModule] = [];
+      acc[permModule].push(perm);
       return acc;
     }, {} as Record<string, Permission[]>);
   };
@@ -279,8 +279,8 @@ export default function AdminUsersPage() {
               <TabsList className="grid w-full grid-cols-3">
                 {Object.keys(groupedPermissions).map(m => <TabsTrigger key={m} value={m} className="capitalize">{m}</TabsTrigger>)}
               </TabsList>
-              {Object.entries(groupedPermissions).map(([module, perms]) => (
-                <TabsContent key={module} value={module} className="space-y-2 mt-4">
+              {Object.entries(groupedPermissions).map(([moduleName, perms]) => (
+                <TabsContent key={moduleName} value={moduleName} className="space-y-2 mt-4">
                   {perms.map((p) => (
                     <div key={p.id} className="flex items-center space-x-3 rounded-lg border p-3">
                       <Checkbox id={p.id} checked={selectedPermissions.includes(p.id)} onCheckedChange={() => setSelectedPermissions(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])} />

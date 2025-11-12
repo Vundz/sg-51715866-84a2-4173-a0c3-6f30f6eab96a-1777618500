@@ -7,7 +7,7 @@ type Permission = Database["public"]["Tables"]["permissions"]["Row"];
 type UserRole = Database["public"]["Enums"]["user_role"];
 
 // Define a type for the object that includes the granted status and source
-type EffectivePermission = Permission &amp; {
+type EffectivePermission = Permission & {
   granted: boolean;
   source: "role" | "user" | "none";
 };
@@ -16,7 +16,7 @@ export const adminService = {
   /**
    * Get all users (admin only)
    */
-  async getAllUsers(): Promise&lt;Profile[]&gt; {
+  async getAllUsers(): Promise<Profile[]> {
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
@@ -29,7 +29,7 @@ export const adminService = {
   /**
    * Create a new user with email and password
    */
-  async createUser(email: string, password: string, fullName: string, role: UserRole): Promise&lt;Profile&gt; {
+  async createUser(email: string, password: string, fullName: string, role: UserRole): Promise<Profile> {
     // First, create the auth user
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -71,7 +71,7 @@ export const adminService = {
   /**
    * Update user role and details
    */
-  async updateUser(userId: string, updates: Partial&lt;Pick&lt;Profile, "full_name" | "role"&gt;&gt;): Promise&lt;Profile&gt; {
+  async updateUser(userId: string, updates: Partial<Pick<Profile, "full_name" | "role">>): Promise<Profile> {
     const { data, error } = await supabase
       .from("profiles")
       .update(updates)
@@ -88,7 +88,7 @@ export const adminService = {
    * NOTE: This does NOT delete the auth.users record.
    * For full user deletion, you need to call an edge function with the service_role key.
    */
-  async deleteUser(userId: string): Promise&lt;boolean&gt; {
+  async deleteUser(userId: string): Promise<boolean> {
     const { error } = await supabase
       .from("profiles")
       .delete()
@@ -100,7 +100,7 @@ export const adminService = {
     return true;
   },
 
-  async isAdmin(userId: string): Promise&lt;boolean&gt; {
+  async isAdmin(userId: string): Promise<boolean> {
     if (!userId) return false;
     try {
       const { data, error } = await supabase
@@ -115,7 +115,7 @@ export const adminService = {
     }
   },
 
-  async getAllPermissions(): Promise&lt;Permission[]&gt; {
+  async getAllPermissions(): Promise<Permission[]> {
     const { data, error } = await supabase
       .from("permissions")
       .select("*")
@@ -124,7 +124,7 @@ export const adminService = {
     return data;
   },
 
-  async getUserPermissions(userId: string): Promise&lt;string[]&gt; {
+  async getUserPermissions(userId: string): Promise<string[]> {
     const { data, error } = await supabase
       .from("user_permissions")
       .select("permission_id")
@@ -133,7 +133,7 @@ export const adminService = {
     return data.map(p => p.permission_id);
   },
   
-  async setUserPermissions(userId: string, permissionIds: string[]): Promise&lt;boolean&gt; {
+  async setUserPermissions(userId: string, permissionIds: string[]): Promise<boolean> {
     const { error: deleteError } = await supabase
         .from('user_permissions')
         .delete()
@@ -153,7 +153,7 @@ export const adminService = {
     return true;
   },
 
-  async ensureDefaultAdmin(): Promise&lt;void&gt; {
+  async ensureDefaultAdmin(): Promise<void> {
     try {
       const { data: existingAdmin, error: findError } = await supabase
         .from("profiles")
@@ -161,7 +161,7 @@ export const adminService = {
         .eq("email", "admin@khulisapp.com")
         .single();
 
-      if (findError &amp;&amp; findError.code !== 'PGRST116') throw findError;
+      if (findError && findError.code !== 'PGRST116') throw findError;
       
       if (existingAdmin) {
         if (existingAdmin.role !== 'admin') {
