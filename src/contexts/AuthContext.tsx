@@ -1,70 +1,35 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { authService } from "@/services/authService";
-import { adminService } from "@/services/adminService";
-import { User as SupabaseUser } from "@supabase/supabase-js";
+import { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { authService } from "@/services/authService";
+import type { Database } from "@/integrations/supabase/types";
 
-interface UserProfile {
-  id: string;
-  email: string;
-  role?: string;
-  full_name?: string;
-  avatar_url?: string;
-}
+type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
-interface AuthContextType {
-  user: UserProfile | null;
-  isAuthenticated: boolean;
-  isAdmin: boolean;
+export interface AuthContextType {
+  user: User | null;
+  profile: Profile | null;
   loading: boolean;
-  checkAuthStatus: () => Promise<void>;
+  login: (password: string, email: string) => Promise<any>;
+  logout: () => Promise<void>;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  const checkAuthStatus = async () => {
-    try {
-      setLoading(true);
-      console.log("AuthContext: Checking auth status...");
-      
-      const currentUser = await authService.getCurrentUser();
-      console.log("AuthContext: Current user:", currentUser);
-      
-      setUser(currentUser);
-      
-      if (currentUser) {
-        const adminStatus = await adminService.isAdmin(currentUser.id);
-        console.log("AuthContext: Admin status:", adminStatus);
-        setIsAdmin(adminStatus);
-      } else {
-        console.log("AuthContext: No user found, setting isAdmin to false");
-        setIsAdmin(false);
-      }
-    } catch (error) {
-      console.error("AuthContext: Error checking auth status:", error);
-      setUser(null);
-      setIsAdmin(false);
-    } finally {
-      setLoading(false);
-      console.log("AuthContext: Auth check complete");
-    }
-  };
-  
   useEffect(() => {
-    console.log("AuthContext: Initial mount, checking auth status");
-    checkAuthStatus();
-
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log("AuthContext: Auth state changed:", event, session?.user?.email);
-        checkAuthStatus();
+        setAuthData(session?.user);
       }
     );
 
@@ -73,26 +38,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const value = {
-    user,
-    isAuthenticated: !!user,
-    isAdmin,
-    loading,
-    checkAuthStatus
+  const setAuthData = async (sessionUser: User | null) => {
+    setUser(sessionUser);
+    if (sessionUser) {
+      const userProfile = await authService.getProfile(sessionUser.id);
+      setProfile(userProfile);
+      setIsAdmin(userProfile?.role === "admin");
+    } else {
+      setProfile(null);
+      setIsAdmin(false);
+    }
+    setLoading(false);
   };
 
-  console.log("AuthContext: Current state:", { 
-    userEmail: user?.email, 
-    isAuthenticated: !!user, 
-    isAdmin, 
-    loading 
-  });
+  const value = {
+    user,
+    profile,
+    loading,
+    login: authService.login,
+    logout: authService.logout,
+    isAdmin,
+  };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
