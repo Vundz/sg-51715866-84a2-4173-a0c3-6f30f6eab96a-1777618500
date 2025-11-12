@@ -1,3 +1,4 @@
+
 import { useState, FormEvent, useEffect } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -6,28 +7,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { authService } from "@/services/authService";
 import { useAuth } from "@/contexts/AuthContext";
-import { Leaf, AlertCircle, CheckCircle, Loader2, CheckCircle2 } from "lucide-react";
+import { Leaf, AlertCircle, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { isAuthenticated, loading: authLoading, checkAuthStatus } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const { user, loading: authLoading, login } = useAuth();
+  const [email, setEmail] = useState("admin@khulisapp.com");
+  const [password, setPassword] = useState("Spawniad8!");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [initLoading, setInitLoading] = useState(false);
-  const [initSuccess, setInitSuccess] = useState("");
   const [initializingAdmin, setInitializingAdmin] = useState(false);
   const [initMessage, setInitMessage] = useState<string | null>(null);
   
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
+    if (!authLoading && user) {
       router.push("/");
     }
-  }, [isAuthenticated, authLoading, router]);
-
+  }, [user, authLoading, router]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -35,8 +32,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await authService.signIn(email, password);
-      await checkAuthStatus();
+      await login(email, password);
       router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to sign in. Please check your credentials.");
@@ -48,7 +44,7 @@ export default function LoginPage() {
   const handleInitAdmin = async () => {
     setInitializingAdmin(true);
     setInitMessage(null);
-    setError(null);
+    setError("");
 
     try {
       const response = await fetch("/api/init-admin", {
@@ -58,12 +54,15 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok) {
-        setInitMessage(data.message);
+        let message = data.message;
         if (data.user?.credentials) {
-          setInitMessage(
-            `${data.message}\n\nCredentials:\nEmail: ${data.user.credentials.email}\nPassword: ${data.user.credentials.password}`
-          );
+          message += `\n\nCredentials:\nEmail: ${data.user.credentials.email}\nPassword: ${data.user.credentials.password}`;
         }
+        setInitMessage(message);
+        // Maybe auto-fill credentials if they were created
+        if (data.user?.credentials?.email) setEmail(data.user.credentials.email);
+        if (data.user?.credentials?.password) setPassword(data.user.credentials.password);
+
       } else {
         setError(data.error || "Failed to initialize admin user");
       }
@@ -74,7 +73,7 @@ export default function LoginPage() {
     }
   };
 
-  if (authLoading || (!authLoading && isAuthenticated)) {
+  if (authLoading || (!authLoading && user)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-10 w-10 animate-spin text-green-600" />
@@ -98,19 +97,10 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
+            {(error || initMessage) && (
+              <Alert variant={error ? "destructive" : "default"} className={initMessage ? "whitespace-pre-wrap" : ""}>
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            {initSuccess && (
-              <Alert className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
-                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                <AlertDescription className="text-green-800 dark:text-green-200">
-                  {initSuccess}
-                </AlertDescription>
+                <AlertDescription>{error || initMessage}</AlertDescription>
               </Alert>
             )}
 
@@ -164,16 +154,13 @@ export default function LoginPage() {
               variant="outline" 
               className="w-full" 
               onClick={handleInitAdmin}
-              disabled={initLoading}
+              disabled={initializingAdmin}
             >
-              {initLoading ? "Initializing..." : "Initialize Admin Account"}
+              {initializingAdmin ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Initializing...</>) : "Initialize Admin Account"}
             </Button>
 
             <div className="text-center text-xs text-muted-foreground">
-              <p className="mb-1">Click above to create default admin account</p>
-              <p className="font-mono">
-                admin@khulisapp.com / Spawniad8!
-              </p>
+              <p className="mb-1">Click above to create a default admin account if one doesn't exist.</p>
             </div>
           </div>
 

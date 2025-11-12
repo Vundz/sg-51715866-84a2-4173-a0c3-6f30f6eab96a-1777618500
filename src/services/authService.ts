@@ -1,12 +1,8 @@
-import { supabase } from "@/integrations/supabase/client";
 
-interface User {
-  id: string;
-  email: string;
-  role?: string;
-  full_name?: string;
-  avatar_url?: string;
-}
+import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+
+type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 // Helper function to get the correct redirect URL based on environment
 const getRedirectURL = () => {
@@ -30,9 +26,27 @@ const getRedirectURL = () => {
 
 export const authService = {
   /**
+   * Get user profile by ID
+   */
+  async getProfile(userId: string): Promise<Profile | null> {
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching profile:", error);
+      return null;
+    }
+    
+    return profile;
+  },
+  
+  /**
    * Sign in with email and password
    */
-  async signIn(email: string, password: string): Promise<User> {
+  async login(email: string, password: string): Promise<Profile> {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -42,27 +56,16 @@ export const authService = {
     if (!data.user) throw new Error("No user data returned");
 
     // Fetch profile data
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", data.user.id)
-      .single();
+    const profile = await this.getProfile(data.user.id);
+    if (!profile) throw new Error("User profile not found.");
 
-    if (profileError) throw profileError;
-
-    return {
-      id: data.user.id,
-      email: data.user.email || "",
-      role: profile?.role || "user",
-      full_name: profile?.full_name || "",
-      avatar_url: profile?.avatar_url || "",
-    };
+    return profile;
   },
 
   /**
    * Sign up a new user
    */
-  async signUp(email: string, password: string, fullName?: string): Promise<User> {
+  async signup(email: string, password: string, fullName?: string): Promise<Profile> {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -77,47 +80,32 @@ export const authService = {
     if (error) throw error;
     if (!data.user) throw new Error("No user data returned");
 
-    // Profile will be created automatically via database trigger
-    return {
-      id: data.user.id,
-      email: data.user.email || "",
-      role: "user",
-      full_name: fullName || "",
-    };
+    // The profile is created by a trigger. We wait a moment and fetch it.
+    // This is a workaround for the race condition where the profile might not be available immediately.
+    await new Promise(res => setTimeout(res, 1000));
+    const profile = await this.getProfile(data.user.id);
+    if (!profile) throw new Error("User profile could not be created or found.");
+
+    return profile;
   },
 
   /**
    * Sign out the current user
    */
-  async signOut(): Promise<void> {
+  async logout(): Promise<void> {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   },
 
   /**
-   * Get the current authenticated user
+   * Get the current authenticated user's profile
    */
-  async getCurrentUser(): Promise<User | null> {
+  async getCurrentUserProfile(): Promise<Profile | null> {
     const { data: { user }, error } = await supabase.auth.getUser();
     
     if (error || !user) return null;
 
-    // Fetch profile data
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError) return null;
-
-    return {
-      id: user.id,
-      email: user.email || "",
-      role: profile?.role || "user",
-      full_name: profile?.full_name || "",
-      avatar_url: profile?.avatar_url || "",
-    };
+    return this.getProfile(user.id);
   },
 
   /**
@@ -152,13 +140,10 @@ export const authService = {
   /**
    * Update user profile
    */
-  async updateProfile(userId: string, updates: Partial<User>): Promise<void> {
+  async updateProfile(userId: string, updates: Partial<Profile>): Promise<void> {
     const { error } = await supabase
       .from("profiles")
-      .update({
-        full_name: updates.full_name,
-        avatar_url: updates.avatar_url,
-      })
+      .update(updates)
       .eq("id", userId);
 
     if (error) throw error;

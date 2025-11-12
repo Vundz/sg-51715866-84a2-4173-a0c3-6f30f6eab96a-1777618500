@@ -1,3 +1,4 @@
+
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -5,15 +6,14 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeSwitch } from "./ThemeSwitch";
 import { Menu, Leaf, Home, MapPin, Sprout, PackageOpen, Package, FileText, Shield, LogOut, LogIn, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { authService } from "@/services/authService";
 
 export function Header() {
   const router = useRouter();
-  const { user, isAuthenticated, isAdmin, loading } = useAuth();
+  const { user, profile, isAdmin, loading, logout } = useAuth();
 
   const handleSignOut = async () => {
     try {
-      await authService.signOut();
+      await logout();
       router.push("/login");
     } catch (error) {
       console.error("Error signing out:", error);
@@ -47,7 +47,7 @@ export function Header() {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-6">
+          {user && <nav className="hidden md:flex items-center space-x-6">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -63,16 +63,16 @@ export function Header() {
                 </Link>
               );
             })}
-          </nav>
+          </nav>}
 
           <div className="flex items-center space-x-4">
             <ThemeSwitch />
             
             {loading ? (
               <Loader2 className="h-5 w-5 animate-spin" />
-            ) : isAuthenticated ? (
+            ) : user ? (
               <div className="hidden md:flex items-center space-x-3">
-                <span className="text-sm text-muted-foreground">{user?.email}</span>
+                <span className="text-sm text-muted-foreground">{profile?.full_name || user.email}</span>
                 <Button variant="outline" size="sm" onClick={handleSignOut}>
                   <LogOut className="h-4 w-4 mr-2" />
                   Sign Out
@@ -86,7 +86,7 @@ export function Header() {
             )}
 
             {/* Mobile Menu */}
-            <Sheet>
+            {user && <Sheet>
               <SheetTrigger asChild className="md:hidden">
                 <Button variant="outline" size="icon">
                   <Menu className="h-5 w-5" />
@@ -115,9 +115,9 @@ export function Header() {
                        <div className="flex justify-center">
                          <Loader2 className="h-5 w-5 animate-spin" />
                        </div>
-                    ) : isAuthenticated ? (
+                    ) : user ? (
                       <div className="space-y-3">
-                        <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                        <p className="text-xs text-muted-foreground truncate">{profile?.full_name || user.email}</p>
                         <Button variant="outline" size="sm" onClick={handleSignOut} className="w-full">
                           <LogOut className="h-4 w-4 mr-2" />
                           Sign Out
@@ -132,7 +132,7 @@ export function Header() {
                   </div>
                 </nav>
               </SheetContent>
-            </Sheet>
+            </Sheet>}
           </div>
         </div>
       </div>
