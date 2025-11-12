@@ -14,7 +14,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { user, loading: authLoading, login } = useAuth();
   const [email, setEmail] = useState("admin@khulisapp.com");
-  const [password, setPassword] = useState("Spawniad8!");
+  const [password, setPassword] = useState("Admin123!");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [initializingAdmin, setInitializingAdmin] = useState(false);
