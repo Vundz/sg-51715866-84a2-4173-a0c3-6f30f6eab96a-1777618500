@@ -8,6 +8,12 @@ type ResponseData = {
   error?: string;
 };
 
+type AuthUser = {
+  id: string;
+  email?: string;
+  [key: string]: any;
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<ResponseData>
@@ -40,7 +46,7 @@ export default async function handler(
       return res.status(500).json({ message: "Error checking users", error: listError.message });
     }
 
-    const existingUser = existingUsers.users.find(u => u.email === adminEmail);
+    const existingUser = (existingUsers.users as AuthUser[]).find((u: AuthUser) => u.email === adminEmail);
 
     if (existingUser) {
       // User exists - update password and ensure profile has admin role
