@@ -284,7 +284,7 @@ export default function AdminUsersPage() {
                   {perms.map((p) => (
                     <div key={p.id} className="flex items-center space-x-3 rounded-lg border p-3">
                       <Checkbox id={p.id} checked={selectedPermissions.includes(p.id)} onCheckedChange={() => setSelectedPermissions(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])} />
-                      <div><Label htmlFor={p.id} className="font-medium cursor-pointer">{p.action}</Label><p className="text-sm text-muted-foreground">{p.description}</p></div>
+                      <div><Label htmlFor={p.id} className="font-medium cursor-pointer">{p.name}</Label><p className="text-sm text-muted-foreground">{p.description}</p></div>
                     </div>
                   ))}
                 </TabsContent>
