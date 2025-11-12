@@ -3,6 +3,7 @@ import type { Database } from "@/integrations/supabase/types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type Permission = Database["public"]["Tables"]["permissions"]["Row"];
+type UserRole = Database["public"]["Enums"]["user_role"];
 
 // Define a type for the object that includes the granted status and source
 type EffectivePermission = Permission & {
@@ -27,7 +28,7 @@ export const adminService = {
   /**
    * Create a new user with email and password
    */
-  async createUser(email: string, password: string, fullName: string, role: string = "user") {
+  async createUser(email: string, password: string, fullName: string, role: UserRole = "viewer") {
     // First, create the auth user
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
