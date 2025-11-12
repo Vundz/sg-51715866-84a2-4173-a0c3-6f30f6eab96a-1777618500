@@ -30,9 +30,9 @@ export const rolePermissionService = {
 
     const grouped: PermissionsByModule = {};
     data.forEach((perm) => {
-      const module = perm.module || "general";
-      if (!grouped[module]) grouped[module] = [];
-      grouped[module].push(perm);
+      const moduleName = perm.module || "general";
+      if (!grouped[moduleName]) grouped[moduleName] = [];
+      grouped[moduleName].push(perm);
     });
 
     return grouped;

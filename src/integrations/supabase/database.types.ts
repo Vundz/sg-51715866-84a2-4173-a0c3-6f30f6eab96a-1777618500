@@ -88,25 +88,31 @@ export type Database = {
       }
       permissions: {
         Row: {
+          action: string | null
           created_at: string | null
           description: string | null
           id: string
           module: string
           name: string
+          resource: string | null
         }
         Insert: {
+          action?: string | null
           created_at?: string | null
           description?: string | null
           id?: string
           module: string
           name?: string
+          resource?: string | null
         }
         Update: {
+          action?: string | null
           created_at?: string | null
           description?: string | null
           id?: string
           module?: string
           name?: string
+          resource?: string | null
         }
         Relationships: []
       }
