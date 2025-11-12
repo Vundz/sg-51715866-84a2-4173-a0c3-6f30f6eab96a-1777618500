@@ -1,4 +1,3 @@
-
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -32,8 +31,7 @@ export function Header() {
 
   if (isAdmin) {
     navItems.push(
-      { href: "/admin/users", label: "Admin Console", icon: Shield },
-      { href: "/admin/user-management", label: "User Management", icon: Shield }
+      { href: "/admin/users", label: "Admin Console", icon: Shield }
     );
   }
 
