@@ -31,7 +31,10 @@ export function Header() {
   ];
 
   if (isAdmin) {
-    navItems.push({ href: "/admin/users", label: "Admin", icon: Shield });
+    navItems.push(
+      { href: "/admin/users", label: "Admin Console", icon: Shield },
+      { href: "/admin/user-management", label: "User Management", icon: Shield }
+    );
   }
 
   return (
