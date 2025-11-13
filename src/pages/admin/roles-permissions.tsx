@@ -57,7 +57,12 @@ export default function RolesPermissionsPage() {
     viewer: [],
   });
   
-  const [originalRolePermissions, setOriginalRolePermissions] = useState<Record<UserRole, RolePermissionData[]>>({});
+  const [originalRolePermissions, setOriginalRolePermissions] = useState<Record<UserRole, RolePermissionData[]>>({
+    admin: [],
+    manager: [],
+    staff: [],
+    viewer: [],
+  });
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
