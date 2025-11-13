@@ -17,7 +17,7 @@ export const plantingService = {
           name,
           variety,
           description,
-          days_to_maturity
+          growth_duration
         ),
         locations!plantings_location_id_fkey (
           id,

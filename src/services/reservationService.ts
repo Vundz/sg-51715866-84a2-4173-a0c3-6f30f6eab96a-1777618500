@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -12,24 +11,20 @@ export const reservationService = {
       .from("reservations")
       .select(`
         *,
-        plant_types!reservations_plant_type_id_fkey (
-          id,
-          name,
-          variety,
-          days_to_maturity
-        ),
-        locations!reservations_location_id_fkey (
-          id,
-          name,
-          type
+        plantings (
+          *,
+          plant_types (*),
+          locations (*)
         )
       `)
-      .order("planned_planting_date", { ascending: true });
+      .order("created_at", { ascending: true });
 
     if (error) throw error;
     return data as (Reservation & {
-      plant_types: Database["public"]["Tables"]["plant_types"]["Row"];
-      locations: Database["public"]["Tables"]["locations"]["Row"];
+      plantings: Database["public"]["Tables"]["plantings"]["Row"] & {
+        plant_types: Database["public"]["Tables"]["plant_types"]["Row"];
+        locations: Database["public"]["Tables"]["locations"]["Row"];
+      };
     })[];
   },
 
@@ -38,8 +33,11 @@ export const reservationService = {
       .from("reservations")
       .select(`
         *,
-        plant_types!reservations_plant_type_id_fkey (*),
-        locations!reservations_location_id_fkey (*)
+        plantings (
+          *,
+          plant_types (*),
+          locations (*)
+        )
       `)
       .eq("id", id)
       .single();
@@ -86,11 +84,14 @@ export const reservationService = {
       .from("reservations")
       .select(`
         *,
-        plant_types!reservations_plant_type_id_fkey (*),
-        locations!reservations_location_id_fkey (*)
+        plantings (
+          *,
+          plant_types (*),
+          locations (*)
+        )
       `)
       .eq("status", "pending")
-      .order("planned_planting_date", { ascending: true });
+      .order("created_at", { ascending: true });
 
     if (error) throw error;
     return data;
