@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Sprout, ShoppingCart } from "lucide-react";
+import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter } from "lucide-react";
 import { Planting, PlantType, Location, Reservation } from "@/types";
 import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
 
@@ -30,6 +31,11 @@ export default function PlantingsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPlanting, setEditingPlanting] = useState<Planting | null>(null);
+  
+  // Search and filter states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "location" | "variety" | "status">("all");
+  const [filterValue, setFilterValue] = useState("");
 
   useEffect(() => {
     setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
@@ -55,6 +61,57 @@ export default function PlantingsPage() {
   const getReservationCount = (plantingId: string): number => {
     return reservations.filter(r => r.plantingId === plantingId && r.status === 'active').length;
   };
+
+  // Get unique varieties and locations for filter dropdowns
+  const uniqueVarieties = useMemo(() => {
+    const varieties = new Set(plantings.map(p => p.variety).filter(Boolean));
+    return Array.from(varieties).sort();
+  }, [plantings]);
+
+  const uniqueLocations = useMemo(() => {
+    return locations.map(l => ({ id: l.id, name: l.name }));
+  }, [locations]);
+
+  // Filter and search logic
+  const filteredPlantings = useMemo(() => {
+    let filtered = [...plantings];
+
+    // Apply search filter (case-insensitive partial match)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(p => {
+        const plantType = getPlantTypeDetails(p.plantTypeId);
+        const location = getLocationName(p.locationId);
+        const batchNumber = p.batchNumber || '';
+        const plantName = plantType?.name || '';
+        const variety = p.variety || '';
+        
+        return (
+          batchNumber.toLowerCase().includes(query) ||
+          plantName.toLowerCase().includes(query) ||
+          variety.toLowerCase().includes(query) ||
+          location.toLowerCase().includes(query)
+        );
+      });
+    }
+
+    // Apply type-specific filters
+    if (filterType !== "all" && filterValue) {
+      switch (filterType) {
+        case "location":
+          filtered = filtered.filter(p => p.locationId === filterValue);
+          break;
+        case "variety":
+          filtered = filtered.filter(p => p.variety === filterValue);
+          break;
+        case "status":
+          filtered = filtered.filter(p => p.status === filterValue);
+          break;
+      }
+    }
+
+    return filtered;
+  }, [plantings, searchQuery, filterType, filterValue, plantTypes, locations]);
 
   const handleSavePlanting = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -116,6 +173,11 @@ export default function PlantingsPage() {
     return date.toLocaleDateString();
   };
 
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setFilterType("all");
+    setFilterValue("");
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -196,9 +258,102 @@ export default function PlantingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Current Plantings</CardTitle>
-          <CardDescription>An overview of all seedling batches in the nursery.</CardDescription>
+          <CardDescription>
+            An overview of all seedling batches in the nursery. 
+            {(searchQuery || filterType !== "all") && (
+              <span className="ml-2 text-lime-600 font-medium">
+                Showing {filteredPlantings.length} of {plantings.length} plantings
+              </span>
+            )}
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Search and Filter Bar */}
+          <div className="flex flex-col md:flex-row gap-4 pb-4 border-b">
+            {/* Search Bar */}
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search by batch, plant, variety, or location..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            {/* Filter Type Selector */}
+            <div className="flex gap-2 items-center">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <Select value={filterType} onValueChange={(value: typeof filterType) => {
+                setFilterType(value);
+                setFilterValue("");
+              }}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Filter by..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Plantings</SelectItem>
+                  <SelectItem value="location">By Location</SelectItem>
+                  <SelectItem value="variety">By Variety</SelectItem>
+                  <SelectItem value="status">By Status</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Filter Value Selector (shows based on filter type) */}
+              {filterType === "location" && (
+                <Select value={filterValue} onValueChange={setFilterValue}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select location..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueLocations.map(loc => (
+                      <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {filterType === "variety" && (
+                <Select value={filterValue} onValueChange={setFilterValue}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select variety..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueVarieties.map(variety => (
+                      <SelectItem key={variety} value={variety}>{variety}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {filterType === "status" && (
+                <Select value={filterValue} onValueChange={setFilterValue}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select status..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="harvested">Harvested</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* Clear Filters Button */}
+              {(searchQuery || filterType !== "all") && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={handleClearFilters}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Table */}
           <Table>
             <TableHeader>
               <TableRow>
@@ -215,10 +370,16 @@ export default function PlantingsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {plantings.length === 0 ? (
-                <TableRow><TableCell colSpan={10} className="text-center h-24">No plantings recorded yet.</TableCell></TableRow>
+              {filteredPlantings.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center h-24">
+                    {searchQuery || filterType !== "all" 
+                      ? "No plantings match your search or filter criteria." 
+                      : "No plantings recorded yet."}
+                  </TableCell>
+                </TableRow>
               ) : (
-                plantings.map(p => {
+                filteredPlantings.map(p => {
                   const plantType = getPlantTypeDetails(p.plantTypeId);
                   const reserved = getReservedQuantity(p.id);
                   const available = getAvailableQuantity(p);
