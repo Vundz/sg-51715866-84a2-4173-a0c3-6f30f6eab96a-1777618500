@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Edit, Trash2, TestTube2, ChevronsRight } from "lucide-react";
-import { Treatment, Planting, PlantType } from "@/types";
-import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
+import { treatmentService } from "@/services/treatmentService";
+import { plantingService } from "@/services/plantingService";
+import { plantTypeService } from "@/services/plantTypeService";
+import type { Tables } from "@/integrations/supabase/types";
+
+type Treatment = Tables<"treatments">;
+type Planting = Tables<"plantings">;
+type PlantType = Tables<"plant_types">;
 
 export default function TreatmentsPage() {
   const [treatments, setTreatments] = useState<Treatment[]>([]);
@@ -22,26 +27,44 @@ export default function TreatmentsPage() {
   const [editingTreatment, setEditingTreatment] = useState<Treatment | null>(null);
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [selectedPlantingIds, setSelectedPlantingIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setTreatments(getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || []);
-    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
-    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [treatmentsData, plantingsData, plantTypesData] = await Promise.all([
+        treatmentService.getTreatments(),
+        plantingService.getPlantings(),
+        plantTypeService.getPlantTypes()
+      ]);
+      setTreatments(treatmentsData);
+      setPlantings(plantingsData);
+      setPlantTypes(plantTypesData);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      alert("Failed to load data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const activePlantings = plantings.filter(p => p.status === "active");
 
   const getPlantingDetails = (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
-    const plantType = plantTypes.find(pt => pt.id === planting?.plantTypeId);
+    const plantType = plantTypes.find(pt => pt.id === planting?.plant_type_id);
     return {
       name: plantType?.name || "N/A",
       variety: planting?.variety || "N/A",
-      datePlanted: planting?.datePlanted ? new Date(planting.datePlanted).toLocaleDateString() : "N/A",
+      datePlanted: planting?.date_planted ? new Date(planting.date_planted).toLocaleDateString() : "N/A",
     };
   };
 
-  const handleSaveTreatment = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveTreatment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const formData = new FormData(e.currentTarget);
@@ -52,36 +75,49 @@ export default function TreatmentsPage() {
       return;
     }
 
-    const treatmentData: Omit<Treatment, "id"> = {
+    const treatmentData = {
       name: formData.get("name") as string,
-      type: formData.get("type") as "fungicide" | "pesticide" | "fertilizer",
-      applicationDate: formData.get("applicationDate") as string,
-      plantingIds: targetPlantingIds,
-      dosage: formData.get("dosage") as string,
-      applicationMethod: formData.get("applicationMethod") as "drench" | "spray" | "granular" | "other",
-      notes: formData.get("notes") as string,
+      type: formData.get("type") as string,
+      application_date: formData.get("applicationDate") as string,
+      planting_ids: targetPlantingIds,
+      dosage: formData.get("dosage") as string || null,
+      application_method: formData.get("applicationMethod") as string || null,
+      notes: formData.get("notes") as string || null,
     };
     
-    const updatedTreatments = editingTreatment
-      ? treatments.map(t => t.id === editingTreatment.id ? { ...t, ...treatmentData } : t)
-      : [...treatments, { ...treatmentData, id: generateId("trt") }];
+    try {
+      if (editingTreatment) {
+        await treatmentService.updateTreatment(editingTreatment.id, treatmentData);
+      } else {
+        await treatmentService.addTreatment(treatmentData);
+      }
       
-    setTreatments(updatedTreatments);
-    setStorageData(STORAGE_KEYS.TREATMENTS, updatedTreatments);
-    setIsDialogOpen(false);
+      await loadData();
+      setIsDialogOpen(false);
+      setEditingTreatment(null);
+      setSelectedPlantingIds([]);
+    } catch (error) {
+      console.error("Error saving treatment:", error);
+      alert("Failed to save treatment. Please try again.");
+    }
   };
   
-  const handleDeleteTreatment = (id: string) => {
+  const handleDeleteTreatment = async (id: string) => {
     if (!confirm("Are you sure you want to delete this treatment record?")) return;
-    const updatedTreatments = treatments.filter(t => t.id !== id);
-    setTreatments(updatedTreatments);
-    setStorageData(STORAGE_KEYS.TREATMENTS, updatedTreatments);
+    
+    try {
+      await treatmentService.deleteTreatment(id);
+      await loadData();
+    } catch (error) {
+      console.error("Error deleting treatment:", error);
+      alert("Failed to delete treatment. Please try again.");
+    }
   };
 
   const handleOpenDialog = (treatment: Treatment | null = null, bulk = false) => {
     setEditingTreatment(treatment);
     setIsBulkMode(bulk);
-    setSelectedPlantingIds(treatment ? treatment.plantingIds : []);
+    setSelectedPlantingIds(treatment ? treatment.planting_ids : []);
     setIsDialogOpen(true);
   };
   
@@ -90,6 +126,17 @@ export default function TreatmentsPage() {
       prev.includes(plantingId) ? prev.filter(id => id !== plantingId) : [...prev, plantingId]
     );
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading treatments...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -140,7 +187,7 @@ export default function TreatmentsPage() {
             ) : (
               <div className="space-y-2">
                 <Label htmlFor="plantingIds">Select Planting *</Label>
-                <Select name="plantingIds" required defaultValue={editingTreatment?.plantingIds[0]}>
+                <Select name="plantingIds" required defaultValue={editingTreatment?.planting_ids[0]}>
                   <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
                   <SelectContent>
                     {activePlantings.map(p => <SelectItem key={p.id} value={p.id}>{getPlantingDetails(p.id).name} ({getPlantingDetails(p.id).variety})</SelectItem>)}
@@ -153,11 +200,11 @@ export default function TreatmentsPage() {
               <div className="space-y-2"><Label htmlFor="type">Treatment Type *</Label><Select name="type" required defaultValue={editingTreatment?.type}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="fungicide">Fungicide</SelectItem><SelectItem value="pesticide">Pesticide</SelectItem><SelectItem value="fertilizer">Fertilizer</SelectItem></SelectContent></Select></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label htmlFor="dosage">Dosage</Label><Input id="dosage" name="dosage" defaultValue={editingTreatment?.dosage} /></div>
-              <div className="space-y-2"><Label htmlFor="applicationMethod">Application Method</Label><Select name="applicationMethod" defaultValue={editingTreatment?.applicationMethod}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="drench">Drench</SelectItem><SelectItem value="spray">Spray</SelectItem><SelectItem value="granular">Granular</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="dosage">Dosage</Label><Input id="dosage" name="dosage" defaultValue={editingTreatment?.dosage || ""} /></div>
+              <div className="space-y-2"><Label htmlFor="applicationMethod">Application Method</Label><Select name="applicationMethod" defaultValue={editingTreatment?.application_method || ""}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="drench">Drench</SelectItem><SelectItem value="spray">Spray</SelectItem><SelectItem value="granular">Granular</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
             </div>
-            <div className="space-y-2"><Label htmlFor="applicationDate">Application Date *</Label><Input id="applicationDate" name="applicationDate" type="date" defaultValue={editingTreatment?.applicationDate || new Date().toISOString().split('T')[0]} required /></div>
-            <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" name="notes" defaultValue={editingTreatment?.notes} /></div>
+            <div className="space-y-2"><Label htmlFor="applicationDate">Application Date *</Label><Input id="applicationDate" name="applicationDate" type="date" defaultValue={editingTreatment?.application_date || new Date().toISOString().split("T")[0]} required /></div>
+            <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" name="notes" defaultValue={editingTreatment?.notes || ""} /></div>
             <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button><Button type="submit" className="bg-cyan-600 hover:bg-cyan-700">Save Treatment</Button></div>
           </form>
         </DialogContent>
@@ -174,10 +221,10 @@ export default function TreatmentsPage() {
               ) : (
                 treatments.map(treatment => (
                   <TableRow key={treatment.id}>
-                    <TableCell>{new Date(treatment.applicationDate).toLocaleDateString()}</TableCell>
+                    <TableCell>{new Date(treatment.application_date).toLocaleDateString()}</TableCell>
                     <TableCell className="font-medium">{treatment.name}</TableCell>
                     <TableCell>{treatment.type}</TableCell>
-                    <TableCell>{treatment.plantingIds.length} planting(s)</TableCell>
+                    <TableCell>{treatment.planting_ids.length} planting(s)</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-1 justify-end">
                         <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(treatment)}><Edit className="w-4 h-4" /></Button>

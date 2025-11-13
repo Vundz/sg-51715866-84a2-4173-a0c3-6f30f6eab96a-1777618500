@@ -10,7 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter } from "lucide-react";
 import { Planting, PlantType, Location, Reservation } from "@/types";
-import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
+import { plantingService } from "@/services/plantingService";
+import { plantTypeService } from "@/services/plantTypeService";
+import { locationService } from "@/services/locationService";
+import { reservationService } from "@/services/reservationService";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Generate batch number: first 2 chars of plant type + first 2 chars of variety + DDMMYY
 const generateBatchNumber = (plantTypeName: string, variety: string, datePlanted: string): string => {
@@ -24,12 +28,14 @@ const generateBatchNumber = (plantTypeName: string, variety: string, datePlanted
 };
 
 export default function PlantingsPage() {
+  const { user } = useAuth();
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPlanting, setEditingPlanting] = useState<Planting | null>(null);
+  const [loading, setLoading] = useState(true);
   
   // Form state for plant type and variety selection
   const [selectedPlantTypeName, setSelectedPlantTypeName] = useState<string>("");
@@ -41,11 +47,32 @@ export default function PlantingsPage() {
   const [filterValue, setFilterValue] = useState("");
 
   useEffect(() => {
-    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
-    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
-    setLocations(getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || []);
-    setReservations(getStorageData<Reservation[]>(STORAGE_KEYS.RESERVATIONS) || []);
-  }, []);
+    loadData();
+  }, [user]);
+
+  const loadData = async () => {
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      const [plantingsData, plantTypesData, locationsData, reservationsData] = await Promise.all([
+        plantingService.getPlantings(),
+        plantTypeService.getPlantTypes(),
+        locationService.getLocations(),
+        reservationService.getReservations()
+      ]);
+      
+      setPlantings(plantingsData);
+      setPlantTypes(plantTypesData);
+      setLocations(locationsData);
+      setReservations(reservationsData);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      alert("Failed to load data. Please try refreshing the page.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getPlantTypeDetails = (plantTypeId: string) => plantTypes.find(pt => pt.id === plantTypeId);
   const getLocationName = (locationId: string) => locations.find(l => l.id === locationId)?.name || 'N/A';
@@ -132,7 +159,7 @@ export default function PlantingsPage() {
     return filtered;
   }, [plantings, searchQuery, filterType, filterValue, plantTypes, locations]);
 
-  const handleSavePlanting = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSavePlanting = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
@@ -168,32 +195,42 @@ export default function PlantingsPage() {
       datePlanted,
       batchNumber,
       status: (formData.get("status") as Planting['status']) || 'active',
+      remainingQuantity: editingPlanting?.remainingQuantity ?? parseInt(formData.get("quantity") as string)
     };
-    
-    const newPlanting = { ...plantingData, id: generateId("pln"), remainingQuantity: plantingData.quantity };
 
-    const updatedPlantings = editingPlanting
-      ? plantings.map(p => p.id === editingPlanting.id ? { ...p, ...plantingData } : p)
-      : [...plantings, newPlanting];
-
-    setPlantings(updatedPlantings);
-    setStorageData(STORAGE_KEYS.PLANTINGS, updatedPlantings);
-    setIsDialogOpen(false);
-    setEditingPlanting(null);
-    setSelectedPlantTypeName("");
-    setSelectedVariety("");
+    try {
+      if (editingPlanting) {
+        await plantingService.updatePlanting(editingPlanting.id, plantingData);
+      } else {
+        await plantingService.addPlanting(plantingData);
+      }
+      
+      await loadData();
+      setIsDialogOpen(false);
+      setEditingPlanting(null);
+      setSelectedPlantTypeName("");
+      setSelectedVariety("");
+    } catch (error) {
+      console.error("Error saving planting:", error);
+      alert("Failed to save planting. Please try again.");
+    }
   };
 
-  const handleDeletePlanting = (id: string) => {
+  const handleDeletePlanting = async (id: string) => {
     const reservationCount = getReservationCount(id);
     if (reservationCount > 0) {
       alert(`Cannot delete this planting. It has ${reservationCount} active reservation(s). Please cancel the reservations first.`);
       return;
     }
     if (!confirm("Are you sure you want to delete this planting?")) return;
-    const updatedPlantings = plantings.filter(p => p.id !== id);
-    setPlantings(updatedPlantings);
-    setStorageData(STORAGE_KEYS.PLANTINGS, updatedPlantings);
+    
+    try {
+      await plantingService.deletePlanting(id);
+      await loadData();
+    } catch (error) {
+      console.error("Error deleting planting:", error);
+      alert("Failed to delete planting. Please try again.");
+    }
   };
 
   const handleOpenDialog = (planting: Planting | null = null) => {
@@ -227,6 +264,22 @@ export default function PlantingsPage() {
     setFilterType("all");
     setFilterValue("");
   };
+
+  if (!user) {
+    return (
+      <div className="max-w-7xl mx-auto p-8 text-center">
+        <p className="text-gray-600">Please log in to manage plantings.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto p-8 text-center">
+        <p className="text-gray-600">Loading plantings...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -314,10 +367,10 @@ export default function PlantingsPage() {
                   required 
                   onChange={(e) => {
                     const qty = parseInt(e.target.value) || 0;
-                    const trays = (qty / 220).toFixed(2);
+                    const trays = Math.round(qty / 220);
                     const trayDisplay = document.getElementById("trayUsageDisplay");
                     if (trayDisplay) {
-                      trayDisplay.textContent = trays;
+                      trayDisplay.textContent = trays.toString();
                     }
                   }}
                 />
@@ -334,7 +387,7 @@ export default function PlantingsPage() {
                 <div className="text-right">
                   <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
                     <span id="trayUsageDisplay">
-                      {editingPlanting ? (editingPlanting.quantity / 220).toFixed(2) : "0.00"}
+                      {editingPlanting ? Math.round(editingPlanting.quantity / 220) : "0"}
                     </span>
                   </div>
                   <p className="text-xs text-blue-600 dark:text-blue-400">trays</p>

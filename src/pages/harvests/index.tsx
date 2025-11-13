@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +10,16 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Package, Printer } from "lucide-react";
-import { Harvest, Planting, PlantType, Location } from "@/types";
-import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
+import { harvestService } from "@/services/harvestService";
+import { plantingService } from "@/services/plantingService";
+import { plantTypeService } from "@/services/plantTypeService";
+import { locationService } from "@/services/locationService";
+import type { Tables } from "@/integrations/supabase/types";
+
+type Harvest = Tables<"harvests">;
+type Planting = Tables<"plantings">;
+type PlantType = Tables<"plant_types">;
+type Location = Tables<"locations">;
 
 export default function HarvestsPage() {
   const [harvests, setHarvests] = useState<Harvest[]>([]);
@@ -21,33 +28,52 @@ export default function HarvestsPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingHarvest, setEditingHarvest] = useState<Harvest | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setHarvests(getStorageData<Harvest[]>(STORAGE_KEYS.HARVESTS) || []);
-    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
-    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
-    setLocations(getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || []);
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [harvestsData, plantingsData, plantTypesData, locationsData] = await Promise.all([
+        harvestService.getHarvests(),
+        plantingService.getPlantings(),
+        plantTypeService.getPlantTypes(),
+        locationService.getLocations()
+      ]);
+      setHarvests(harvestsData);
+      setPlantings(plantingsData);
+      setPlantTypes(plantTypesData);
+      setLocations(locationsData);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      alert("Failed to load data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getPlantingDetails = (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
     if (!planting) return null;
-    const plantType = plantTypes.find(pt => pt.id === planting.plantTypeId);
-    const location = locations.find(l => l.id === planting.locationId);
+    const plantType = plantTypes.find(pt => pt.id === planting.plant_type_id);
+    const location = locations.find(l => l.id === planting.location_id);
     return { 
       ...planting, 
-      plantTypeName: plantType?.name || 'N/A',
-      locationName: location?.name || 'N/A'
+      plantTypeName: plantType?.name || "N/A",
+      locationName: location?.name || "N/A"
     };
   };
 
   const handlePrintDispatchSlip = (harvest: Harvest) => {
-    const details = getPlantingDetails(harvest.plantingId);
+    const details = getPlantingDetails(harvest.planting_id);
     if (!details) return;
 
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open("", "_blank");
     if (!printWindow) {
-      alert('Please allow pop-ups to print dispatch slips');
+      alert("Please allow pop-ups to print dispatch slips");
       return;
     }
 
@@ -168,7 +194,7 @@ export default function HarvestsPage() {
           </div>
           <div class="info-row">
             <span class="label">Date:</span>
-            <span class="value">${new Date(harvest.harvestDate).toLocaleDateString()}</span>
+            <span class="value">${new Date(harvest.harvest_date).toLocaleDateString()}</span>
           </div>
           <div class="info-row">
             <span class="label">Time:</span>
@@ -177,7 +203,7 @@ export default function HarvestsPage() {
         </div>
         
         <div class="highlight">
-          QUANTITY: ${harvest.quantityHarvested} UNITS
+          QUANTITY: ${harvest.quantity_harvested} UNITS
         </div>
         
         <div class="section">
@@ -192,7 +218,7 @@ export default function HarvestsPage() {
           </div>
           <div class="info-row">
             <span class="label">Batch:</span>
-            <span class="value">${details.batchNumber || details.id}</span>
+            <span class="value">${details.batch_number || details.id}</span>
           </div>
           <div class="info-row">
             <span class="label">Quality:</span>
@@ -208,7 +234,7 @@ export default function HarvestsPage() {
           </div>
           <div class="info-row">
             <span class="label">Planting Date:</span>
-            <span class="value">${new Date(details.datePlanted).toLocaleDateString()}</span>
+            <span class="value">${new Date(details.date_planted).toLocaleDateString()}</span>
           </div>
         </div>
         
@@ -217,7 +243,7 @@ export default function HarvestsPage() {
           <div class="section-title">Notes</div>
           <div class="notes">${harvest.notes}</div>
         </div>
-        ` : ''}
+        ` : ""}
         
         <div class="barcode">
           <div style="font-size: 20px; letter-spacing: 2px;">||||| ${harvest.id.slice(-8)} |||||</div>
@@ -242,79 +268,65 @@ export default function HarvestsPage() {
     }, 250);
   };
 
-  const handleSaveHarvest = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveHarvest = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const plantingId = formData.get("plantingId") as string;
     const quantityHarvested = parseInt(formData.get("quantityHarvested") as string);
     const closePlanting = formData.get("closePlanting") === "on";
 
-    const harvestData: Omit<Harvest, 'id'> = {
-      plantingId,
-      quantityHarvested,
-      harvestDate: formData.get("harvestDate") as string,
-      quality: formData.get("quality") as Harvest['quality'],
-      notes: formData.get("notes") as string,
-      isClosed: closePlanting
+    const harvestData = {
+      planting_id: plantingId,
+      quantity_harvested: quantityHarvested,
+      harvest_date: formData.get("harvestDate") as string,
+      quality: formData.get("quality") as string,
+      notes: formData.get("notes") as string || null,
+      is_closed: closePlanting
     };
 
-    const updatedPlantings = [...plantings];
-    const plantingToUpdate = updatedPlantings.find(p => p.id === plantingId);
-
-    if (plantingToUpdate) {
-        if (editingHarvest) {
-            const originalHarvest = harvests.find(h => h.id === editingHarvest.id);
-            if(originalHarvest) {
-                plantingToUpdate.remainingQuantity = (plantingToUpdate.remainingQuantity ?? plantingToUpdate.quantity) + originalHarvest.quantityHarvested - quantityHarvested;
-            }
-        } else {
-             plantingToUpdate.remainingQuantity = (plantingToUpdate.remainingQuantity ?? plantingToUpdate.quantity) - quantityHarvested;
-        }
-
-      if (closePlanting || plantingToUpdate.remainingQuantity <= 0) {
-        plantingToUpdate.status = 'closed';
-        plantingToUpdate.remainingQuantity = 0;
+    try {
+      if (editingHarvest) {
+        await harvestService.updateHarvest(editingHarvest.id, harvestData);
+      } else {
+        await harvestService.addHarvest(harvestData);
       }
-    }
-    
-    const updatedHarvests = editingHarvest
-      ? harvests.map(h => h.id === editingHarvest.id ? { ...h, ...harvestData } : h)
-      : [...harvests, { ...harvestData, id: generateId("har") }];
       
-    setHarvests(updatedHarvests);
-    setStorageData(STORAGE_KEYS.HARVESTS, updatedHarvests);
-    setPlantings(updatedPlantings);
-    setStorageData(STORAGE_KEYS.PLANTINGS, updatedPlantings);
-    setIsDialogOpen(false);
-    setEditingHarvest(null);
+      await loadData();
+      setIsDialogOpen(false);
+      setEditingHarvest(null);
+    } catch (error) {
+      console.error("Error saving harvest:", error);
+      alert("Failed to save harvest. Please try again.");
+    }
   };
 
-  const handleDeleteHarvest = (id: string) => {
+  const handleDeleteHarvest = async (id: string) => {
     if (!confirm("Are you sure you want to delete this harvest record?")) return;
     
-    const harvestToDelete = harvests.find(h => h.id === id);
-    if (!harvestToDelete) return;
-
-    const updatedPlantings = [...plantings];
-    const plantingToUpdate = updatedPlantings.find(p => p.id === harvestToDelete.plantingId);
-    if (plantingToUpdate) {
-        plantingToUpdate.remainingQuantity = (plantingToUpdate.remainingQuantity ?? plantingToUpdate.quantity) + harvestToDelete.quantityHarvested;
-        if (plantingToUpdate.status === 'closed' && plantingToUpdate.remainingQuantity > 0) {
-            plantingToUpdate.status = 'active';
-        }
+    try {
+      await harvestService.deleteHarvest(id);
+      await loadData();
+    } catch (error) {
+      console.error("Error deleting harvest:", error);
+      alert("Failed to delete harvest. Please try again.");
     }
-
-    const updatedHarvests = harvests.filter(h => h.id !== id);
-    setHarvests(updatedHarvests);
-    setStorageData(STORAGE_KEYS.HARVESTS, updatedHarvests);
-    setPlantings(updatedPlantings);
-    setStorageData(STORAGE_KEYS.PLANTINGS, updatedPlantings);
   };
 
   const handleOpenDialog = (harvest: Harvest | null = null) => {
     setEditingHarvest(harvest);
     setIsDialogOpen(true);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading harvests...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -343,16 +355,16 @@ export default function HarvestsPage() {
           <form onSubmit={handleSaveHarvest} className="space-y-4 pt-4">
             <div className="space-y-2">
               <Label htmlFor="plantingId">Planting</Label>
-              <Select name="plantingId" required defaultValue={editingHarvest?.plantingId}>
+              <Select name="plantingId" required defaultValue={editingHarvest?.planting_id}>
                 <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
                 <SelectContent>
-                  {plantings.filter(p => p.status === 'active').map(p => {
+                  {plantings.filter(p => p.status === "active").map(p => {
                     const details = getPlantingDetails(p.id);
                     return (
                       <SelectItem key={p.id} value={p.id}>
-                        {details?.plantTypeName} ({details?.variety}) - Remaining: {details?.remainingQuantity ?? details?.quantity}
+                        {details?.plantTypeName} ({details?.variety}) - Remaining: {details?.remaining_quantity ?? details?.quantity}
                       </SelectItem>
-                    )
+                    );
                   })}
                 </SelectContent>
               </Select>
@@ -360,11 +372,11 @@ export default function HarvestsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="quantityHarvested">Quantity Harvested</Label>
-                <Input id="quantityHarvested" name="quantityHarvested" type="number" defaultValue={editingHarvest?.quantityHarvested} required />
+                <Input id="quantityHarvested" name="quantityHarvested" type="number" defaultValue={editingHarvest?.quantity_harvested} required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="harvestDate">Harvest Date</Label>
-                <Input id="harvestDate" name="harvestDate" type="date" defaultValue={editingHarvest?.harvestDate || new Date().toISOString().split('T')[0]} required />
+                <Input id="harvestDate" name="harvestDate" type="date" defaultValue={editingHarvest?.harvest_date || new Date().toISOString().split("T")[0]} required />
               </div>
             </div>
             <div className="space-y-2">
@@ -381,10 +393,10 @@ export default function HarvestsPage() {
             </div>
             <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
-                <Textarea id="notes" name="notes" defaultValue={editingHarvest?.notes} />
+                <Textarea id="notes" name="notes" defaultValue={editingHarvest?.notes || ""} />
             </div>
             <div className="flex items-center space-x-2">
-                <Checkbox id="closePlanting" name="closePlanting" defaultChecked={editingHarvest?.isClosed} />
+                <Checkbox id="closePlanting" name="closePlanting" defaultChecked={editingHarvest?.is_closed || false} />
                 <label htmlFor="closePlanting" className="text-sm font-medium leading-none">
                 Close this planting after harvest
                 </label>
@@ -418,18 +430,18 @@ export default function HarvestsPage() {
                 <TableRow><TableCell colSpan={5} className="text-center h-24">No harvests recorded yet.</TableCell></TableRow>
               ) : (
                 harvests.map(h => {
-                  const details = getPlantingDetails(h.plantingId);
+                  const details = getPlantingDetails(h.planting_id);
                   return (
                     <TableRow key={h.id}>
-                      <TableCell className="font-medium">{details?.plantTypeName || 'N/A'}<br/><span className="text-xs text-gray-500">{details?.variety}</span></TableCell>
-                      <TableCell>{h.quantityHarvested}</TableCell>
-                      <TableCell>{new Date(h.harvestDate).toLocaleDateString()}</TableCell>
+                      <TableCell className="font-medium">{details?.plantTypeName || "N/A"}<br/><span className="text-xs text-gray-500">{details?.variety}</span></TableCell>
+                      <TableCell>{h.quantity_harvested}</TableCell>
+                      <TableCell>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
                       <TableCell>
-                        <Badge variant={h.quality === 'excellent' || h.quality === 'good' ? 'default' : 'destructive'}
+                        <Badge variant={h.quality === "excellent" || h.quality === "good" ? "default" : "destructive"}
                           className={
-                            h.quality === 'excellent' ? 'bg-green-100 text-green-800' :
-                            h.quality === 'good' ? 'bg-blue-100 text-blue-800' :
-                            h.quality === 'fair' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                            h.quality === "excellent" ? "bg-green-100 text-green-800" :
+                            h.quality === "good" ? "bg-blue-100 text-blue-800" :
+                            h.quality === "fair" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"
                           }
                         >{h.quality}</Badge>
                       </TableCell>
@@ -449,7 +461,7 @@ export default function HarvestsPage() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  )
+                  );
                 })
               )}
             </TableBody>

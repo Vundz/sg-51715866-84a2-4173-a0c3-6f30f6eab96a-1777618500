@@ -6,42 +6,95 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Edit, Trash2, Leaf } from "lucide-react";
-import { PlantType } from "@/types";
-import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
+import { plantTypeService } from "@/services/plantTypeService";
+import type { Database } from "@/integrations/supabase/types";
+import { useToast } from "@/hooks/use-toast";
+
+type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
 
 export default function PlantTypesPage() {
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPlantType, setEditingPlantType] = useState<PlantType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
+    loadPlantTypes();
   }, []);
 
-  const handleSavePlantType = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const plantTypeData: Omit<PlantType, 'id'> = {
-      name: formData.get("name") as string,
-      variety: formData.get("variety") as string,
-      growthDuration: parseInt(formData.get("growthDuration") as string, 10),
-    };
-
-    const updatedPlantTypes = editingPlantType
-      ? plantTypes.map(pt => pt.id === editingPlantType.id ? { ...pt, ...plantTypeData } : pt)
-      : [...plantTypes, { ...plantTypeData, id: generateId("pt") }];
-      
-    setPlantTypes(updatedPlantTypes);
-    setStorageData(STORAGE_KEYS.PLANT_TYPES, updatedPlantTypes);
-    setIsDialogOpen(false);
-    setEditingPlantType(null);
+  const loadPlantTypes = async () => {
+    try {
+      setLoading(true);
+      const data = await plantTypeService.getPlantTypes();
+      setPlantTypes(data);
+    } catch (error) {
+      console.error("Error loading plant types:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load plant types. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeletePlantType = (id: string) => {
+  const handleSavePlantType = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const plantTypeData = {
+      name: formData.get("name") as string,
+      variety: formData.get("variety") as string,
+      growth_duration: parseInt(formData.get("growthDuration") as string, 10),
+    };
+
+    try {
+      if (editingPlantType) {
+        await plantTypeService.updatePlantType(editingPlantType.id, plantTypeData);
+        toast({
+          title: "Success",
+          description: "Plant type updated successfully.",
+        });
+      } else {
+        await plantTypeService.createPlantType(plantTypeData);
+        toast({
+          title: "Success",
+          description: "Plant type created successfully.",
+        });
+      }
+      
+      await loadPlantTypes();
+      setIsDialogOpen(false);
+      setEditingPlantType(null);
+    } catch (error) {
+      console.error("Error saving plant type:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save plant type. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeletePlantType = async (id: string) => {
     if (!confirm("Are you sure you want to delete this plant type? This might affect existing plantings.")) return;
-    const updatedPlantTypes = plantTypes.filter(pt => pt.id !== id);
-    setPlantTypes(updatedPlantTypes);
-    setStorageData(STORAGE_KEYS.PLANT_TYPES, updatedPlantTypes);
+    
+    try {
+      await plantTypeService.deletePlantType(id);
+      toast({
+        title: "Success",
+        description: "Plant type deleted successfully.",
+      });
+      await loadPlantTypes();
+    } catch (error) {
+      console.error("Error deleting plant type:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete plant type. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleOpenDialog = (plantType: PlantType | null = null) => {
@@ -84,7 +137,7 @@ export default function PlantTypesPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="growthDuration">Growth Duration (days)</Label>
-              <Input id="growthDuration" name="growthDuration" type="number" defaultValue={editingPlantType?.growthDuration} required />
+              <Input id="growthDuration" name="growthDuration" type="number" defaultValue={editingPlantType?.growth_duration} required />
             </div>
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
@@ -100,37 +153,41 @@ export default function PlantTypesPage() {
           <CardDescription>All the plant types and varieties in your system.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Variety</TableHead>
-                <TableHead>Growth Duration</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {plantTypes.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-8">Loading plant types...</div>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center h-24">No plant types created yet.</TableCell>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Variety</TableHead>
+                  <TableHead>Growth Duration</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ) : (
-                plantTypes.map(pt => (
-                  <TableRow key={pt.id}>
-                    <TableCell className="font-medium">{pt.name}</TableCell>
-                    <TableCell>{pt.variety}</TableCell>
-                    <TableCell>{pt.growthDuration} days</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex gap-1 justify-end">
-                        <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(pt)}><Edit className="w-4 h-4" /></Button>
-                        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlantType(pt.id)}><Trash2 className="w-4 h-4" /></Button>
-                      </div>
-                    </TableCell>
+              </TableHeader>
+              <TableBody>
+                {plantTypes.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center h-24">No plant types created yet.</TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  plantTypes.map(pt => (
+                    <TableRow key={pt.id}>
+                      <TableCell className="font-medium">{pt.name}</TableCell>
+                      <TableCell>{pt.variety}</TableCell>
+                      <TableCell>{pt.growth_duration} days</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-1 justify-end">
+                          <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(pt)}><Edit className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlantType(pt.id)}><Trash2 className="w-4 h-4" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
