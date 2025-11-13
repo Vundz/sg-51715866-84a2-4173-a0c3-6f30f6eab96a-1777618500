@@ -499,7 +499,7 @@ export default function PlantingsPage() {
                   const reserved = getReservedQuantity(p.id);
                   const available = getAvailableQuantity(p);
                   const reservationCount = getReservationCount(p.id);
-                  const trayUsage = ((p.remainingQuantity ?? p.quantity) / 220).toFixed(2);
+                  const trayUsage = Math.round((p.remainingQuantity ?? p.quantity) / 220);
                   
                   return (
                     <TableRow key={p.id}>
