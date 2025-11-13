@@ -2,7 +2,6 @@
 import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
-import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { adminService } from "@/services/adminService";
-import { Plus, Pencil, Trash2, AlertCircle, CheckCircle2, Loader2, Users, Key, UserX, RotateCw } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertCircle, CheckCircle2, Loader2, Users, Key } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -151,241 +150,235 @@ export default function UserManagementPage() {
 
   if (authLoading || loading) {
     return (
-      <Layout>
-        <div className="flex h-screen items-center justify-center">
-          <Loader2 className="h-10 w-10 animate-spin" />
-        </div>
-      </Layout>
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin" />
+      </div>
     );
   }
 
   if (!isAdmin) {
     return (
-      <Layout>
-        <div className="container mx-auto mt-10 flex justify-center">
-          <Card className="max-w-md">
-            <CardHeader>
-              <CardTitle className="text-red-600 flex items-center gap-2">
-                <AlertCircle />
-                Access Denied
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>You must be an administrator to view this page.</p>
-            </CardContent>
-          </Card>
-        </div>
-      </Layout>
+      <div className="container mx-auto mt-10 flex justify-center">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle className="text-red-600 flex items-center gap-2">
+              <AlertCircle />
+              Access Denied
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>You must be an administrator to view this page.</p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="container mx-auto p-6 space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Users className="h-8 w-8" />
-              User Management
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Create, edit, suspend, and manage user accounts
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => router.push("/admin/roles-permissions")}
-              className="gap-2"
-            >
-              <Key className="h-4 w-4" />
-              Roles & Permissions
-            </Button>
-            <Button onClick={() => handleOpenDialog()} className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add User
-            </Button>
-          </div>
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Users className="h-8 w-8" />
+            User Management
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Create, edit, suspend, and manage user accounts
+          </p>
         </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/admin/roles-permissions")}
+            className="gap-2"
+          >
+            <Key className="h-4 w-4" />
+            Roles & Permissions
+          </Button>
+          <Button onClick={() => handleOpenDialog()} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add User
+          </Button>
+        </div>
+      </div>
 
-        {/* Alerts */}
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        {success && (
-          <Alert className="border-green-500">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-600">{success}</AlertDescription>
-          </Alert>
-        )}
+      {/* Alerts */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      {success && (
+        <Alert className="border-green-500">
+          <CheckCircle2 className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-600">{success}</AlertDescription>
+        </Alert>
+      )}
 
-        {/* Users Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>All Users</CardTitle>
-            <CardDescription>Total users: {users.length}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Full Name</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.length > 0 ? (
-                  users.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell className="font-medium">{u.email}</TableCell>
-                      <TableCell>{u.full_name || "-"}</TableCell>
-                      <TableCell>
-                        <Badge className={getRoleBadgeColor(u.role)}>
-                          {u.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(u.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenDialog(u)}
-                            title="Edit user"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(u.id, u.email)}
-                            className="text-red-600 hover:text-red-700"
-                            title="Delete user"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={5}
-                      className="text-center text-muted-foreground py-8"
-                    >
-                      No users found.
+      {/* Users Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>All Users</CardTitle>
+          <CardDescription>Total users: {users.length}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Email</TableHead>
+                <TableHead>Full Name</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users.length > 0 ? (
+                users.map((u) => (
+                  <TableRow key={u.id}>
+                    <TableCell className="font-medium">{u.email}</TableCell>
+                    <TableCell>{u.full_name || "-"}</TableCell>
+                    <TableCell>
+                      <Badge className={getRoleBadgeColor(u.role)}>
+                        {u.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(u.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenDialog(u)}
+                          title="Edit user"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(u.id, u.email)}
+                          className="text-red-600 hover:text-red-700"
+                          title="Delete user"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center text-muted-foreground py-8"
+                  >
+                    No users found.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-        {/* Create/Edit User Dialog */}
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {editingUser ? "Edit User" : "Create New User"}
-              </DialogTitle>
-              <DialogDescription>
-                {editingUser
-                  ? "Update user details and role assignment"
-                  : "Create a new user account with email and password"}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Create/Edit User Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingUser ? "Edit User" : "Create New User"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingUser
+                ? "Update user details and role assignment"
+                : "Create a new user account with email and password"}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
+                required
+                disabled={!!editingUser}
+                placeholder="user@example.com"
+              />
+            </div>
+
+            {!editingUser && (
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address *</Label>
+                <Label htmlFor="password">Password *</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
+                  id="password"
+                  type="password"
+                  value={formData.password}
                   onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
+                    setFormData({ ...formData, password: e.target.value })
                   }
                   required
-                  disabled={!!editingUser}
-                  placeholder="user@example.com"
+                  placeholder="Minimum 8 characters"
                 />
               </div>
+            )}
 
-              {!editingUser && (
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password *</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) =>
-                      setFormData({ ...formData, password: e.target.value })
-                    }
-                    required
-                    placeholder="Minimum 8 characters"
-                  />
-                </div>
-              )}
+            <div className="space-y-2">
+              <Label htmlFor="full_name">Full Name</Label>
+              <Input
+                id="full_name"
+                value={formData.full_name}
+                onChange={(e) =>
+                  setFormData({ ...formData, full_name: e.target.value })
+                }
+                placeholder="John Doe"
+              />
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="full_name">Full Name</Label>
-                <Input
-                  id="full_name"
-                  value={formData.full_name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, full_name: e.target.value })
-                  }
-                  placeholder="John Doe"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="role">Role *</Label>
+              <Select
+                value={formData.role}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, role: value as UserRole })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map((r) => (
+                    <SelectItem key={r} value={r} className="capitalize">
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="role">Role *</Label>
-                <Select
-                  value={formData.role}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, role: value as UserRole })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ROLES.map((r) => (
-                      <SelectItem key={r} value={r} className="capitalize">
-                        {r}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setDialogOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  {editingUser ? "Update User" : "Create User"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </Layout>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">
+                {editingUser ? "Update User" : "Create User"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
