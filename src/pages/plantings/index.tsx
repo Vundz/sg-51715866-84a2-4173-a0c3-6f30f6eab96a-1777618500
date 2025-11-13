@@ -475,6 +475,7 @@ export default function PlantingsPage() {
                 <TableHead>Plant</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Total Qty</TableHead>
+                <TableHead>Trays</TableHead>
                 <TableHead>Reserved</TableHead>
                 <TableHead>Available</TableHead>
                 <TableHead>Date Planted</TableHead>
@@ -486,7 +487,7 @@ export default function PlantingsPage() {
             <TableBody>
               {filteredPlantings.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center h-24">
+                  <TableCell colSpan={11} className="text-center h-24">
                     {searchQuery || filterType !== "all" 
                       ? "No plantings match your search or filter criteria." 
                       : "No plantings recorded yet."}
@@ -498,6 +499,7 @@ export default function PlantingsPage() {
                   const reserved = getReservedQuantity(p.id);
                   const available = getAvailableQuantity(p);
                   const reservationCount = getReservationCount(p.id);
+                  const trayUsage = ((p.remainingQuantity ?? p.quantity) / 220).toFixed(2);
                   
                   return (
                     <TableRow key={p.id}>
@@ -511,6 +513,9 @@ export default function PlantingsPage() {
                       </TableCell>
                       <TableCell>{getLocationName(p.locationId)}</TableCell>
                       <TableCell>{p.remainingQuantity ?? p.quantity}</TableCell>
+                      <TableCell>
+                        <span className="font-medium text-blue-600">{trayUsage}</span>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className={reserved > 0 ? "font-medium text-blue-600" : ""}>{reserved}</span>
