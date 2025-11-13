@@ -12,19 +12,25 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Edit, Trash2, TestTube2, ChevronsRight } from "lucide-react";
 import { treatmentService } from "@/services/treatmentService";
 import { plantingService } from "@/services/plantingService";
-import { plantTypeService } from "@/services/plantTypeService";
-import type { Tables } from "@/integrations/supabase/types";
+import type { Database } from "@/integrations/supabase/types";
 
-type Treatment = Tables<"treatments">;
-type Planting = Tables<"plantings">;
-type PlantType = Tables<"plant_types">;
+type Treatment = Database["public"]["Tables"]["treatments"]["Row"];
+type Planting = Database["public"]["Tables"]["plantings"]["Row"];
+type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
+
+type PlantingWithDetails = Planting & {
+  plant_types: PlantType;
+};
+
+type TreatmentWithDetails = Treatment & {
+  plantings: PlantingWithDetails[];
+};
 
 export default function TreatmentsPage() {
-  const [treatments, setTreatments] = useState<Treatment[]>([]);
-  const [plantings, setPlantings] = useState<Planting[]>([]);
-  const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
+  const [treatments, setTreatments] = useState<TreatmentWithDetails[]>([]);
+  const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingTreatment, setEditingTreatment] = useState<Treatment | null>(null);
+  const [editingTreatment, setEditingTreatment] = useState<TreatmentWithDetails | null>(null);
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [selectedPlantingIds, setSelectedPlantingIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,14 +42,12 @@ export default function TreatmentsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [treatmentsData, plantingsData, plantTypesData] = await Promise.all([
+      const [treatmentsData, plantingsData] = await Promise.all([
         treatmentService.getTreatments(),
         plantingService.getPlantings(),
-        plantTypeService.getPlantTypes()
       ]);
-      setTreatments(treatmentsData);
-      setPlantings(plantingsData);
-      setPlantTypes(plantTypesData);
+      setTreatments(treatmentsData as TreatmentWithDetails[]);
+      setPlantings(plantingsData as PlantingWithDetails[]);
     } catch (error) {
       console.error("Error loading data:", error);
       alert("Failed to load data. Please try again.");
@@ -53,13 +57,12 @@ export default function TreatmentsPage() {
   };
 
   const activePlantings = plantings.filter(p => p.status === "active");
-
+  
   const getPlantingDetails = (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
-    const plantType = plantTypes.find(pt => pt.id === planting?.plant_type_id);
     return {
-      name: plantType?.name || "N/A",
-      variety: planting?.variety || "N/A",
+      name: planting?.plant_types?.name || "N/A",
+      variety: planting?.plant_types?.variety || "N/A",
       datePlanted: planting?.date_planted ? new Date(planting.date_planted).toLocaleDateString() : "N/A",
     };
   };
@@ -68,7 +71,7 @@ export default function TreatmentsPage() {
     e.preventDefault();
 
     const formData = new FormData(e.currentTarget);
-    const targetPlantingIds = isBulkMode ? selectedPlantingIds : [formData.get("plantingIds") as string];
+    const targetPlantingIds = isBulkMode ? selectedPlantingIds : [formData.get("planting_ids") as string];
 
     if (targetPlantingIds.length === 0 || !targetPlantingIds[0]) {
       alert("Please select at least one planting.");
@@ -76,20 +79,21 @@ export default function TreatmentsPage() {
     }
 
     const treatmentData = {
-      name: formData.get("name") as string,
-      type: formData.get("type") as string,
-      application_date: formData.get("applicationDate") as string,
+      chemical_name: formData.get("chemical_name") as string,
+      treatment_type: formData.get("treatment_type") as string,
+      date_applied: formData.get("date_applied") as string,
       planting_ids: targetPlantingIds,
-      dosage: formData.get("dosage") as string || null,
-      application_method: formData.get("applicationMethod") as string || null,
-      notes: formData.get("notes") as string || null,
+      dosage: (formData.get("dosage") as string) || null,
+      application_method: (formData.get("application_method") as string) || null,
+      notes: (formData.get("notes") as string) || null,
+      applied_by: (formData.get("applied_by") as string) || null,
     };
     
     try {
       if (editingTreatment) {
         await treatmentService.updateTreatment(editingTreatment.id, treatmentData);
       } else {
-        await treatmentService.addTreatment(treatmentData);
+        await treatmentService.createTreatment(treatmentData);
       }
       
       await loadData();
@@ -114,10 +118,10 @@ export default function TreatmentsPage() {
     }
   };
 
-  const handleOpenDialog = (treatment: Treatment | null = null, bulk = false) => {
+  const handleOpenDialog = (treatment: TreatmentWithDetails | null = null, bulk = false) => {
     setEditingTreatment(treatment);
     setIsBulkMode(bulk);
-    setSelectedPlantingIds(treatment ? treatment.planting_ids : []);
+    setSelectedPlantingIds(treatment && treatment.planting_ids ? treatment.planting_ids : []);
     setIsDialogOpen(true);
   };
   
@@ -127,37 +131,19 @@ export default function TreatmentsPage() {
     );
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading treatments...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="flex items-center justify-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600"></div></div>;
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-bold flex items-center gap-3">
-            <TestTube2 className="w-10 h-10 text-cyan-600" />
-            Treatments
-          </h1>
+          <h1 className="text-4xl font-bold flex items-center gap-3"><TestTube2 className="w-10 h-10 text-cyan-600" />Treatments</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">Log and manage all chemical and fertilizer applications.</p>
         </div>
         
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => handleOpenDialog(null, true)} disabled={activePlantings.length === 0}>
-              <ChevronsRight className="w-4 h-4 mr-2" />
-              Bulk Apply
-          </Button>
-          <Button onClick={() => handleOpenDialog()} className="bg-cyan-600 hover:bg-cyan-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Treatment
-          </Button>
+          <Button variant="outline" onClick={() => handleOpenDialog(null, true)} disabled={activePlantings.length === 0}><ChevronsRight className="w-4 h-4 mr-2" />Bulk Apply</Button>
+          <Button onClick={() => handleOpenDialog()} className="bg-cyan-600 hover:bg-cyan-700"><Plus className="w-4 h-4 mr-2" />Add Treatment</Button>
         </div>
       </div>
 
@@ -165,9 +151,7 @@ export default function TreatmentsPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{isBulkMode ? "Bulk Apply Treatment" : (editingTreatment ? "Edit" : "Add") + " Treatment"}</DialogTitle>
-            <DialogDescription>
-              {isBulkMode ? "Apply the same treatment to multiple plantings at once." : "Log a single treatment application."}
-            </DialogDescription>
+            <DialogDescription>{isBulkMode ? "Apply the same treatment to multiple plantings at once." : "Log a single treatment application."}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveTreatment} className="space-y-4 pt-4">
             {isBulkMode ? (
@@ -186,8 +170,8 @@ export default function TreatmentsPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                <Label htmlFor="plantingIds">Select Planting *</Label>
-                <Select name="plantingIds" required defaultValue={editingTreatment?.planting_ids[0]}>
+                <Label htmlFor="planting_ids">Select Planting *</Label>
+                <Select name="planting_ids" required defaultValue={editingTreatment?.planting_ids?.[0]}>
                   <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
                   <SelectContent>
                     {activePlantings.map(p => <SelectItem key={p.id} value={p.id}>{getPlantingDetails(p.id).name} ({getPlantingDetails(p.id).variety})</SelectItem>)}
@@ -196,14 +180,17 @@ export default function TreatmentsPage() {
               </div>
             )}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label htmlFor="name">Chemical/Fertilizer Name *</Label><Input id="name" name="name" defaultValue={editingTreatment?.name} required /></div>
-              <div className="space-y-2"><Label htmlFor="type">Treatment Type *</Label><Select name="type" required defaultValue={editingTreatment?.type}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="fungicide">Fungicide</SelectItem><SelectItem value="pesticide">Pesticide</SelectItem><SelectItem value="fertilizer">Fertilizer</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="chemical_name">Chemical/Fertilizer Name *</Label><Input id="chemical_name" name="chemical_name" defaultValue={editingTreatment?.chemical_name || ""} required /></div>
+              <div className="space-y-2"><Label htmlFor="treatment_type">Treatment Type *</Label><Select name="treatment_type" required defaultValue={editingTreatment?.treatment_type || undefined}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="fungicide">Fungicide</SelectItem><SelectItem value="pesticide">Pesticide</SelectItem><SelectItem value="fertilizer">Fertilizer</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label htmlFor="dosage">Dosage</Label><Input id="dosage" name="dosage" defaultValue={editingTreatment?.dosage || ""} /></div>
-              <div className="space-y-2"><Label htmlFor="applicationMethod">Application Method</Label><Select name="applicationMethod" defaultValue={editingTreatment?.application_method || ""}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="drench">Drench</SelectItem><SelectItem value="spray">Spray</SelectItem><SelectItem value="granular">Granular</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="application_method">Application Method</Label><Select name="application_method" defaultValue={editingTreatment?.application_method || undefined}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="drench">Drench</SelectItem><SelectItem value="spray">Spray</SelectItem><SelectItem value="granular">Granular</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
             </div>
-            <div className="space-y-2"><Label htmlFor="applicationDate">Application Date *</Label><Input id="applicationDate" name="applicationDate" type="date" defaultValue={editingTreatment?.application_date || new Date().toISOString().split("T")[0]} required /></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2"><Label htmlFor="date_applied">Application Date *</Label><Input id="date_applied" name="date_applied" type="date" defaultValue={editingTreatment?.date_applied || new Date().toISOString().split("T")[0]} required /></div>
+              <div className="space-y-2"><Label htmlFor="applied_by">Applied By</Label><Input id="applied_by" name="applied_by" defaultValue={editingTreatment?.applied_by || ""} /></div>
+            </div>
             <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" name="notes" defaultValue={editingTreatment?.notes || ""} /></div>
             <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button><Button type="submit" className="bg-cyan-600 hover:bg-cyan-700">Save Treatment</Button></div>
           </form>
@@ -221,10 +208,10 @@ export default function TreatmentsPage() {
               ) : (
                 treatments.map(treatment => (
                   <TableRow key={treatment.id}>
-                    <TableCell>{new Date(treatment.application_date).toLocaleDateString()}</TableCell>
-                    <TableCell className="font-medium">{treatment.name}</TableCell>
-                    <TableCell>{treatment.type}</TableCell>
-                    <TableCell>{treatment.planting_ids.length} planting(s)</TableCell>
+                    <TableCell>{new Date(treatment.date_applied).toLocaleDateString()}</TableCell>
+                    <TableCell className="font-medium">{treatment.chemical_name}</TableCell>
+                    <TableCell>{treatment.treatment_type}</TableCell>
+                    <TableCell>{treatment.planting_ids?.length} planting(s)</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-1 justify-end">
                         <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(treatment)}><Edit className="w-4 h-4" /></Button>
