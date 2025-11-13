@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,8 +11,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Plus, Edit, X, ShoppingCart, CheckCircle2, AlertCircle } from "lucide-react";
 import { useRouter } from "next/router";
-import { Reservation, Planting, PlantType } from "@/types";
-import { getStorageData, setStorageData, generateId, STORAGE_KEYS } from "@/lib/storage";
+import { reservationService } from "@/services/reservationService";
+import { plantingService } from "@/services/plantingService";
+import { plantTypeService } from "@/services/plantTypeService";
+import type { Tables } from "@/integrations/supabase/types";
+
+type Reservation = Tables<"reservations">;
+type Planting = Tables<"plantings">;
+type PlantType = Tables<"plant_types">;
 
 export default function ReservationsPage() {
   const router = useRouter();
@@ -25,31 +30,49 @@ export default function ReservationsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [selectedPlantingId, setSelectedPlantingId] = useState<string>("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setReservations(getStorageData<Reservation[]>(STORAGE_KEYS.RESERVATIONS) || []);
-    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
-    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [reservationsData, plantingsData, plantTypesData] = await Promise.all([
+        reservationService.getReservations(),
+        plantingService.getPlantings(),
+        plantTypeService.getPlantTypes()
+      ]);
+      setReservations(reservationsData);
+      setPlantings(plantingsData);
+      setPlantTypes(plantTypesData);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      alert("Failed to load data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getAvailableQuantity = (plantingId: string): number => {
     const planting = plantings.find(p => p.id === plantingId);
     if (!planting) return 0;
     
-    const activeReservations = reservations.filter(r => r.plantingId === plantingId && r.status === 'active');
-    const reservedQuantity = activeReservations.reduce((sum, r) => sum + r.quantityReserved, 0);
+    const activeReservations = reservations.filter(r => r.planting_id === plantingId && r.status === "active");
+    const reservedQuantity = activeReservations.reduce((sum, r) => sum + r.quantity_reserved, 0);
     
-    return (planting.remainingQuantity || planting.quantity) - reservedQuantity;
+    return (planting.remaining_quantity || planting.quantity) - reservedQuantity;
   };
 
   const getPlantingDetails = (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
     if (!planting) return null;
-    const plantType = plantTypes.find(pt => pt.id === planting.plantTypeId);
+    const plantType = plantTypes.find(pt => pt.id === planting.plant_type_id);
     return { planting, plantType };
   };
 
-  const handleSaveReservation = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveReservation = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const plantingId = formData.get("plantingId") as string;
@@ -62,73 +85,93 @@ export default function ReservationsPage() {
       return;
     }
     
-    const reservationData: Omit<Reservation, 'id'> = {
-      plantingId,
-      customerName: formData.get("customerName") as string,
-      customerPhone: formData.get("customerPhone") as string,
-      customerEmail: formData.get("customerEmail") as string || undefined,
-      quantityReserved,
-      reservationDate: formData.get("reservationDate") as string,
-      paymentStatus: (formData.get("paymentStatus") as Reservation['paymentStatus']) || 'pending',
-      amountPaid: parseFloat(formData.get("amountPaid") as string) || undefined,
-      totalAmount: parseFloat(formData.get("totalAmount") as string) || undefined,
-      notes: formData.get("notes") as string || undefined,
-      status: 'active'
+    const reservationData = {
+      planting_id: plantingId,
+      customer_name: formData.get("customerName") as string,
+      customer_phone: formData.get("customerPhone") as string,
+      customer_email: (formData.get("customerEmail") as string) || null,
+      quantity_reserved: quantityReserved,
+      reservation_date: formData.get("reservationDate") as string,
+      payment_status: (formData.get("paymentStatus") as string) || "pending",
+      amount_paid: parseFloat(formData.get("amountPaid") as string) || null,
+      total_amount: parseFloat(formData.get("totalAmount") as string) || null,
+      notes: (formData.get("notes") as string) || null,
+      status: "active"
     };
-    
-    const newReservation = { ...reservationData, id: generateId("rsv") };
 
-    const updatedReservations = editingReservation
-      ? reservations.map(r => r.id === editingReservation.id ? { ...r, ...reservationData } : r)
-      : [...reservations, newReservation];
-
-    setReservations(updatedReservations);
-    setStorageData(STORAGE_KEYS.RESERVATIONS, updatedReservations);
-    setIsDialogOpen(false);
-    setEditingReservation(null);
-    setSelectedPlantingId("");
+    try {
+      if (editingReservation) {
+        await reservationService.updateReservation(editingReservation.id, reservationData);
+      } else {
+        await reservationService.addReservation(reservationData);
+      }
+      
+      await loadData();
+      setIsDialogOpen(false);
+      setEditingReservation(null);
+      setSelectedPlantingId("");
+    } catch (error) {
+      console.error("Error saving reservation:", error);
+      alert("Failed to save reservation. Please try again.");
+    }
   };
 
-  const handleCancelReservation = (id: string) => {
+  const handleCancelReservation = async (id: string) => {
     if (!confirm("Are you sure you want to cancel this reservation? The reserved quantity will be returned to available stock.")) return;
     
-    const updatedReservations = reservations.map(r => 
-      r.id === id ? { ...r, status: 'cancelled' as const } : r
-    );
-    
-    setReservations(updatedReservations);
-    setStorageData(STORAGE_KEYS.RESERVATIONS, updatedReservations);
+    try {
+      await reservationService.updateReservation(id, { status: "cancelled" });
+      await loadData();
+    } catch (error) {
+      console.error("Error cancelling reservation:", error);
+      alert("Failed to cancel reservation. Please try again.");
+    }
   };
 
-  const handleCompleteReservation = (id: string) => {
+  const handleCompleteReservation = async (id: string) => {
     if (!confirm("Mark this reservation as completed?")) return;
     
-    const updatedReservations = reservations.map(r => 
-      r.id === id ? { ...r, status: 'completed' as const, paymentStatus: 'paid' as const } : r
-    );
-    
-    setReservations(updatedReservations);
-    setStorageData(STORAGE_KEYS.RESERVATIONS, updatedReservations);
+    try {
+      await reservationService.updateReservation(id, { 
+        status: "completed", 
+        payment_status: "paid" 
+      });
+      await loadData();
+    } catch (error) {
+      console.error("Error completing reservation:", error);
+      alert("Failed to complete reservation. Please try again.");
+    }
   };
 
   const handleOpenDialog = (reservation: Reservation | null = null) => {
     setEditingReservation(reservation);
     if (reservation) {
-      setSelectedPlantingId(reservation.plantingId);
+      setSelectedPlantingId(reservation.planting_id);
     }
     setIsDialogOpen(true);
   };
 
-  const activePlantings = plantings.filter(p => p.status === 'active');
+  const activePlantings = plantings.filter(p => p.status === "active");
 
   const filteredReservations = plantingIdFilter 
-    ? reservations.filter(r => r.plantingId === plantingIdFilter)
+    ? reservations.filter(r => r.planting_id === plantingIdFilter)
     : reservations;
 
   const getPlantingName = (plantingId: string) => {
     const details = getPlantingDetails(plantingId);
-    return details ? `${details.plantType?.name} (${details.planting.variety})` : 'Unknown';
+    return details ? `${details.plantType?.name} (${details.planting.variety})` : "Unknown";
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading reservations...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -151,7 +194,7 @@ export default function ReservationsPage() {
           {plantingIdFilter && (
             <Button 
               variant="outline" 
-              onClick={() => router.push('/reservations')}
+              onClick={() => router.push("/reservations")}
             >
               Show All
             </Button>
@@ -167,12 +210,12 @@ export default function ReservationsPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600">
-              {plantingIdFilter ? 'Filtered' : 'Active'} Reservations
+              {plantingIdFilter ? "Filtered" : "Active"} Reservations
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {filteredReservations.filter(r => r.status === 'active').length}
+              {filteredReservations.filter(r => r.status === "active").length}
             </div>
           </CardContent>
         </Card>
@@ -183,7 +226,7 @@ export default function ReservationsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {filteredReservations.filter(r => r.status === 'active').reduce((sum, r) => sum + r.quantityReserved, 0)}
+              {filteredReservations.filter(r => r.status === "active").reduce((sum, r) => sum + r.quantity_reserved, 0)}
             </div>
             <p className="text-xs text-gray-500 mt-1">seedlings</p>
           </CardContent>
@@ -195,7 +238,7 @@ export default function ReservationsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {filteredReservations.filter(r => r.status === 'active' && r.paymentStatus === 'pending').length}
+              {filteredReservations.filter(r => r.status === "active" && r.payment_status === "pending").length}
             </div>
           </CardContent>
         </Card>
@@ -217,7 +260,7 @@ export default function ReservationsPage() {
                 required 
                 value={selectedPlantingId} 
                 onValueChange={setSelectedPlantingId}
-                defaultValue={editingReservation?.plantingId}
+                defaultValue={editingReservation?.planting_id}
               >
                 <SelectTrigger><SelectValue placeholder="Select a planting batch" /></SelectTrigger>
                 <SelectContent>
@@ -250,7 +293,7 @@ export default function ReservationsPage() {
                   <Input 
                     id="customerName" 
                     name="customerName" 
-                    defaultValue={editingReservation?.customerName} 
+                    defaultValue={editingReservation?.customer_name} 
                     required 
                   />
                 </div>
@@ -260,7 +303,7 @@ export default function ReservationsPage() {
                     id="customerPhone" 
                     name="customerPhone" 
                     type="tel"
-                    defaultValue={editingReservation?.customerPhone} 
+                    defaultValue={editingReservation?.customer_phone} 
                     required 
                   />
                 </div>
@@ -271,7 +314,7 @@ export default function ReservationsPage() {
                   id="customerEmail" 
                   name="customerEmail" 
                   type="email"
-                  defaultValue={editingReservation?.customerEmail} 
+                  defaultValue={editingReservation?.customer_email || ""} 
                 />
               </div>
             </div>
@@ -286,7 +329,7 @@ export default function ReservationsPage() {
                     name="quantityReserved" 
                     type="number" 
                     min="1"
-                    defaultValue={editingReservation?.quantityReserved} 
+                    defaultValue={editingReservation?.quantity_reserved} 
                     required 
                   />
                 </div>
@@ -296,7 +339,7 @@ export default function ReservationsPage() {
                     id="reservationDate" 
                     name="reservationDate" 
                     type="date" 
-                    defaultValue={editingReservation?.reservationDate || new Date().toISOString().split('T')[0]} 
+                    defaultValue={editingReservation?.reservation_date || new Date().toISOString().split("T")[0]} 
                     required 
                   />
                 </div>
@@ -308,7 +351,7 @@ export default function ReservationsPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="paymentStatus">Payment Status *</Label>
-                  <Select name="paymentStatus" defaultValue={editingReservation?.paymentStatus || 'pending'}>
+                  <Select name="paymentStatus" defaultValue={editingReservation?.payment_status || "pending"}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="pending">Pending</SelectItem>
@@ -324,7 +367,7 @@ export default function ReservationsPage() {
                     name="totalAmount" 
                     type="number" 
                     step="0.01"
-                    defaultValue={editingReservation?.totalAmount} 
+                    defaultValue={editingReservation?.total_amount || ""} 
                   />
                 </div>
                 <div className="space-y-2">
@@ -334,7 +377,7 @@ export default function ReservationsPage() {
                     name="amountPaid" 
                     type="number" 
                     step="0.01"
-                    defaultValue={editingReservation?.amountPaid} 
+                    defaultValue={editingReservation?.amount_paid || ""} 
                   />
                 </div>
               </div>
@@ -346,7 +389,7 @@ export default function ReservationsPage() {
                 id="notes" 
                 name="notes" 
                 rows={3}
-                defaultValue={editingReservation?.notes}
+                defaultValue={editingReservation?.notes || ""}
                 placeholder="Additional information about this reservation..."
               />
             </div>
@@ -388,48 +431,48 @@ export default function ReservationsPage() {
               {filteredReservations.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center h-24">
-                    {plantingIdFilter ? 'No reservations for this planting.' : 'No reservations yet.'}
+                    {plantingIdFilter ? "No reservations for this planting." : "No reservations yet."}
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredReservations.map(r => {
-                  const details = getPlantingDetails(r.plantingId);
+                  const details = getPlantingDetails(r.planting_id);
                   return (
                     <TableRow key={r.id}>
                       <TableCell>
-                        <div className="font-medium">{r.customerName}</div>
-                        <div className="text-xs text-gray-500">{r.customerPhone}</div>
+                        <div className="font-medium">{r.customer_name}</div>
+                        <div className="text-xs text-gray-500">{r.customer_phone}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{details?.plantType?.name || 'N/A'}</div>
+                        <div className="font-medium">{details?.plantType?.name || "N/A"}</div>
                         <div className="text-xs text-gray-500">{details?.planting.variety}</div>
                       </TableCell>
-                      <TableCell>{r.quantityReserved}</TableCell>
-                      <TableCell>{new Date(r.reservationDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{r.quantity_reserved}</TableCell>
+                      <TableCell>{new Date(r.reservation_date).toLocaleDateString()}</TableCell>
                       <TableCell>
                         <Badge 
-                          variant={r.paymentStatus === 'paid' ? 'default' : r.paymentStatus === 'partial' ? 'secondary' : 'outline'}
+                          variant={r.payment_status === "paid" ? "default" : r.payment_status === "partial" ? "secondary" : "outline"}
                           className={
-                            r.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' : 
-                            r.paymentStatus === 'partial' ? 'bg-yellow-100 text-yellow-800' : 
-                            'bg-gray-100 text-gray-800'
+                            r.payment_status === "paid" ? "bg-green-100 text-green-800" : 
+                            r.payment_status === "partial" ? "bg-yellow-100 text-yellow-800" : 
+                            "bg-gray-100 text-gray-800"
                           }
                         >
-                          {r.paymentStatus}
+                          {r.payment_status}
                         </Badge>
-                        {r.totalAmount && (
+                        {r.total_amount && (
                           <div className="text-xs text-gray-500 mt-1">
-                            {r.amountPaid || 0} / {r.totalAmount}
+                            {r.amount_paid || 0} / {r.total_amount}
                           </div>
                         )}
                       </TableCell>
                       <TableCell>
                         <Badge 
-                          variant={r.status === 'active' ? 'default' : r.status === 'completed' ? 'secondary' : 'outline'}
+                          variant={r.status === "active" ? "default" : r.status === "completed" ? "secondary" : "outline"}
                           className={
-                            r.status === 'active' ? 'bg-blue-100 text-blue-800' : 
-                            r.status === 'completed' ? 'bg-green-100 text-green-800' : 
-                            'bg-red-100 text-red-800'
+                            r.status === "active" ? "bg-blue-100 text-blue-800" : 
+                            r.status === "completed" ? "bg-green-100 text-green-800" : 
+                            "bg-red-100 text-red-800"
                           }
                         >
                           {r.status}
@@ -437,7 +480,7 @@ export default function ReservationsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">
-                          {r.status === 'active' && (
+                          {r.status === "active" && (
                             <>
                               <Button 
                                 size="sm" 
