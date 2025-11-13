@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
-import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -177,197 +176,191 @@ export default function RolesPermissionsPage() {
 
   if (authLoading || loading) {
     return (
-      <Layout>
-        <div className="flex h-screen items-center justify-center">
-          <Loader2 className="h-10 w-10 animate-spin" />
-        </div>
-      </Layout>
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin" />
+      </div>
     );
   }
 
   if (!isAdmin) {
     return (
-      <Layout>
-        <div className="container mx-auto mt-10 flex justify-center">
-          <Card className="max-w-md">
-            <CardHeader>
-              <CardTitle className="text-red-600 flex items-center gap-2">
-                <AlertCircle />
-                Access Denied
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>You must be an administrator to view this page.</p>
-            </CardContent>
-          </Card>
-        </div>
-      </Layout>
+      <div className="container mx-auto mt-10 flex justify-center">
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle className="text-red-600 flex items-center gap-2">
+              <AlertCircle />
+              Access Denied
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p>You must be an administrator to view this page.</p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="container mx-auto p-6 space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Shield className="h-8 w-8" />
-              Roles & Permissions Matrix
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Configure role-based access control across all system modules
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => router.push("/admin/user-management")}
-              className="gap-2"
-            >
-              <Users className="h-4 w-4" />
-              User Management
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleInitializeDefaults}
-              className="gap-2"
-            >
-              Reset to Defaults
-            </Button>
-            {hasChanges && (
-              <Button onClick={handleSaveAll} disabled={saving} className="gap-2">
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save All Changes
-              </Button>
-            )}
-          </div>
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Shield className="h-8 w-8" />
+            Roles & Permissions Matrix
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Configure role-based access control across all system modules
+          </p>
         </div>
-
-        {/* Alerts */}
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-        {success && (
-          <Alert className="border-green-500">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-600">{success}</AlertDescription>
-          </Alert>
-        )}
-
-        {/* Permissions Matrix by Module */}
-        <div className="space-y-8">
-          {MODULE_ORDER.map((moduleName) => {
-            const modulePerms = permissionsByModule[moduleName];
-            if (!modulePerms || modulePerms.length === 0) return null;
-
-            const fullAccessPerm = getPermissionForAction(moduleName, null);
-            const viewPerm = getPermissionForAction(moduleName, "view");
-            const createPerm = getPermissionForAction(moduleName, "create");
-            const editPerm = getPermissionForAction(moduleName, "edit");
-            const deletePerm = getPermissionForAction(moduleName, "delete");
-
-            return (
-              <Card key={moduleName}>
-                <CardHeader>
-                  <CardTitle className="text-xl">
-                    {MODULE_DISPLAY_NAMES[moduleName] || moduleName}
-                  </CardTitle>
-                  <CardDescription>
-                    Configure permissions for {MODULE_DISPLAY_NAMES[moduleName]?.toLowerCase() || moduleName}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[150px]">Role</TableHead>
-                        <TableHead className="text-center w-[120px]">Full Access</TableHead>
-                        <TableHead className="text-center w-[120px]">View</TableHead>
-                        <TableHead className="text-center w-[120px]">Create</TableHead>
-                        <TableHead className="text-center w-[120px]">Edit</TableHead>
-                        <TableHead className="text-center w-[120px]">Delete</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {ROLES.map((role) => (
-                        <TableRow key={role}>
-                          <TableCell>
-                            <Badge className={getRoleBadgeColor(role)}>
-                              {role}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {fullAccessPerm && (
-                              <Checkbox
-                                checked={rolePermissions[role]?.includes(fullAccessPerm.id)}
-                                onCheckedChange={() => handlePermissionToggle(role, fullAccessPerm.id)}
-                              />
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {viewPerm && (
-                              <Checkbox
-                                checked={rolePermissions[role]?.includes(viewPerm.id)}
-                                onCheckedChange={() => handlePermissionToggle(role, viewPerm.id)}
-                              />
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {createPerm && (
-                              <Checkbox
-                                checked={rolePermissions[role]?.includes(createPerm.id)}
-                                onCheckedChange={() => handlePermissionToggle(role, createPerm.id)}
-                              />
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {editPerm && (
-                              <Checkbox
-                                checked={rolePermissions[role]?.includes(editPerm.id)}
-                                onCheckedChange={() => handlePermissionToggle(role, editPerm.id)}
-                              />
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {deletePerm && (
-                              <Checkbox
-                                checked={rolePermissions[role]?.includes(deletePerm.id)}
-                                onCheckedChange={() => handlePermissionToggle(role, deletePerm.id)}
-                              />
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Save Button at Bottom */}
-        {hasChanges && (
-          <div className="flex justify-end sticky bottom-4">
-            <Button onClick={handleSaveAll} disabled={saving} size="lg" className="gap-2 shadow-lg">
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/admin/user-management")}
+            className="gap-2"
+          >
+            <Users className="h-4 w-4" />
+            User Management
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleInitializeDefaults}
+            className="gap-2"
+          >
+            Reset to Defaults
+          </Button>
+          {hasChanges && (
+            <Button onClick={handleSaveAll} disabled={saving} className="gap-2">
               {saving ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Save className="h-5 w-5" />
+                <Save className="h-4 w-4" />
               )}
               Save All Changes
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </Layout>
+
+      {/* Alerts */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      {success && (
+        <Alert className="border-green-500">
+          <CheckCircle2 className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-600">{success}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Permissions Matrix by Module */}
+      <div className="space-y-8">
+        {MODULE_ORDER.map((moduleName) => {
+          const modulePerms = permissionsByModule[moduleName];
+          if (!modulePerms || modulePerms.length === 0) return null;
+
+          const fullAccessPerm = getPermissionForAction(moduleName, null);
+          const viewPerm = getPermissionForAction(moduleName, "view");
+          const createPerm = getPermissionForAction(moduleName, "create");
+          const editPerm = getPermissionForAction(moduleName, "edit");
+          const deletePerm = getPermissionForAction(moduleName, "delete");
+
+          return (
+            <Card key={moduleName}>
+              <CardHeader>
+                <CardTitle className="text-xl">
+                  {MODULE_DISPLAY_NAMES[moduleName] || moduleName}
+                </CardTitle>
+                <CardDescription>
+                  Configure permissions for {MODULE_DISPLAY_NAMES[moduleName]?.toLowerCase() || moduleName}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[150px]">Role</TableHead>
+                      <TableHead className="text-center w-[120px]">Full Access</TableHead>
+                      <TableHead className="text-center w-[120px]">View</TableHead>
+                      <TableHead className="text-center w-[120px]">Create</TableHead>
+                      <TableHead className="text-center w-[120px]">Edit</TableHead>
+                      <TableHead className="text-center w-[120px]">Delete</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ROLES.map((role) => (
+                      <TableRow key={role}>
+                        <TableCell>
+                          <Badge className={getRoleBadgeColor(role)}>
+                            {role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {fullAccessPerm && (
+                            <Checkbox
+                              checked={rolePermissions[role]?.includes(fullAccessPerm.id)}
+                              onCheckedChange={() => handlePermissionToggle(role, fullAccessPerm.id)}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {viewPerm && (
+                            <Checkbox
+                              checked={rolePermissions[role]?.includes(viewPerm.id)}
+                              onCheckedChange={() => handlePermissionToggle(role, viewPerm.id)}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {createPerm && (
+                            <Checkbox
+                              checked={rolePermissions[role]?.includes(createPerm.id)}
+                              onCheckedChange={() => handlePermissionToggle(role, createPerm.id)}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {editPerm && (
+                            <Checkbox
+                              checked={rolePermissions[role]?.includes(editPerm.id)}
+                              onCheckedChange={() => handlePermissionToggle(role, editPerm.id)}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {deletePerm && (
+                            <Checkbox
+                              checked={rolePermissions[role]?.includes(deletePerm.id)}
+                              onCheckedChange={() => handlePermissionToggle(role, deletePerm.id)}
+                            />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Save Button at Bottom */}
+      {hasChanges && (
+        <div className="flex justify-end sticky bottom-4">
+          <Button onClick={handleSaveAll} disabled={saving} size="lg" className="gap-2 shadow-lg">
+            {saving ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Save className="h-5 w-5" />
+            )}
+            Save All Changes
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
