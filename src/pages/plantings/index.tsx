@@ -306,9 +306,42 @@ export default function PlantingsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="quantity">Quantity</Label>
-                <Input id="quantity" name="quantity" type="number" defaultValue={editingPlanting?.quantity} required />
+                <Input 
+                  id="quantity" 
+                  name="quantity" 
+                  type="number" 
+                  defaultValue={editingPlanting?.quantity} 
+                  required 
+                  onChange={(e) => {
+                    const qty = parseInt(e.target.value) || 0;
+                    const trays = (qty / 220).toFixed(2);
+                    const trayDisplay = document.getElementById("trayUsageDisplay");
+                    if (trayDisplay) {
+                      trayDisplay.textContent = trays;
+                    }
+                  }}
+                />
               </div>
             </div>
+            
+            {/* Estimated Tray Usage Display */}
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium text-blue-900 dark:text-blue-100">Estimated Tray Usage</Label>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Based on 220 seedlings per tray</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                    <span id="trayUsageDisplay">
+                      {editingPlanting ? (editingPlanting.quantity / 220).toFixed(2) : "0.00"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">trays</p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="datePlanted">Date Planted</Label>

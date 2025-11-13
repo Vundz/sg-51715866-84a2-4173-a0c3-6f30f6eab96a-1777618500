@@ -16,6 +16,7 @@ export default function DashboardPage() {
     upcomingHarvests: 0,
     plantTypes: 0,
     activeReservations: 0,
+    trayUtilization: 0,
   });
 
   useEffect(() => {
@@ -36,6 +37,11 @@ export default function DashboardPage() {
       return daysUntil >= 0 && daysUntil <= 7;
     }).length;
 
+    // Calculate total tray utilization (quantity / 220 for each active planting)
+    const totalTrays = plantings
+      .filter(p => p.status === 'active')
+      .reduce((sum, p) => sum + (p.quantity / 220), 0);
+
     setStats({
       activePlantings: plantings.filter(p => p.status === 'active').length,
       totalHarvests: harvests.length,
@@ -44,16 +50,17 @@ export default function DashboardPage() {
       upcomingHarvests: upcoming,
       plantTypes: plantTypes.length,
       activeReservations: reservations.filter(r => r.status === 'active').length,
+      trayUtilization: Math.round(totalTrays * 100) / 100, // Round to 2 decimal places
     });
   }, []);
 
   const statCards = [
     { title: "Active Plantings", value: stats.activePlantings, icon: Sprout, href:"/plantings" },
+    { title: "Tray Utilization", value: `${stats.trayUtilization}`, icon: Package, href: "/plantings", subtitle: "trays in use" },
     { title: "Active Reservations", value: stats.activeReservations, icon: ShoppingCart, href: "/reservations" },
     { title: "Upcoming Harvests", value: stats.upcomingHarvests, icon: Calendar, href: "/reports/upcoming-harvests" },
     { title: "Total Harvests", value: stats.totalHarvests, icon: Package, href:"/harvests" },
     { title: "Locations", value: stats.locations, icon: MapPin, href:"/locations" },
-    { title: "Plant Types", value: stats.plantTypes, icon: TrendingUp, href:"/plant-types" },
   ];
 
   return (
@@ -72,7 +79,10 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{card.value}</div>
-               <Link href={card.href} className="text-xs text-muted-foreground flex items-center gap-1 hover:text-primary">
+              {card.subtitle && (
+                <p className="text-xs text-muted-foreground mt-1">{card.subtitle}</p>
+              )}
+              <Link href={card.href} className="text-xs text-muted-foreground flex items-center gap-1 hover:text-primary mt-1">
                 View All <ArrowRight className="w-3 h-3" />
               </Link>
             </CardContent>
