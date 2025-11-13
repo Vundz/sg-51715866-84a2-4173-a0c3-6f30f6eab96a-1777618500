@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +31,10 @@ export default function PlantingsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPlanting, setEditingPlanting] = useState<Planting | null>(null);
   
+  // Form state for plant type and variety selection
+  const [selectedPlantTypeName, setSelectedPlantTypeName] = useState<string>("");
+  const [selectedVariety, setSelectedVariety] = useState<string>("");
+  
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "location" | "variety" | "status">("all");
@@ -61,6 +64,22 @@ export default function PlantingsPage() {
   const getReservationCount = (plantingId: string): number => {
     return reservations.filter(r => r.plantingId === plantingId && r.status === 'active').length;
   };
+
+  // Get unique plant type names
+  const uniquePlantTypeNames = useMemo(() => {
+    const names = new Set(plantTypes.map(pt => pt.name));
+    return Array.from(names).sort();
+  }, [plantTypes]);
+
+  // Get varieties for the selected plant type
+  const availableVarieties = useMemo(() => {
+    if (!selectedPlantTypeName) return [];
+    return plantTypes
+      .filter(pt => pt.name === selectedPlantTypeName)
+      .map(pt => pt.variety)
+      .filter(Boolean)
+      .sort();
+  }, [selectedPlantTypeName, plantTypes]);
 
   // Get unique varieties and locations for filter dropdowns
   const uniqueVarieties = useMemo(() => {
@@ -116,19 +135,34 @@ export default function PlantingsPage() {
   const handleSavePlanting = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const plantTypeId = formData.get("plantTypeId") as string;
-    const plantType = getPlantTypeDetails(plantTypeId);
+    
+    // Validate that both plant type and variety are selected
+    if (!selectedPlantTypeName || !selectedVariety) {
+      alert("Please select both Plant Type and Variety");
+      return;
+    }
+    
+    // Find the plant type that matches both name and variety
+    const plantType = plantTypes.find(
+      pt => pt.name === selectedPlantTypeName && pt.variety === selectedVariety
+    );
+    
+    if (!plantType) {
+      alert("Invalid plant type and variety combination");
+      return;
+    }
+    
     const datePlanted = formData.get("datePlanted") as string;
     
     const batchNumber = generateBatchNumber(
-      plantType?.name || '',
-      plantType?.variety || '',
+      plantType.name,
+      plantType.variety,
       datePlanted
     );
     
     const plantingData: Omit<Planting, 'id'> = {
-      plantTypeId,
-      variety: plantType?.variety || '',
+      plantTypeId: plantType.id,
+      variety: plantType.variety,
       locationId: formData.get("locationId") as string,
       quantity: parseInt(formData.get("quantity") as string),
       datePlanted,
@@ -139,13 +173,15 @@ export default function PlantingsPage() {
     const newPlanting = { ...plantingData, id: generateId("pln"), remainingQuantity: plantingData.quantity };
 
     const updatedPlantings = editingPlanting
-      ? plantings.map(p => p.id === editingPlanting.id ? { ...p, ...plantingData, variety: plantType?.variety || '', batchNumber } : p)
+      ? plantings.map(p => p.id === editingPlanting.id ? { ...p, ...plantingData } : p)
       : [...plantings, newPlanting];
 
     setPlantings(updatedPlantings);
     setStorageData(STORAGE_KEYS.PLANTINGS, updatedPlantings);
     setIsDialogOpen(false);
     setEditingPlanting(null);
+    setSelectedPlantTypeName("");
+    setSelectedVariety("");
   };
 
   const handleDeletePlanting = (id: string) => {
@@ -162,7 +198,20 @@ export default function PlantingsPage() {
 
   const handleOpenDialog = (planting: Planting | null = null) => {
     setEditingPlanting(planting);
+    if (planting) {
+      const plantType = getPlantTypeDetails(planting.plantTypeId);
+      setSelectedPlantTypeName(plantType?.name || "");
+      setSelectedVariety(planting.variety);
+    } else {
+      setSelectedPlantTypeName("");
+      setSelectedVariety("");
+    }
     setIsDialogOpen(true);
+  };
+
+  const handlePlantTypeChange = (value: string) => {
+    setSelectedPlantTypeName(value);
+    setSelectedVariety(""); // Reset variety when plant type changes
   };
   
   const getExpectedHarvestDate = (planting: Planting) => {
@@ -206,14 +255,46 @@ export default function PlantingsPage() {
           <form onSubmit={handleSavePlanting} className="space-y-4 pt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="plantTypeId">Plant Type</Label>
-                <Select name="plantTypeId" required defaultValue={editingPlanting?.plantTypeId}>
-                  <SelectTrigger><SelectValue placeholder="Select a plant type" /></SelectTrigger>
+                <Label htmlFor="plantTypeName">
+                  Plant Type <span className="text-red-500">*</span>
+                </Label>
+                <Select 
+                  value={selectedPlantTypeName} 
+                  onValueChange={handlePlantTypeChange}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a plant type" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {plantTypes.map(pt => <SelectItem key={pt.id} value={pt.id}>{pt.name} ({pt.variety})</SelectItem>)}
+                    {uniquePlantTypeNames.map(name => (
+                      <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="variety">
+                  Variety <span className="text-red-500">*</span>
+                </Label>
+                <Select 
+                  value={selectedVariety} 
+                  onValueChange={setSelectedVariety}
+                  disabled={!selectedPlantTypeName}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={selectedPlantTypeName ? "Select a variety" : "Select plant type first"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableVarieties.map(variety => (
+                      <SelectItem key={variety} value={variety}>{variety}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="locationId">Location</Label>
                 <Select name="locationId" required defaultValue={editingPlanting?.locationId}>
@@ -223,30 +304,30 @@ export default function PlantingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="quantity">Quantity</Label>
                 <Input id="quantity" name="quantity" type="number" defaultValue={editingPlanting?.quantity} required />
               </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="datePlanted">Date Planted</Label>
                 <Input id="datePlanted" name="datePlanted" type="date" defaultValue={editingPlanting?.datePlanted || new Date().toISOString().split('T')[0]} required />
               </div>
-            </div>
-            {editingPlanting && (
+              {editingPlanting && (
                 <div className="space-y-2">
-                    <Label htmlFor="status">Status</Label>
-                    <Select name="status" defaultValue={editingPlanting?.status}>
-                        <SelectTrigger><SelectValue/></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="harvested">Harvested</SelectItem>
-                            <SelectItem value="closed">Closed</SelectItem>
-                        </SelectContent>
-                    </Select>
+                  <Label htmlFor="status">Status</Label>
+                  <Select name="status" defaultValue={editingPlanting?.status}>
+                    <SelectTrigger><SelectValue/></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="harvested">Harvested</SelectItem>
+                      <SelectItem value="closed">Closed</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-            )}
+              )}
+            </div>
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
               <Button type="submit" className="bg-lime-600 hover:bg-lime-700">Save Planting</Button>
