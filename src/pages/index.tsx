@@ -50,7 +50,7 @@ export default function DashboardPage() {
       upcomingHarvests: upcoming,
       plantTypes: plantTypes.length,
       activeReservations: reservations.filter(r => r.status === 'active').length,
-      trayUtilization: Math.round(totalTrays * 100) / 100, // Round to 2 decimal places
+      trayUtilization: Math.round(totalTrays), // Round to whole number
     });
   }, []);
 
