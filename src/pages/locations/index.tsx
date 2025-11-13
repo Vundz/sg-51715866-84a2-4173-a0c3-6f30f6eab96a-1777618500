@@ -55,6 +55,7 @@ export default function LocationsPage() {
       setLoading(true);
       const locationData = {
         name: formData.get("name") as string,
+        type: formData.get("type") as string,
         capacity: parseInt(formData.get("capacity") as string, 10),
       };
 
@@ -123,6 +124,10 @@ export default function LocationsPage() {
             <div className="space-y-2">
               <Label htmlFor="name">Location Name</Label>
               <Input id="name" name="name" defaultValue={editingLocation?.name} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="type">Location Type</Label>
+              <Input id="type" name="type" defaultValue={editingLocation?.type || "Greenhouse"} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="capacity">Capacity</Label>

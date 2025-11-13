@@ -46,7 +46,7 @@ export default function PlantTypesPage() {
     const plantTypeData = {
       name: formData.get("name") as string,
       variety: formData.get("variety") as string,
-      growth_duration: parseInt(formData.get("growthDuration") as string, 10),
+      days_to_maturity: parseInt(formData.get("days_to_maturity") as string, 10),
     };
 
     try {
@@ -136,8 +136,8 @@ export default function PlantTypesPage() {
               <Input id="variety" name="variety" defaultValue={editingPlantType?.variety} required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="growthDuration">Growth Duration (days)</Label>
-              <Input id="growthDuration" name="growthDuration" type="number" defaultValue={editingPlantType?.growth_duration} required />
+              <Label htmlFor="days_to_maturity">Growth Duration (days)</Label>
+              <Input id="days_to_maturity" name="days_to_maturity" type="number" defaultValue={editingPlantType?.days_to_maturity} required />
             </div>
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
@@ -175,7 +175,7 @@ export default function PlantTypesPage() {
                     <TableRow key={pt.id}>
                       <TableCell className="font-medium">{pt.name}</TableCell>
                       <TableCell>{pt.variety}</TableCell>
-                      <TableCell>{pt.growth_duration} days</TableCell>
+                      <TableCell>{pt.days_to_maturity} days</TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">
                           <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(pt)}><Edit className="w-4 h-4" /></Button>

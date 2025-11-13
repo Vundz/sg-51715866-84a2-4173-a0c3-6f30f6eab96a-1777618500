@@ -9,12 +9,21 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter } from "lucide-react";
-import { Planting, PlantType, Location, Reservation } from "@/types";
 import { plantingService } from "@/services/plantingService";
 import { plantTypeService } from "@/services/plantTypeService";
 import { locationService } from "@/services/locationService";
 import { reservationService } from "@/services/reservationService";
 import { useAuth } from "@/contexts/AuthContext";
+import type { Database } from "@/integrations/supabase/types";
+import { useToast } from "@/hooks/use-toast";
+
+type Planting = Database["public"]["Tables"]["plantings"]["Row"] & { 
+  plant_types: Database["public"]["Tables"]["plant_types"]["Row"] | null,
+  locations: Database["public"]["Tables"]["locations"]["Row"] | null
+};
+type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
+type Location = Database["public"]["Tables"]["locations"]["Row"];
+type Reservation = Database["public"]["Tables"]["reservations"]["Row"];
 
 // Generate batch number: first 2 chars of plant type + first 2 chars of variety + DDMMYY
 const generateBatchNumber = (plantTypeName: string, variety: string, datePlanted: string): string => {
@@ -29,6 +38,7 @@ const generateBatchNumber = (plantTypeName: string, variety: string, datePlanted
 
 export default function PlantingsPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -62,34 +72,31 @@ export default function PlantingsPage() {
         reservationService.getReservations()
       ]);
       
-      setPlantings(plantingsData);
+      setPlantings(plantingsData as Planting[]);
       setPlantTypes(plantTypesData);
       setLocations(locationsData);
-      setReservations(reservationsData);
+      setReservations(reservationsData as Reservation[]);
     } catch (error) {
       console.error("Error loading data:", error);
-      alert("Failed to load data. Please try refreshing the page.");
+      toast({ title: "Error", description: "Failed to load data. Please try refreshing the page.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
-  const getPlantTypeDetails = (plantTypeId: string) => plantTypes.find(pt => pt.id === plantTypeId);
-  const getLocationName = (locationId: string) => locations.find(l => l.id === locationId)?.name || 'N/A';
-
   const getReservedQuantity = (plantingId: string): number => {
-    const activeReservations = reservations.filter(r => r.plantingId === plantingId && r.status === 'active');
-    return activeReservations.reduce((sum, r) => sum + r.quantityReserved, 0);
+    const activeReservations = reservations.filter(r => r.planting_id === plantingId && r.status === 'active');
+    return activeReservations.reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
   };
-
+  
   const getAvailableQuantity = (planting: Planting): number => {
     const reserved = getReservedQuantity(planting.id);
-    const remaining = planting.remainingQuantity ?? planting.quantity;
+    const remaining = planting.remaining_quantity ?? planting.quantity;
     return Math.max(0, remaining - reserved);
   };
 
   const getReservationCount = (plantingId: string): number => {
-    return reservations.filter(r => r.plantingId === plantingId && r.status === 'active').length;
+    return reservations.filter(r => r.planting_id === plantingId && r.status === 'active').length;
   };
 
   // Get unique plant type names
@@ -110,8 +117,8 @@ export default function PlantingsPage() {
 
   // Get unique varieties and locations for filter dropdowns
   const uniqueVarieties = useMemo(() => {
-    const varieties = new Set(plantings.map(p => p.variety).filter(Boolean));
-    return Array.from(varieties).sort();
+    const varieties = new Set(plantings.map(p => p.plant_types?.variety).filter(Boolean));
+    return Array.from(varieties as string[]).sort();
   }, [plantings]);
 
   const uniqueLocations = useMemo(() => {
@@ -126,11 +133,10 @@ export default function PlantingsPage() {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(p => {
-        const plantType = getPlantTypeDetails(p.plantTypeId);
-        const location = getLocationName(p.locationId);
-        const batchNumber = p.batchNumber || '';
-        const plantName = plantType?.name || '';
-        const variety = p.variety || '';
+        const batchNumber = p.batch_number || '';
+        const plantName = p.plant_types?.name || '';
+        const variety = p.plant_types?.variety || '';
+        const location = p.locations?.name || '';
         
         return (
           batchNumber.toLowerCase().includes(query) ||
@@ -145,10 +151,10 @@ export default function PlantingsPage() {
     if (filterType !== "all" && filterValue) {
       switch (filterType) {
         case "location":
-          filtered = filtered.filter(p => p.locationId === filterValue);
+          filtered = filtered.filter(p => p.location_id === filterValue);
           break;
         case "variety":
-          filtered = filtered.filter(p => p.variety === filterValue);
+          filtered = filtered.filter(p => p.plant_types?.variety === filterValue);
           break;
         case "status":
           filtered = filtered.filter(p => p.status === filterValue);
@@ -157,29 +163,27 @@ export default function PlantingsPage() {
     }
 
     return filtered;
-  }, [plantings, searchQuery, filterType, filterValue, plantTypes, locations]);
+  }, [plantings, searchQuery, filterType, filterValue]);
 
   const handleSavePlanting = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    // Validate that both plant type and variety are selected
     if (!selectedPlantTypeName || !selectedVariety) {
-      alert("Please select both Plant Type and Variety");
+      toast({ title: "Validation Error", description: "Please select both Plant Type and Variety", variant: "destructive" });
       return;
     }
     
-    // Find the plant type that matches both name and variety
     const plantType = plantTypes.find(
       pt => pt.name === selectedPlantTypeName && pt.variety === selectedVariety
     );
     
     if (!plantType) {
-      alert("Invalid plant type and variety combination");
+      toast({ title: "Validation Error", description: "Invalid plant type and variety combination", variant: "destructive" });
       return;
     }
     
-    const datePlanted = formData.get("datePlanted") as string;
+    const datePlanted = formData.get("date_planted") as string;
     
     const batchNumber = generateBatchNumber(
       plantType.name,
@@ -187,22 +191,24 @@ export default function PlantingsPage() {
       datePlanted
     );
     
-    const plantingData: Omit<Planting, 'id'> = {
-      plantTypeId: plantType.id,
-      variety: plantType.variety,
-      locationId: formData.get("locationId") as string,
-      quantity: parseInt(formData.get("quantity") as string),
-      datePlanted,
-      batchNumber,
+    const quantity = parseInt(formData.get("quantity") as string);
+    const plantingData = {
+      plant_type_id: plantType.id,
+      location_id: formData.get("location_id") as string,
+      quantity,
+      date_planted: datePlanted,
+      batch_number: batchNumber,
       status: (formData.get("status") as Planting['status']) || 'active',
-      remainingQuantity: editingPlanting?.remainingQuantity ?? parseInt(formData.get("quantity") as string)
+      remaining_quantity: editingPlanting?.remaining_quantity ?? quantity,
     };
 
     try {
       if (editingPlanting) {
         await plantingService.updatePlanting(editingPlanting.id, plantingData);
+        toast({ title: "Success", description: "Planting updated successfully." });
       } else {
-        await plantingService.addPlanting(plantingData);
+        await plantingService.createPlanting(plantingData);
+        toast({ title: "Success", description: "Planting created successfully." });
       }
       
       await loadData();
@@ -212,14 +218,14 @@ export default function PlantingsPage() {
       setSelectedVariety("");
     } catch (error) {
       console.error("Error saving planting:", error);
-      alert("Failed to save planting. Please try again.");
+      toast({ title: "Error", description: "Failed to save planting. Please try again.", variant: "destructive" });
     }
   };
 
   const handleDeletePlanting = async (id: string) => {
     const reservationCount = getReservationCount(id);
     if (reservationCount > 0) {
-      alert(`Cannot delete this planting. It has ${reservationCount} active reservation(s). Please cancel the reservations first.`);
+      toast({ title: "Delete Error", description: `Cannot delete this planting. It has ${reservationCount} active reservation(s). Please cancel them first.`, variant: "destructive" });
       return;
     }
     if (!confirm("Are you sure you want to delete this planting?")) return;
@@ -227,18 +233,18 @@ export default function PlantingsPage() {
     try {
       await plantingService.deletePlanting(id);
       await loadData();
+      toast({ title: "Success", description: "Planting deleted successfully." });
     } catch (error) {
       console.error("Error deleting planting:", error);
-      alert("Failed to delete planting. Please try again.");
+      toast({ title: "Error", description: "Failed to delete planting. Please try again.", variant: "destructive" });
     }
   };
 
   const handleOpenDialog = (planting: Planting | null = null) => {
     setEditingPlanting(planting);
     if (planting) {
-      const plantType = getPlantTypeDetails(planting.plantTypeId);
-      setSelectedPlantTypeName(plantType?.name || "");
-      setSelectedVariety(planting.variety);
+      setSelectedPlantTypeName(planting.plant_types?.name || "");
+      setSelectedVariety(planting.plant_types?.variety || "");
     } else {
       setSelectedPlantTypeName("");
       setSelectedVariety("");
@@ -252,10 +258,9 @@ export default function PlantingsPage() {
   };
   
   const getExpectedHarvestDate = (planting: Planting) => {
-    const plantType = getPlantTypeDetails(planting.plantTypeId);
-    if (!plantType?.growthDuration) return "N/A";
-    const date = new Date(planting.datePlanted);
-    date.setDate(date.getDate() + plantType.growthDuration);
+    if (!planting.plant_types?.days_to_maturity) return "N/A";
+    const date = new Date(planting.date_planted);
+    date.setDate(date.getDate() + planting.plant_types.days_to_maturity);
     return date.toLocaleDateString();
   };
 
@@ -349,8 +354,8 @@ export default function PlantingsPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="locationId">Location</Label>
-                <Select name="locationId" required defaultValue={editingPlanting?.locationId}>
+                <Label htmlFor="location_id">Location</Label>
+                <Select name="location_id" required defaultValue={editingPlanting?.location_id}>
                   <SelectTrigger><SelectValue placeholder="Select a location" /></SelectTrigger>
                   <SelectContent>
                     {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
@@ -377,7 +382,6 @@ export default function PlantingsPage() {
               </div>
             </div>
             
-            {/* Estimated Tray Usage Display */}
             <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -397,8 +401,8 @@ export default function PlantingsPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="datePlanted">Date Planted</Label>
-                <Input id="datePlanted" name="datePlanted" type="date" defaultValue={editingPlanting?.datePlanted || new Date().toISOString().split('T')[0]} required />
+                <Label htmlFor="date_planted">Date Planted</Label>
+                <Input id="date_planted" name="date_planted" type="date" defaultValue={editingPlanting?.date_planted || new Date().toISOString().split('T')[0]} required />
               </div>
               {editingPlanting && (
                 <div className="space-y-2">
@@ -437,7 +441,6 @@ export default function PlantingsPage() {
         <CardContent className="space-y-4">
           {/* Search and Filter Bar */}
           <div className="flex flex-col md:flex-row gap-4 pb-4 border-b">
-            {/* Search Bar */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
@@ -448,7 +451,6 @@ export default function PlantingsPage() {
               />
             </div>
 
-            {/* Filter Type Selector */}
             <div className="flex gap-2 items-center">
               <Filter className="w-4 h-4 text-gray-500" />
               <Select value={filterType} onValueChange={(value: typeof filterType) => {
@@ -466,7 +468,6 @@ export default function PlantingsPage() {
                 </SelectContent>
               </Select>
 
-              {/* Filter Value Selector (shows based on filter type) */}
               {filterType === "location" && (
                 <Select value={filterValue} onValueChange={setFilterValue}>
                   <SelectTrigger className="w-[180px]">
@@ -506,7 +507,6 @@ export default function PlantingsPage() {
                 </Select>
               )}
 
-              {/* Clear Filters Button */}
               {(searchQuery || filterType !== "all") && (
                 <Button 
                   variant="ghost" 
@@ -520,7 +520,6 @@ export default function PlantingsPage() {
             </div>
           </div>
 
-          {/* Table */}
           <Table>
             <TableHeader>
               <TableRow>
@@ -548,24 +547,23 @@ export default function PlantingsPage() {
                 </TableRow>
               ) : (
                 filteredPlantings.map(p => {
-                  const plantType = getPlantTypeDetails(p.plantTypeId);
                   const reserved = getReservedQuantity(p.id);
                   const available = getAvailableQuantity(p);
                   const reservationCount = getReservationCount(p.id);
-                  const trayUsage = Math.round((p.remainingQuantity ?? p.quantity) / 220);
+                  const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
                   
                   return (
                     <TableRow key={p.id}>
                       <TableCell className="font-mono font-semibold text-sm">
-                        {p.batchNumber || 'N/A'}
+                        {p.batch_number || 'N/A'}
                       </TableCell>
                       <TableCell className="font-medium">
-                        {plantType?.name || 'N/A'}
+                        {p.plant_types?.name || 'N/A'}
                         <br/>
-                        <span className="text-xs text-gray-500">{p.variety}</span>
+                        <span className="text-xs text-gray-500">{p.plant_types?.variety}</span>
                       </TableCell>
-                      <TableCell>{getLocationName(p.locationId)}</TableCell>
-                      <TableCell>{p.remainingQuantity ?? p.quantity}</TableCell>
+                      <TableCell>{p.locations?.name || 'N/A'}</TableCell>
+                      <TableCell>{p.remaining_quantity ?? p.quantity}</TableCell>
                       <TableCell>
                         <span className="font-medium text-blue-600">{trayUsage}</span>
                       </TableCell>
@@ -589,7 +587,7 @@ export default function PlantingsPage() {
                           {available}
                         </span>
                       </TableCell>
-                      <TableCell>{new Date(p.datePlanted).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(p.date_planted).toLocaleDateString()}</TableCell>
                       <TableCell>{getExpectedHarvestDate(p)}</TableCell>
                       <TableCell>
                         <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
