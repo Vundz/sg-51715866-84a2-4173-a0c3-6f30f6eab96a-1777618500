@@ -64,6 +64,7 @@ export default function RolesPermissionsPage() {
     viewer: [],
   });
   const [hasChanges, setHasChanges] = useState(false);
+  const [initializing, setInitializing] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -186,6 +187,35 @@ export default function RolesPermissionsPage() {
       setLoading(false);
     }
   };
+
+  const handleInitializePermissions = async () => {
+    if (!confirm("This will initialize the database with default role permissions. Continue?")) {
+      return;
+    }
+    
+    try {
+      setInitializing(true);
+      setError(null);
+      
+      const response = await fetch("/api/init-permissions", {
+        method: "POST",
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to initialize permissions");
+      }
+      
+      setSuccess(`Permissions initialized successfully! (${data.count} records created)`);
+      await loadData();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message || "Failed to initialize permissions.");
+    } finally {
+      setInitializing(false);
+    }
+  };
   
   const getPermissionCheckboxState = (role: UserRole, permissionId: string | undefined, action: keyof Omit<RolePermissionData, "permission_id">) => {
     if (!permissionId) return false;
@@ -230,6 +260,7 @@ export default function RolesPermissionsPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => router.push("/admin/user-management")} className="gap-2"><Users className="h-4 w-4" />User Management</Button>
+          <Button variant="secondary" onClick={handleInitializePermissions} disabled={initializing} className="gap-2">{initializing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}Initialize Permissions</Button>
           <Button variant="outline" onClick={handleResetToDefaults} className="gap-2">Reset to Defaults</Button>
           {hasChanges && <Button onClick={handleSaveAll} disabled={saving} className="gap-2">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save Changes</Button>}
         </div>
