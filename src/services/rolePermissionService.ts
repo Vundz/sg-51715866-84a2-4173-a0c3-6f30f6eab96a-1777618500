@@ -12,7 +12,13 @@ export interface PermissionsByModule {
 
 export interface RolePermissions {
   role: UserRole;
-  permissions: string[];
+  permissions: {
+    permission_id: string;
+    can_create: boolean;
+    can_read: boolean;
+    can_update: boolean;
+    can_delete: boolean;
+  }[];
 }
 
 export const rolePermissionService = {
@@ -29,7 +35,7 @@ export const rolePermissionService = {
     if (error) throw error;
 
     const grouped: PermissionsByModule = {};
-    data.forEach((perm) => {
+    (data || []).forEach((perm) => {
       const moduleName = perm.module || "general";
       if (!grouped[moduleName]) grouped[moduleName] = [];
       grouped[moduleName].push(perm);
@@ -39,43 +45,42 @@ export const rolePermissionService = {
   },
 
   /**
-   * Get permissions for a specific role
+   * Get permissions for a specific role with CRUD flags
    */
-  async getRolePermissions(role: UserRole): Promise<string[]> {
+  async getRolePermissions(role: UserRole): Promise<RolePermissions["permissions"]> {
     const { data, error } = await supabase
       .from("role_permissions")
-      .select("permission_id")
+      .select("permission_id, can_create, can_read, can_update, can_delete")
       .eq("role", role);
 
-    if (error) throw error;
-    return data.map((rp) => rp.permission_id);
+    if (error) {
+      console.error("Error fetching role permissions:", error);
+      return [];
+    }
+    
+    return data || [];
   },
 
   /**
-   * Set permissions for a role (replaces existing)
+   * Update a single permission for a role
    */
-  async setRolePermissions(role: UserRole, permissionIds: string[]): Promise<void> {
-    // Delete existing permissions for this role
-    const { error: deleteError } = await supabase
-      .from("role_permissions")
-      .delete()
-      .eq("role", role);
-
-    if (deleteError) throw deleteError;
-
-    // Insert new permissions
-    if (permissionIds.length > 0) {
-      const newPermissions = permissionIds.map((pid) => ({
-        role,
-        permission_id: pid,
-      }));
-
-      const { error: insertError } = await supabase
-        .from("role_permissions")
-        .insert(newPermissions);
-
-      if (insertError) throw insertError;
+  async updateRolePermission(
+    role: UserRole,
+    permissionId: string,
+    updates: {
+      can_create?: boolean;
+      can_read?: boolean;
+      can_update?: boolean;
+      can_delete?: boolean;
     }
+  ): Promise<void> {
+    const { error } = await supabase
+      .from("role_permissions")
+      .update(updates)
+      .eq("role", role)
+      .eq("permission_id", permissionId);
+
+    if (error) throw error;
   },
 
   /**
@@ -94,87 +99,168 @@ export const rolePermissionService = {
   },
 
   /**
-   * Check if a role has a specific permission
+   * Check if a role has a specific permission with action
    */
-  async roleHasPermission(role: UserRole, permissionId: string): Promise<boolean> {
+  async roleHasPermission(
+    role: UserRole,
+    permissionId: string,
+    action: "create" | "read" | "update" | "delete"
+  ): Promise<boolean> {
     const { data, error } = await supabase
       .from("role_permissions")
-      .select("id")
+      .select(`can_create, can_read, can_update, can_delete`)
       .eq("role", role)
       .eq("permission_id", permissionId)
       .single();
 
-    if (error && error.code !== "PGRST116") throw error;
-    return !!data;
+    if (error && error.code !== "PGRST116") {
+      console.error("Error checking role permission:", error);
+      return false;
+    }
+    
+    if (!data) return false;
+
+    switch (action) {
+      case "create":
+        return data.can_create;
+      case "read":
+        return data.can_read;
+      case "update":
+        return data.can_update;
+      case "delete":
+        return data.can_delete;
+      default:
+        return false;
+    }
   },
 
   /**
    * Get effective permissions for a user (combines role permissions and user-specific permissions)
    */
-  async getUserEffectivePermissions(userId: string): Promise<string[]> {
-    // Get user's role
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .single();
+  async getUserEffectivePermissions(userId: string): Promise<{
+    [permissionId: string]: {
+      can_create: boolean;
+      can_read: boolean;
+      can_update: boolean;
+      can_delete: boolean;
+    };
+  }> {
+    try {
+      // Get user's role
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .single();
 
-    if (profileError) throw profileError;
+      if (profileError) {
+        console.error("Error fetching user profile:", profileError);
+        return {};
+      }
 
-    // Get role permissions
-    const rolePermissions = await this.getRolePermissions(profile.role);
+      // Get role permissions
+      const rolePermissions = await this.getRolePermissions(profile.role);
 
-    // Get user-specific permissions
-    const { data: userPerms, error: userPermsError } = await supabase
-      .from("user_permissions")
-      .select("permission_id")
-      .eq("user_id", userId);
+      // Convert to object format
+      const permissions: {
+        [permissionId: string]: {
+          can_create: boolean;
+          can_read: boolean;
+          can_update: boolean;
+          can_delete: boolean;
+        };
+      } = {};
 
-    if (userPermsError) throw userPermsError;
+      rolePermissions.forEach((perm) => {
+        permissions[perm.permission_id] = {
+          can_create: perm.can_create,
+          can_read: perm.can_read,
+          can_update: perm.can_update,
+          can_delete: perm.can_delete,
+        };
+      });
 
-    const userPermissions = userPerms.map((up) => up.permission_id);
-
-    // Combine and deduplicate
-    const allPermissions = [...new Set([...rolePermissions, ...userPermissions])];
-    return allPermissions;
+      return permissions;
+    } catch (error) {
+      console.error("Error getting user effective permissions:", error);
+      return {};
+    }
   },
 
   /**
-   * Initialize default role permissions
+   * Reset role permissions to defaults
    */
-  async initializeDefaultRolePermissions(): Promise<void> {
+  async resetRoleToDefaults(role: UserRole): Promise<void> {
     try {
       // Get all permissions
       const { data: allPermissions, error } = await supabase
         .from("permissions")
-        .select("id, name, module");
+        .select("id, module, action");
 
       if (error) throw error;
 
-      // Admin gets all permissions
-      const adminPermissions = allPermissions.map((p) => p.id);
-      await this.setRolePermissions("admin", adminPermissions);
+      // Delete existing permissions for this role
+      await supabase.from("role_permissions").delete().eq("role", role);
 
-      // Manager gets all except admin management
-      const managerPermissions = allPermissions
-        .filter((p) => p.module !== "admin")
-        .map((p) => p.id);
-      await this.setRolePermissions("manager", managerPermissions);
+      // Set defaults based on role
+      const newPermissions: Array<{
+        role: UserRole;
+        permission_id: string;
+        can_create: boolean;
+        can_read: boolean;
+        can_update: boolean;
+        can_delete: boolean;
+      }> = [];
 
-      // Staff gets view and edit for most modules
-      const staffPermissions = allPermissions
-        .filter((p) => p.module !== "admin" && p.name?.includes("view") || p.name?.includes("edit"))
-        .map((p) => p.id);
-      await this.setRolePermissions("staff", staffPermissions);
+      allPermissions.forEach((perm) => {
+        let canCreate = false;
+        let canRead = false;
+        let canUpdate = false;
+        let canDelete = false;
 
-      // Viewer gets only view permissions
-      const viewerPermissions = allPermissions
-        .filter((p) => p.name?.includes("view"))
-        .map((p) => p.id);
-      await this.setRolePermissions("viewer", viewerPermissions);
+        switch (role) {
+          case "admin":
+            canCreate = canRead = canUpdate = canDelete = true;
+            break;
+          case "manager":
+            if (perm.module !== "admin") {
+              canCreate = canRead = canUpdate = canDelete = true;
+            }
+            break;
+          case "staff":
+            if (perm.module !== "admin") {
+              canRead = true;
+              canCreate = perm.action === "create";
+              canUpdate = perm.action === "edit";
+            }
+            break;
+          case "viewer":
+            canRead = perm.action === "view";
+            break;
+        }
 
+        if (canRead || canCreate || canUpdate || canDelete) {
+          newPermissions.push({
+            role,
+            permission_id: perm.id,
+            can_create: canCreate,
+            can_read: canRead,
+            can_update: canUpdate,
+            can_delete: canDelete,
+          });
+        }
+      });
+
+      if (newPermissions.length > 0) {
+        const { error: insertError } = await supabase
+          .from("role_permissions")
+          .insert(newPermissions);
+
+        if (insertError) throw insertError;
+      }
     } catch (error) {
-      console.error("Error initializing default role permissions:", error);
+      console.error("Error resetting role to defaults:", error);
+      throw error;
     }
   },
 };
