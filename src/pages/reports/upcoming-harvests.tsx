@@ -121,7 +121,7 @@ const UpcomingHarvestsReport: React.FC = () => {
         
         // Calculate reserved quantity for this planting
         const plantingReservations = reservations.filter(r => r.planting_id === p.id && r.status === "pending");
-        const reservedQty = plantingReservations.reduce((sum, r) => sum + (r.quantity || 0), 0);
+        const reservedQty = plantingReservations.reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
         
         return {
           ...p,
