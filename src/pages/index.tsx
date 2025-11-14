@@ -33,7 +33,7 @@ export default function DashboardPage() {
     upcomingHarvests: 0,
     plantTypes: 0,
     activeReservations: 0,
-    trayUtilization: 0,
+    trayUtilization: 0
   });
   const [loading, setLoading] = useState(true);
 
@@ -41,41 +41,41 @@ export default function DashboardPage() {
     const fetchData = async () => {
       try {
         const [
-          plantingsData,
-          harvestsData,
-          locationsData,
-          treatmentsData,
-          plantTypesData,
-          reservationsData,
-        ] = await Promise.all([
-          plantingService.getPlantings(),
-          harvestService.getHarvests(),
-          locationService.getLocations(),
-          treatmentService.getTreatments(),
-          plantTypeService.getPlantTypes(),
-          reservationService.getReservations(),
-        ]);
+        plantingsData,
+        harvestsData,
+        locationsData,
+        treatmentsData,
+        plantTypesData,
+        reservationsData] =
+        await Promise.all([
+        plantingService.getPlantings(),
+        harvestService.getHarvests(),
+        locationService.getLocations(),
+        treatmentService.getTreatments(),
+        plantTypeService.getPlantTypes(),
+        reservationService.getReservations()]
+        );
 
-        const upcoming = plantingsData.filter(p => {
+        const upcoming = plantingsData.filter((p) => {
           if (p.status !== "active" || !p.expected_harvest_date) return false;
           const expected = new Date(p.expected_harvest_date);
           const daysUntil = Math.ceil((expected.getTime() - new Date().getTime()) / (1000 * 3600 * 24));
           return daysUntil >= 0 && daysUntil <= 7;
         }).length;
 
-        const totalTrays = plantingsData
-          .filter(p => p.status === 'active')
-          .reduce((sum, p) => sum + ((p.remaining_quantity ?? p.quantity) / 220), 0);
-        
+        const totalTrays = plantingsData.
+        filter((p) => p.status === 'active').
+        reduce((sum, p) => sum + (p.remaining_quantity ?? p.quantity) / 220, 0);
+
         setStats({
-          activePlantings: plantingsData.filter(p => p.status === 'active').length,
+          activePlantings: plantingsData.filter((p) => p.status === 'active').length,
           totalHarvests: harvestsData.length,
           locations: locationsData.length,
           treatments: treatmentsData.length,
           upcomingHarvests: upcoming,
           plantTypes: plantTypesData.length,
-          activeReservations: reservationsData.filter(r => r.status === 'active').length,
-          trayUtilization: Math.round(totalTrays),
+          activeReservations: reservationsData.filter((r) => r.status === 'active').length,
+          trayUtilization: Math.round(totalTrays)
         });
 
       } catch (error) {
@@ -84,18 +84,18 @@ export default function DashboardPage() {
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, []);
 
   const statCards = [
-    { title: "Active Plantings", value: stats.activePlantings, icon: Sprout, href:"/plantings" },
-    { title: "Tray Utilization", value: `${stats.trayUtilization}`, icon: Package, href: "/plantings", subtitle: "trays in use" },
-    { title: "Active Reservations", value: stats.activeReservations, icon: ShoppingCart, href: "/reservations" },
-    { title: "Upcoming Harvests", value: stats.upcomingHarvests, icon: Calendar, href: "/reports/upcoming-harvests" },
-    { title: "Total Harvests", value: stats.totalHarvests, icon: Package, href:"/harvests" },
-    { title: "Locations", value: stats.locations, icon: MapPin, href:"/locations" },
-  ];
+  { title: "Active Plantings", value: stats.activePlantings, icon: Sprout, href: "/plantings" },
+  { title: "Tray Utilization", value: `${stats.trayUtilization}`, icon: Package, href: "/plantings", subtitle: "trays in use" },
+  { title: "Active Reservations", value: stats.activeReservations, icon: ShoppingCart, href: "/reservations" },
+  { title: "Upcoming Harvests", value: stats.upcomingHarvests, icon: Calendar, href: "/reports/upcoming-harvests" },
+  { title: "Total Harvests", value: stats.totalHarvests, icon: Package, href: "/harvests" },
+  { title: "Locations", value: stats.locations, icon: MapPin, href: "/locations" }];
+
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
@@ -105,23 +105,23 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {statCards.map(card => (
-          <Card key={card.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
+        {statCards.map((card) =>
+        <Card key={card.title}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2" style={{ backgroundColor: "#22c55e" }}>
               <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
               <card.icon className="w-4 h-4 text-gray-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{card.value}</div>
-              {card.subtitle && (
-                <p className="text-xs text-muted-foreground mt-1">{card.subtitle}</p>
-              )}
+              {card.subtitle &&
+            <p className="text-xs text-muted-foreground mt-1">{card.subtitle}</p>
+            }
               <Link href={card.href} className="text-xs text-muted-foreground flex items-center gap-1 hover:text-primary mt-1">
                 View All <ArrowRight className="w-3 h-3" />
               </Link>
             </CardContent>
           </Card>
-        ))}
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -158,6 +158,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
-  );
+    </div>);
+
 }
