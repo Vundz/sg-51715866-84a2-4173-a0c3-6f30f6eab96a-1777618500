@@ -86,7 +86,7 @@ export default function PlantingsPage() {
 
   const getReservedQuantity = (plantingId: string): number => {
     const activeReservations = reservations.filter(r => r.planting_id === plantingId && r.status === 'active');
-    return activeReservations.reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
+    return activeReservations.reduce((sum, r) => sum + (r.quantity || 0), 0);
   };
   
   const getAvailableQuantity = (planting: Planting): number => {
@@ -258,9 +258,9 @@ export default function PlantingsPage() {
   };
   
   const getExpectedHarvestDate = (planting: Planting) => {
-    if (!planting.plant_types?.days_to_maturity) return "N/A";
+    if (!planting.plant_types?.growth_duration) return "N/A";
     const date = new Date(planting.date_planted);
-    date.setDate(date.getDate() + planting.plant_types.days_to_maturity);
+    date.setDate(date.getDate() + planting.plant_types.growth_duration);
     return date.toLocaleDateString();
   };
 

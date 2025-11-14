@@ -275,7 +275,7 @@ export default function ReservationsPage() {
                               <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(r)} title="Edit"><Edit className="w-4 h-4" /></Button>
                               <Button size="sm" variant="ghost" className="text-green-600" onClick={() => handleCompleteReservation(r.id)} title="Complete"><CheckCircle2 className="w-4 h-4" /></Button>
                               <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleCancelReservation(r.id)} title="Cancel"><X className="w-4 h-4" /></Button>
-                          </พิ>)}
+                          </>)}
                         </div>
                       </TableCell>
                     </TableRow>
