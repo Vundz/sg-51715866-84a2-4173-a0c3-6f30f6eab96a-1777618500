@@ -1,11 +1,21 @@
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Sprout, Package, MapPin, TestTube2, Calendar, TrendingUp, ShoppingCart } from "lucide-react";
-import { Planting, Harvest, Location, Treatment, PlantType, Reservation } from "@/types";
-import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
+import { BarChart, LineChart, PieChart, Users, DollarSign, Package, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { harvestService } from "@/services/harvestService";
+import { plantingService } from "@/services/plantingService";
+import { reservationService } from "@/services/reservationService";
+
+// Helper to format numbers
+const formatNumber = (num: number) => {
+  if (num >= 1000000) {
+    return `${(num / 1000000).toFixed(1)}M`;
+  } else if (num >= 1000) {
+    return `${(num / 1000).toFixed(1)}K`;
+  } else {
+    return num.toString();
+  }
+};
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({

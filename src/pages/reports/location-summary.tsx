@@ -7,9 +7,16 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileSpreadsheet, FileText, MapPin } from "lucide-react";
 import { Location, Planting } from "@/types";
 import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
+import { locationService } from "@/services/locationService";
+import { plantingService } from "@/services/plantingService";
+import { useToast } from "@/hooks/use-toast";
+import { Bar } from "react-chartjs-2";
+import "chart.js/auto";
 
-export default function LocationSummaryReportPage() {
-  const [locations, setLocations] = useState<Location[]>([]);
+type LocationData = Awaited<ReturnType<typeof locationService.getLocations>>[0];
+
+const LocationSummaryReport: React.FC = () => {
+  const [locations, setLocations] = useState<LocationData[]>([]);
   const [plantings, setPlantings] = useState<Planting[]>([]);
 
   useEffect(() => {

@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,9 +10,15 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileSpreadsheet, FileText, TestTube2 } from "lucide-react";
 import { Treatment, Planting, PlantType } from "@/types";
 import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
+import { treatmentService } from "@/services/treatmentService";
+import { useToast } from "@/hooks/use-toast";
+import { Bar } from "react-chartjs-2";
+import "chart.js/auto";
+
+type TreatmentData = Awaited<ReturnType<typeof treatmentService.getTreatments>>[0];
 
 export default function TreatmentsReportPage() {
-  const [treatments, setTreatments] = useState<Treatment[]>([]);
+  const [treatments, setTreatments] = useState<TreatmentData[]>([]);
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
 

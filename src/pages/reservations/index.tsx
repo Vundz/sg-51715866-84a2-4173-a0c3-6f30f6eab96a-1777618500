@@ -34,10 +34,11 @@ export default function ReservationsPage() {
   const { planting: plantingIdFilter } = router.query;
   
   const [reservations, setReservations] = useState<ReservationWithDetails[]>([]);
-  const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [plantings, setPlantings] = useState<Planting[]>([]);
   const [editingReservation, setEditingReservation] = useState<ReservationWithDetails | null>(null);
-  const [selectedPlantingId, setSelectedPlantingId] = useState<string>("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredReservations, setFilteredReservations] = useState<ReservationWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [reservedQuantities, setReservedQuantities] = useState<Record<string, number>>({});
 
@@ -46,35 +47,25 @@ export default function ReservationsPage() {
   }, []);
 
   useEffect(() => {
-    if (plantingIdFilter && typeof plantingIdFilter === 'string') {
-      setSelectedPlantingId(plantingIdFilter);
+    let filtered = reservations;
+    if (searchQuery) {
+      filtered = reservations.filter(r =>
+        r.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        r.plantings?.plant_types?.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
     }
-  }, [plantingIdFilter]);
+    setFilteredReservations(filtered);
+  }, [reservations, searchQuery]);
 
   const loadData = async () => {
     try {
-      setLoading(true);
-      const [reservationsData, plantingsData] = await Promise.all([
-        reservationService.getReservations(),
-        plantingService.getPlantings()
-      ]);
-      setReservations(reservationsData as ReservationWithDetails[]);
-      setPlantings(plantingsData as PlantingWithDetails[]);
-
-      // Pre-calculate reserved quantities
-      const resQty: Record<string, number> = {};
-      for (const p of plantingsData) {
-        resQty[p.id] = reservationsData
-          .filter(r => r.planting_id === p.id && r.status === 'active')
-          .reduce((sum, r) => sum + (r.quantity ?? 0), 0);
-      }
-      setReservedQuantities(resQty);
-
+      const reservationsData = await reservationService.getReservationsWithDetails();
+      const plantingsData = await plantingService.getPlantingsWithDetails();
+      setReservations(reservationsData);
+      setPlantings(plantingsData);
     } catch (error) {
       console.error("Error loading data:", error);
-      alert("Failed to load data. Please try again.");
-    } finally {
-      setLoading(false);
+      toast({ title: "Error", description: "Failed to load data.", variant: "destructive" });
     }
   };
 
@@ -91,28 +82,19 @@ export default function ReservationsPage() {
   const handleSaveReservation = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const plantingId = formData.get("planting_id") as string;
-    const quantity = parseInt(formData.get("quantity") as string);
-    
-    const availableQty = getAvailableQuantity(plantingId);
-    
-    if (quantity > availableQty) {
-      alert(`Error: Only ${availableQty} seedlings are available for this batch. You tried to reserve ${quantity}.`);
-      return;
-    }
     
     const reservationData = {
-      planting_id: plantingId,
+      planting_id: formData.get("planting_id") as string,
       customer_name: formData.get("customer_name") as string,
       customer_phone: formData.get("customer_phone") as string,
-      customer_email: (formData.get("customer_email") as string) || null,
-      quantity: quantity,
-      reservation_date: (formData.get("reservation_date") as string) || new Date().toISOString().split("T")[0],
-      payment_status: (formData.get("payment_status") as string) || "pending",
-      amount_paid: parseFloat(formData.get("amount_paid") as string) || null,
-      total_amount: parseFloat(formData.get("total_amount") as string) || null,
-      notes: (formData.get("notes") as string) || null,
-      status: "active"
+      customer_email: formData.get("customer_email") as string,
+      quantity_reserved: parseInt(formData.get("quantity_reserved") as string, 10),
+      reserved_date: formData.get("reserved_date") as string,
+      payment_status: formData.get("payment_status") as string,
+      amount_paid: parseFloat(formData.get("amount_paid") as string),
+      total_amount: parseFloat(formData.get("total_amount") as string),
+      notes: formData.get("notes") as string,
+      status: "active",
     };
 
     try {
@@ -156,19 +138,10 @@ export default function ReservationsPage() {
 
   const handleOpenDialog = (reservation: ReservationWithDetails | null = null) => {
     setEditingReservation(reservation);
-    if (reservation) {
-      setSelectedPlantingId(reservation.planting_id || "");
-    } else if (plantingIdFilter && typeof plantingIdFilter === 'string') {
-      setSelectedPlantingId(plantingIdFilter);
-    }
     setIsDialogOpen(true);
   };
 
   const activePlantings = plantings.filter(p => p.status === "active");
-
-  const filteredReservations = plantingIdFilter 
-    ? reservations.filter(r => r.planting_id === plantingIdFilter)
-    : reservations;
 
   const getPlantingName = (plantingId: string | null) => {
     if (!plantingId) return "Unknown Planting";
@@ -202,7 +175,7 @@ export default function ReservationsPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingReservation ? "Edit" : "New"} Reservation</DialogTitle>
+            <DialogTitle>{editingReservation ? "Edit Reservation" : "Add New Reservation"}</DialogTitle>
             <DialogDescription>{editingReservation ? "Update the reservation details." : "Create a new customer reservation."}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveReservation} className="space-y-4 pt-4">
@@ -255,33 +228,29 @@ export default function ReservationsPage() {
           <Table>
             <TableHeader><TableRow><TableHead>Customer</TableHead><TableHead>Plant Type</TableHead><TableHead>Quantity</TableHead><TableHead>Date</TableHead><TableHead>Payment</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
             <TableBody>
-              {filteredReservations.length === 0 ? (<TableRow><TableCell colSpan={7} className="text-center h-24">{plantingIdFilter ? "No reservations for this planting." : "No reservations yet."}</TableCell></TableRow>) : (
-                filteredReservations.map(r => {
-                  const planting = r.plantings;
-                  return (
-                    <TableRow key={r.id}>
-                      <TableCell><div className="font-medium">{r.customer_name}</div><div className="text-xs text-gray-500">{r.customer_phone}</div></TableCell>
-                      <TableCell><div className="font-medium">{planting?.plant_types?.name || "N/A"}</div><div className="text-xs text-gray-500">{planting?.plant_types?.variety}</div></TableCell>
-                      <TableCell>{r.quantity}</TableCell>
-                      <TableCell>{new Date(r.reservation_date || "").toLocaleDateString()}</TableCell>
-                      <TableCell>
-                        <Badge variant={r.payment_status === "paid" ? "default" : r.payment_status === "partial" ? "secondary" : "outline"} className={r.payment_status === "paid" ? "bg-green-100 text-green-800" : r.payment_status === "partial" ? "bg-yellow-100 text-yellow-800" : "bg-gray-100 text-gray-800"}>{r.payment_status}</Badge>
-                        {r.total_amount && (<div className="text-xs text-gray-500 mt-1">{r.amount_paid || 0} / {r.total_amount}</div>)}
-                      </TableCell>
-                      <TableCell><Badge variant={r.status === "active" ? "default" : r.status === "completed" ? "secondary" : "outline"} className={r.status === "active" ? "bg-blue-100 text-blue-800" : r.status === "completed" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>{r.status}</Badge></TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-1 justify-end">
-                          {r.status === "active" && (<>
+              {loading ? (
+                <TableRow><TableCell colSpan={8} className="text-center">Loading...</TableCell></TableRow>
+              ) : filteredReservations.map(r => (
+                <TableRow key={r.id}>
+                  <TableCell>{r.plantings?.plant_types?.name} ({r.plantings?.batch_number})</TableCell>
+                  <TableCell>{r.customer_name}</TableCell>
+                  <TableCell>{new Date(r.reserved_date).toLocaleDateString()}</TableCell>
+                  <TableCell>{r.quantity_reserved}</TableCell>
+                  <TableCell>
+                    <Badge variant={r.status === 'active' ? 'default' : 'secondary'}>{r.status}</Badge>
+                  </TableCell>
+                  <TableCell>{r.payment_status}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex gap-1 justify-end">
+                      {r.status === "active" && (<>
                               <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(r)} title="Edit"><Edit className="w-4 h-4" /></Button>
                               <Button size="sm" variant="ghost" className="text-green-600" onClick={() => handleCompleteReservation(r.id)} title="Complete"><CheckCircle2 className="w-4 h-4" /></Button>
                               <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleCancelReservation(r.id)} title="Cancel"><X className="w-4 h-4" /></Button>
                           </>)}
                         </div>
                       </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent>

@@ -20,9 +20,10 @@ export type Database = {
           created_at: string | null
           harvest_date: string
           id: string
+          is_closed: boolean
           notes: string | null
           planting_id: string
-          quality_grade: string | null
+          quality: string
           quantity_harvested: number
           updated_at: string | null
         }
@@ -30,9 +31,10 @@ export type Database = {
           created_at?: string | null
           harvest_date: string
           id?: string
+          is_closed?: boolean
           notes?: string | null
           planting_id: string
-          quality_grade?: string | null
+          quality?: string
           quantity_harvested: number
           updated_at?: string | null
         }
@@ -40,9 +42,10 @@ export type Database = {
           created_at?: string | null
           harvest_date?: string
           id?: string
+          is_closed?: boolean
           notes?: string | null
           planting_id?: string
-          quality_grade?: string | null
+          quality?: string
           quantity_harvested?: number
           updated_at?: string | null
         }
@@ -119,8 +122,8 @@ export type Database = {
       plant_types: {
         Row: {
           created_at: string | null
-          days_to_maturity: number
           description: string | null
+          growth_duration: number
           id: string
           name: string
           updated_at: string | null
@@ -128,8 +131,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          days_to_maturity: number
           description?: string | null
+          growth_duration: number
           id?: string
           name: string
           updated_at?: string | null
@@ -137,8 +140,8 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          days_to_maturity?: number
           description?: string | null
+          growth_duration?: number
           id?: string
           name?: string
           updated_at?: string | null
@@ -157,8 +160,10 @@ export type Database = {
           notes: string | null
           plant_type_id: string
           quantity: number
+          remaining_quantity: number | null
           status: string
           updated_at: string | null
+          variety: string | null
         }
         Insert: {
           batch_number: string
@@ -170,8 +175,10 @@ export type Database = {
           notes?: string | null
           plant_type_id: string
           quantity: number
+          remaining_quantity?: number | null
           status?: string
           updated_at?: string | null
+          variety?: string | null
         }
         Update: {
           batch_number?: string
@@ -183,8 +190,10 @@ export type Database = {
           notes?: string | null
           plant_type_id?: string
           quantity?: number
+          remaining_quantity?: number | null
           status?: string
           updated_at?: string | null
+          variety?: string | null
         }
         Relationships: [
           {
@@ -235,51 +244,59 @@ export type Database = {
       }
       reservations: {
         Row: {
+          amount_paid: number | null
           created_at: string | null
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string
           id: string
-          location_id: string
           notes: string | null
-          plant_type_id: string
-          quantity: number
+          payment_status: string
+          planting_id: string
+          quantity_reserved: number
           reserved_date: string
           status: string
+          total_amount: number | null
           updated_at: string | null
         }
         Insert: {
+          amount_paid?: number | null
           created_at?: string | null
+          customer_email?: string | null
+          customer_name: string
+          customer_phone: string
           id?: string
-          location_id: string
           notes?: string | null
-          plant_type_id: string
-          quantity: number
+          payment_status?: string
+          planting_id: string
+          quantity_reserved: number
           reserved_date: string
           status?: string
+          total_amount?: number | null
           updated_at?: string | null
         }
         Update: {
+          amount_paid?: number | null
           created_at?: string | null
+          customer_email?: string | null
+          customer_name?: string
+          customer_phone?: string
           id?: string
-          location_id?: string
           notes?: string | null
-          plant_type_id?: string
-          quantity?: number
+          payment_status?: string
+          planting_id?: string
+          quantity_reserved?: number
           reserved_date?: string
           status?: string
+          total_amount?: number | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "reservations_location_id_fkey"
-            columns: ["location_id"]
+            foreignKeyName: "reservations_planting_id_fkey"
+            columns: ["planting_id"]
             isOneToOne: false
-            referencedRelation: "locations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reservations_plant_type_id_fkey"
-            columns: ["plant_type_id"]
-            isOneToOne: false
-            referencedRelation: "plant_types"
+            referencedRelation: "plantings"
             referencedColumns: ["id"]
           },
         ]
@@ -327,42 +344,42 @@ export type Database = {
       }
       treatments: {
         Row: {
+          application_date: string
           application_method: string
           applied_by: string | null
-          chemical_name: string
           created_at: string | null
-          date_applied: string
           dosage: string
           id: string
+          name: string
           notes: string | null
           planting_ids: string[]
-          treatment_type: string
+          type: string
           updated_at: string | null
         }
         Insert: {
+          application_date: string
           application_method: string
           applied_by?: string | null
-          chemical_name: string
           created_at?: string | null
-          date_applied: string
           dosage: string
           id?: string
+          name: string
           notes?: string | null
           planting_ids: string[]
-          treatment_type: string
+          type: string
           updated_at?: string | null
         }
         Update: {
+          application_date?: string
           application_method?: string
           applied_by?: string | null
-          chemical_name?: string
           created_at?: string | null
-          date_applied?: string
           dosage?: string
           id?: string
+          name?: string
           notes?: string | null
           planting_ids?: string[]
-          treatment_type?: string
+          type?: string
           updated_at?: string | null
         }
         Relationships: []

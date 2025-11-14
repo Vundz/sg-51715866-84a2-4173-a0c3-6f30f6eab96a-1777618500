@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Edit, Trash2, TestTube2, ChevronsRight } from "lucide-react";
-import { treatmentService } from "@/services/treatmentService";
+import { treatmentService, TreatmentWithDetails } from "@/services/treatmentService";
 import { plantingService } from "@/services/plantingService";
+import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 
 type Treatment = Database["public"]["Tables"]["treatments"]["Row"];
@@ -34,6 +35,7 @@ export default function TreatmentsPage() {
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [selectedPlantingIds, setSelectedPlantingIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     loadData();
@@ -50,7 +52,7 @@ export default function TreatmentsPage() {
       setPlantings(plantingsData as PlantingWithDetails[]);
     } catch (error) {
       console.error("Error loading data:", error);
-      alert("Failed to load data. Please try again.");
+      toast({ title: "Error", description: "Failed to load data.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -71,24 +73,24 @@ export default function TreatmentsPage() {
     e.preventDefault();
 
     const formData = new FormData(e.currentTarget);
-    const targetPlantingIds = isBulkMode ? selectedPlantingIds : [formData.get("planting_ids") as string];
-
-    if (targetPlantingIds.length === 0 || !targetPlantingIds[0]) {
-      alert("Please select at least one planting.");
+    const planting_ids = formData.getAll("planting_ids") as string[];
+    
+    if (planting_ids.length === 0) {
+      toast({ title: "Error", description: "Please select at least one planting.", variant: "destructive" });
       return;
     }
 
     const treatmentData = {
-      chemical_name: formData.get("chemical_name") as string,
-      treatment_type: formData.get("treatment_type") as string,
-      date_applied: formData.get("date_applied") as string,
-      planting_ids: targetPlantingIds,
-      dosage: (formData.get("dosage") as string) || null,
-      application_method: (formData.get("application_method") as string) || null,
-      notes: (formData.get("notes") as string) || null,
-      applied_by: (formData.get("applied_by") as string) || null,
+      name: formData.get("name") as string,
+      type: formData.get("type") as string,
+      application_date: formData.get("application_date") as string,
+      planting_ids: planting_ids,
+      dosage: formData.get("dosage") as string,
+      application_method: formData.get("application_method") as string,
+      notes: formData.get("notes") as string,
+      applied_by: formData.get("applied_by") as string,
     };
-    
+
     try {
       if (editingTreatment) {
         await treatmentService.updateTreatment(editingTreatment.id, treatmentData);
@@ -150,7 +152,7 @@ export default function TreatmentsPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{isBulkMode ? "Bulk Apply Treatment" : (editingTreatment ? "Edit" : "Add") + " Treatment"}</DialogTitle>
+            <DialogTitle>{editingTreatment ? "Edit Treatment" : "Add New Treatment"}</DialogTitle>
             <DialogDescription>{isBulkMode ? "Apply the same treatment to multiple plantings at once." : "Log a single treatment application."}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveTreatment} className="space-y-4 pt-4">
@@ -174,7 +176,9 @@ export default function TreatmentsPage() {
                 <Select name="planting_ids" required defaultValue={editingTreatment?.planting_ids?.[0]}>
                   <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
                   <SelectContent>
-                    {activePlantings.map(p => <SelectItem key={p.id} value={p.id}>{getPlantingDetails(p.id).name} ({getPlantingDetails(p.id).variety})</SelectItem>)}
+                    {plantings.map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.plant_types?.name} ({p.batch_number})</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -203,24 +207,21 @@ export default function TreatmentsPage() {
           <Table>
             <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Name</TableHead><TableHead>Type</TableHead><TableHead>Applied To</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
             <TableBody>
-              {treatments.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center h-24">No treatments recorded yet.</TableCell></TableRow>
-              ) : (
-                treatments.map(treatment => (
-                  <TableRow key={treatment.id}>
-                    <TableCell>{new Date(treatment.date_applied).toLocaleDateString()}</TableCell>
-                    <TableCell className="font-medium">{treatment.chemical_name}</TableCell>
-                    <TableCell>{treatment.treatment_type}</TableCell>
-                    <TableCell>{treatment.planting_ids?.length} planting(s)</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex gap-1 justify-end">
-                        <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(treatment)}><Edit className="w-4 h-4" /></Button>
-                        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteTreatment(treatment.id)}><Trash2 className="w-4 h-4" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
+              {loading ? (
+                <TableRow><TableCell colSpan={7} className="text-center">Loading...</TableCell></TableRow>
+              ) : filteredTreatments.map(t => (
+                <TableRow key={t.id}>
+                  <TableCell>{t.name}</TableCell>
+                  <TableCell>{t.type}</TableCell>
+                  <TableCell>{t.plantings.map(p => p.batch_number).join(', ')}</TableCell>
+                  <TableCell>{new Date(t.application_date).toLocaleDateString()}</TableCell>
+                  <TableCell>{t.applied_by}</TableCell>
+                  <TableCell>
+                    <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(t)}><Edit className="w-4 h-4" /></Button>
+                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteTreatment(t.id)}><Trash2 className="w-4 h-4" /></Button>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent>

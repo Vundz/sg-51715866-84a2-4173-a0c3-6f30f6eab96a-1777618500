@@ -1,121 +1,126 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
-type Treatment = Database["public"]["Tables"]["treatments"]["Row"];
-type TreatmentInsert = Database["public"]["Tables"]["treatments"]["Insert"];
-type TreatmentUpdate = Database["public"]["Tables"]["treatments"]["Update"];
+export type Treatment = Database["public"]["Tables"]["treatments"]["Row"];
+export type PlantingTreatment = Database["public"]["Tables"]["planting_treatments"]["Row"];
+export type Planting = Database["public"]["Tables"]["plantings"]["Row"] & {
+    plant_types: { name: string } | null;
+};
+export type TreatmentWithDetails = Treatment & {
+  plantings: { id: string, batch_number: string }[];
+};
 
 export const treatmentService = {
-  async getTreatments() {
+  async getTreatments(): Promise<TreatmentWithDetails[]> {
     const { data, error } = await supabase
       .from("treatments")
-      .select(`*`)
-      .order("date_applied", { ascending: false });
+      .select(`
+        *,
+        plantings ( id, batch_number )
+      `);
 
     if (error) throw error;
-
-    // Manually fetch plantings for each treatment
-    const treatmentsWithPlantings = await Promise.all(
-      data.map(async (treatment) => {
-        if (!treatment.planting_ids || treatment.planting_ids.length === 0) {
-          return { ...treatment, plantings: [] };
-        }
-        const { data: plantings, error: plantingsError } = await supabase
-          .from("plantings")
-          .select(`
-            id,
-            batch_number,
-            plant_types ( name, variety ),
-            locations ( name )
-          `)
-          .in("id", treatment.planting_ids);
-
-        if (plantingsError) {
-          console.error("Error fetching plantings for treatment:", treatment.id, plantingsError);
-          return { ...treatment, plantings: [] };
-        }
-
-        return { ...treatment, plantings: plantings || [] };
-      })
-    );
-
-    return treatmentsWithPlantings as any;
+    
+    return data.map(t => ({
+        ...t,
+        plantings: Array.isArray(t.plantings) ? t.plantings : []
+    }));
   },
 
-  async getTreatmentById(id: string) {
+  async getTreatment(id: string) {
     const { data, error } = await supabase
       .from("treatments")
-      .select(`*`)
+      .select(`
+        *,
+        plantings ( id, batch_number )
+      `)
       .eq("id", id)
       .single();
 
     if (error) throw error;
-    return data;
+    
+    return {
+        ...data,
+        plantings: Array.isArray(data.plantings) ? data.plantings : []
+    };
   },
 
-  async createTreatment(treatment: TreatmentInsert) {
-    const { data, error } = await supabase
+  async addTreatment(treatment: Omit<Treatment, "id" | "created_at" | "updated_at"> & { planting_ids: string[] }) {
+    const { planting_ids, ...treatmentData } = treatment;
+    const { data: insertData, error: insertError } = await supabase
       .from("treatments")
-      .insert([treatment])
-      .select()
-      .single();
+      .insert([treatmentData])
+      .select();
 
-    if (error) throw error;
-    return data as Treatment;
+    if (insertError) throw insertError;
+    const newTreatment = insertData[0];
+
+    if (planting_ids && planting_ids.length > 0) {
+      const plantingTreatments = planting_ids.map(planting_id => ({
+        planting_id: planting_id,
+        treatment_id: newTreatment.id,
+      }));
+
+      const { error: ptError } = await supabase.from("planting_treatments").insert(plantingTreatments);
+      if (ptError) {
+        // roll back treatment creation?
+        console.error("Error linking treatment to plantings:", ptError);
+        throw ptError;
+      }
+    }
+
+    return newTreatment;
   },
 
-  async createBulkTreatments(treatments: TreatmentInsert[]) {
+  async updateTreatment(id: string, treatment: Partial<Omit<Treatment, "id" | "created_at" | "updated_at">> & { planting_ids?: string[] }) {
+     const { planting_ids, ...treatmentData } = treatment;
+    
     const { data, error } = await supabase
       .from("treatments")
-      .insert(treatments)
+      .update(treatmentData)
+      .eq("id", id)
       .select();
 
     if (error) throw error;
-    return data as Treatment[];
-  },
 
-  async updateTreatment(id: string, updates: TreatmentUpdate) {
-    const { data, error } = await supabase
-      .from("treatments")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single();
+    if (planting_ids) {
+       const { error: deleteError } = await supabase
+        .from("planting_treatments")
+        .delete()
+        .eq("treatment_id", id);
+      if (deleteError) throw deleteError;
 
-    if (error) throw error;
-    return data as Treatment;
+      if (planting_ids.length > 0) {
+        const plantingTreatments = planting_ids.map(planting_id => ({
+          planting_id: planting_id,
+          treatment_id: id,
+        }));
+        const { error: ptError } = await supabase.from("planting_treatments").insert(plantingTreatments);
+        if (ptError) throw ptError;
+      }
+    }
+
+    return data[0];
   },
 
   async deleteTreatment(id: string) {
-    const { error } = await supabase
+    // First delete from the join table
+    const { error: ptError } = await supabase
+        .from("planting_treatments")
+        .delete()
+        .eq("treatment_id", id);
+    if (ptError) {
+        console.error("Error deleting from planting_treatments:", ptError);
+        throw ptError;
+    }
+
+    // Then delete the treatment itself
+    const { data, error } = await supabase
       .from("treatments")
       .delete()
       .eq("id", id);
 
     if (error) throw error;
-    return true;
-  },
-
-  async getTreatmentsByPlanting(plantingId: string) {
-    const { data, error } = await supabase
-      .from("treatments")
-      .select("*")
-      .contains("planting_ids", [plantingId])
-      .order("date_applied", { ascending: false });
-
-    if (error) throw error;
-    return data as Treatment[];
-  },
-
-  async getTreatmentsByType(treatmentType: string) {
-    const { data, error } = await supabase
-      .from("treatments")
-      .select(`*`)
-      .eq("treatment_type", treatmentType)
-      .order("date_applied", { ascending: false });
-
-    if (error) throw error;
     return data;
-  }
+  },
 };

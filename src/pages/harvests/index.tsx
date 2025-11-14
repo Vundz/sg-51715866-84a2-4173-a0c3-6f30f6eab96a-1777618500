@@ -9,8 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Package, Printer } from "lucide-react";
-import { harvestService } from "@/services/harvestService";
+import { harvestService, HarvestWithDetails } from "@/services/harvestService";
 import { plantingService } from "@/services/plantingService";
+import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 
 type Harvest = Database["public"]["Tables"]["harvests"]["Row"];
@@ -23,10 +24,6 @@ type PlantingWithDetails = Planting & {
   locations: Location;
 };
 
-type HarvestWithDetails = Harvest & {
-  plantings: PlantingWithDetails;
-};
-
 export default function HarvestsPage() {
   const [harvests, setHarvests] = useState<HarvestWithDetails[]>([]);
   const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
@@ -34,12 +31,18 @@ export default function HarvestsPage() {
   const [editingHarvest, setEditingHarvest] = useState<HarvestWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [harvestedQuantities, setHarvestedQuantities] = useState<Record<string, number>>({});
+  const [filters, setFilters] = useState({
+    planting_id: "",
+    date_from: "",
+    date_to: "",
+    status: "",
+  });
 
   useEffect(() => {
-    loadData();
+    loadInitialData();
   }, []);
 
-  const loadData = async () => {
+  const loadInitialData = async () => {
     try {
       setLoading(true);
       const [harvestsData, plantingsData] = await Promise.all([
@@ -62,6 +65,21 @@ export default function HarvestsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    let filtered = harvests;
+    if (filters.date_from) {
+      filtered = filtered.filter(h => new Date(h.harvest_date) >= new Date(filters.date_from));
+    }
+    if (filters.date_to) {
+      filtered = filtered.filter(h => new Date(h.harvest_date) <= new Date(filters.date_to));
+    }
+    if (filters.status) {
+      filtered = filtered.filter(h => h.status === filters.status);
+    }
+    
+    setFilteredHarvests(filtered);
+  }, [harvests, searchQuery, filters]);
 
   const getRemainingQuantity = (planting: PlantingWithDetails) => {
     const harvested = harvestedQuantities[planting.id] || 0;
@@ -171,7 +189,7 @@ export default function HarvestsPage() {
         await harvestService.createHarvest(harvestData);
       }
       
-      await loadData();
+      await loadInitialData();
       setIsDialogOpen(false);
       setEditingHarvest(null);
     } catch (error) {
@@ -185,7 +203,7 @@ export default function HarvestsPage() {
     
     try {
       await harvestService.deleteHarvest(id);
-      await loadData();
+      await loadInitialData();
     } catch (error) {
       console.error("Error deleting harvest:", error);
       alert("Failed to delete harvest. Please try again.");
@@ -224,51 +242,54 @@ export default function HarvestsPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>{editingHarvest ? "Edit" : "Add"} Harvest</DialogTitle>
-            <DialogDescription>{editingHarvest ? "Update the details for this harvest." : "Record a new harvest from a planting."}</DialogDescription>
+            <DialogTitle>{editingHarvest ? "Edit Harvest" : "Add New Harvest"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSaveHarvest} className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <Label htmlFor="planting_id">Planting</Label>
-              <Select name="planting_id" required defaultValue={editingHarvest?.planting_id}>
-                <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
-                <SelectContent>
-                  {plantings.filter(p => p.status === "active").map(p => {
-                    const remaining = getRemainingQuantity(p);
-                    return (
-                      <SelectItem key={p.id} value={p.id} disabled={remaining <= 0}>
-                        {p.plant_types.name} ({p.plant_types.variety}) - Remaining: {remaining}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+          <form onSubmit={handleSaveHarvest} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="planting_id">Planting Batch</Label>
+                <Select name="planting_id" defaultValue={editingHarvest?.planting_id} required>
+                  <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
+                  <SelectContent>
+                    {plantings.filter(p => p.status === "active").map(p => {
+                      const remaining = getRemainingQuantity(p);
+                      return (
+                        <SelectItem key={p.id} value={p.id} disabled={remaining <= 0}>
+                          {p.plant_types.name} ({p.plant_types.variety}) - Remaining: {remaining}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="harvest_date">Harvest Date</Label>
+                <Input id="harvest_date" name="harvest_date" type="date" defaultValue={editingHarvest?.harvest_date.split('T')[0]} required />
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="quantity_harvested">Quantity Harvested</Label>
                 <Input id="quantity_harvested" name="quantity_harvested" type="number" defaultValue={editingHarvest?.quantity_harvested} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="harvest_date">Harvest Date</Label>
-                <Input id="harvest_date" name="harvest_date" type="date" defaultValue={editingHarvest?.harvest_date || new Date().toISOString().split("T")[0]} required />
+                <Label htmlFor="status">Status</Label>
+                <Select name="status" defaultValue={editingHarvest?.status ?? 'harvested'}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="harvested">Harvested</SelectItem>
+                    <SelectItem value="sold">Sold</SelectItem>
+                    <SelectItem value="processed">Processed</SelectItem>
+                    <SelectItem value="waste">Waste</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="quality_grade">Quality</Label>
-              <Select name="quality_grade" required defaultValue={editingHarvest?.quality_grade || undefined}>
-                <SelectTrigger><SelectValue placeholder="Select quality" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="excellent">Excellent</SelectItem>
-                  <SelectItem value="good">Good</SelectItem>
-                  <SelectItem value="fair">Fair</SelectItem>
-                  <SelectItem value="poor">Poor</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea id="notes" name="notes" defaultValue={editingHarvest?.notes || ""} />
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea id="notes" name="notes" defaultValue={editingHarvest?.notes ?? ""} />
             </div>
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>

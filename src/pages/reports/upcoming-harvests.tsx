@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,9 +9,13 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileSpreadsheet, FileText, Calendar, AlertCircle } from "lucide-react";
 import { Planting, PlantType, Location } from "@/types";
 import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
+import { plantingService } from "@/services/plantingService";
+import { useToast } from "@/hooks/use-toast";
 
-export default function UpcomingHarvestsReportPage() {
-  const [plantings, setPlantings] = useState<Planting[]>([]);
+type PlantingData = Awaited<ReturnType<typeof plantingService.getPlantingsWithDetails>>[0];
+
+const UpcomingHarvestsReport: React.FC = () => {
+  const [plantings, setPlantings] = useState<PlantingData[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [daysThreshold, setDaysThreshold] = useState("7");

@@ -86,7 +86,7 @@ export default function PlantingsPage() {
 
   const getReservedQuantity = (plantingId: string): number => {
     const activeReservations = reservations.filter(r => r.planting_id === plantingId && r.status === 'active');
-    return activeReservations.reduce((sum, r) => sum + (r.quantity || 0), 0);
+    return activeReservations.reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
   };
   
   const getAvailableQuantity = (planting: Planting): number => {
@@ -169,45 +169,40 @@ export default function PlantingsPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    if (!selectedPlantTypeName || !selectedVariety) {
-      toast({ title: "Validation Error", description: "Please select both Plant Type and Variety", variant: "destructive" });
-      return;
+    const selectedPlantType = plantTypes.find(pt => pt.id === (formData.get("plant_type_id") as string));
+    if (!selectedPlantType) {
+        toast({ title: "Error", description: "Selected plant type not found.", variant: "destructive" });
+        return;
     }
-    
-    const plantType = plantTypes.find(
-      pt => pt.name === selectedPlantTypeName && pt.variety === selectedVariety
-    );
-    
-    if (!plantType) {
-      toast({ title: "Validation Error", description: "Invalid plant type and variety combination", variant: "destructive" });
-      return;
-    }
-    
-    const datePlanted = formData.get("date_planted") as string;
-    
-    const batchNumber = generateBatchNumber(
-      plantType.name,
-      plantType.variety,
-      datePlanted
-    );
-    
-    const quantity = parseInt(formData.get("quantity") as string);
+
+    const datePlanted = new Date(formData.get("date_planted") as string);
+    const expectedHarvestDate = new Date(datePlanted);
+    expectedHarvestDate.setDate(datePlanted.getDate() + (selectedPlantType.growth_duration || 0));
+
     const plantingData = {
-      plant_type_id: plantType.id,
+      plant_type_id: formData.get("plant_type_id") as string,
       location_id: formData.get("location_id") as string,
-      quantity,
-      date_planted: datePlanted,
-      batch_number: batchNumber,
-      status: (formData.get("status") as Planting['status']) || 'active',
-      remaining_quantity: editingPlanting?.remaining_quantity ?? quantity,
+      quantity: parseInt(formData.get("quantity") as string),
+      date_planted: formData.get("date_planted") as string,
+      expected_harvest_date: expectedHarvestDate.toISOString().split('T')[0],
+      batch_number: formData.get("batch_number") as string,
+      status: formData.get("status") as string,
+      notes: formData.get("notes") as string,
+      variety: formData.get("variety") as string,
     };
+    
+    const finalPlantingData = {
+        ...plantingData,
+        remaining_quantity: plantingData.quantity,
+    }
 
     try {
+      let savedPlanting;
       if (editingPlanting) {
-        await plantingService.updatePlanting(editingPlanting.id, plantingData);
+        await plantingService.updatePlanting(editingPlanting.id, finalPlantingData);
         toast({ title: "Success", description: "Planting updated successfully." });
       } else {
-        await plantingService.createPlanting(plantingData);
+        savedPlanting = await plantingService.addPlanting(finalPlantingData);
         toast({ title: "Success", description: "Planting created successfully." });
       }
       

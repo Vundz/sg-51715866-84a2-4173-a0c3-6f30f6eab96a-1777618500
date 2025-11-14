@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,9 +10,17 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileSpreadsheet, FileText, Package } from "lucide-react";
 import { Harvest, Planting, PlantType } from "@/types";
 import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
+import { harvestService } from "@/services/harvestService";
+import { plantingService } from "@/services/plantingService";
+import { useToast } from "@/hooks/use-toast";
+import "chart.js/auto";
+import { Bar } from "react-chartjs-2";
 
-export default function HarvestsReportPage() {
-  const [harvests, setHarvests] = useState<Harvest[]>([]);
+type HarvestData = Awaited<ReturnType<typeof harvestService.getHarvests>>[0];
+type PlantingData = Awaited<ReturnType<typeof plantingService.getPlantings>>[0];
+
+const HarvestsReportPage: React.FC = () => {
+  const [harvests, setHarvests] = useState<HarvestData[]>([]);
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
 

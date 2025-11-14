@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +7,14 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileSpreadsheet, FileText, TrendingUp } from "lucide-react";
 import { Location, Planting, PlantType } from "@/types";
 import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
+import { locationService } from "@/services/locationService";
+import { plantingService } from "@/services/plantingService";
+import { harvestService } from "@/services/harvestService";
+import { useToast } from "@/hooks/use-toast";
+
+type LocationData = Awaited<ReturnType<typeof locationService.getLocations>>[0];
+type PlantingData = Awaited<ReturnType<typeof plantingService.getPlantings>>[0];
+type HarvestData = Awaited<ReturnType<typeof harvestService.getHarvests>>[0];
 
 interface LocationDetail {
   location: Location;
