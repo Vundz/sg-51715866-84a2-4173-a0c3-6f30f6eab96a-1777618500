@@ -149,6 +149,7 @@ export default function TreatmentsPage() {
       } else {
         const treatmentPayload = {
             ...treatmentData,
+            planting_ids: finalPlantingIds
         }
         await treatmentService.createTreatment(treatmentPayload, finalPlantingIds);
         toast({ title: "Success", description: "Treatment created." });
