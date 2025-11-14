@@ -134,11 +134,11 @@ export default function PlantTypesPage() {
           </DialogHeader>
           <form onSubmit={handleSavePlantType} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Plant Name</Label>
+              <Label htmlFor="name">Plant Name <span className="text-red-500">*</span></Label>
               <Input id="name" name="name" defaultValue={editingPlantType?.name} required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="variety">Variety</Label>
+              <Label htmlFor="variety">Variety <span className="text-red-500">*</span></Label>
               <Input id="variety" name="variety" defaultValue={editingPlantType?.variety} required />
             </div>
              <div className="space-y-2">
@@ -147,7 +147,7 @@ export default function PlantTypesPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="growth_duration">Growth Duration (days)</Label>
+                <Label htmlFor="growth_duration">Growth Duration (days) <span className="text-red-500">*</span></Label>
                 <Input id="growth_duration" name="growth_duration" type="number" defaultValue={editingPlantType?.growth_duration} required />
               </div>
               <div className="space-y-2">
