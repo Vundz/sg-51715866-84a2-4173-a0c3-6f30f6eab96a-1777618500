@@ -29,6 +29,7 @@ export default function BulkHarvestPage() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [harvestedQuantities, setHarvestedQuantities] = useState<Record<string, number>>({});
   const { toast } = useToast();
   const router = useRouter();
 
@@ -36,9 +37,30 @@ export default function BulkHarvestPage() {
     const loadPlantings = async () => {
       try {
         setLoading(true);
-        const data = await plantingService.getPlantingsWithDetails();
+        const [plantingsData, harvestsData] = await Promise.all([
+          plantingService.getPlantingsWithDetails(),
+          harvestService.getHarvests()
+        ]);
+        
+        // Calculate harvested quantities for each planting
+        const quantities: Record<string, number> = {};
+        plantingsData.forEach(p => {
+          const totalHarvested = harvestsData
+            .filter(h => h.planting_id === p.id)
+            .reduce((sum, h) => sum + h.quantity_harvested, 0);
+          quantities[p.id] = totalHarvested;
+        });
+        setHarvestedQuantities(quantities);
+        
         // Only show active plantings that have quantity remaining
-        setPlantings(data.filter(p => p.status === 'active' && (p.remaining_quantity ?? p.quantity) > 0));
+        const activePlantings = plantingsData.filter(p => {
+          if (p.status !== 'active') return false;
+          const totalHarvested = quantities[p.id] || 0;
+          const available = p.quantity - totalHarvested;
+          return available > 0;
+        });
+        
+        setPlantings(activePlantings);
       } catch (error) {
         console.error("Error loading plantings:", error);
         toast({ title: "Error", description: "Failed to load plantings.", variant: "destructive" });
@@ -61,7 +83,8 @@ export default function BulkHarvestPage() {
   }, [plantings, searchQuery]);
 
   const getAvailableQuantity = (planting: PlantingWithDetails): number => {
-    return planting.remaining_quantity ?? planting.quantity;
+    const totalHarvested = harvestedQuantities[planting.id] || 0;
+    return planting.quantity - totalHarvested;
   };
 
   const validateQuantity = (plantingId: string, quantity: number, available: number): string => {

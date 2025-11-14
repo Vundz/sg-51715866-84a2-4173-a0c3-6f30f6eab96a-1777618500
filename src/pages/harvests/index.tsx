@@ -50,9 +50,13 @@ export default function HarvestsPage() {
       setHarvests(harvestsData);
       setPlantings(plantingsData);
 
+      // Calculate total harvested quantity for each planting
       const quantities: Record<string, number> = {};
       for (const p of plantingsData) {
-        quantities[p.id] = await harvestService.getTotalHarvestedQuantity(p.id);
+        const totalHarvested = harvestsData
+          .filter(h => h.planting_id === p.id)
+          .reduce((sum, h) => sum + h.quantity_harvested, 0);
+        quantities[p.id] = totalHarvested;
       }
       setHarvestedQuantities(quantities);
 
