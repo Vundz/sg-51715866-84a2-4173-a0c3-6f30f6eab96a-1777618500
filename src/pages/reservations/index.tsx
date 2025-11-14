@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, Edit, X, ShoppingCart, CheckCircle2, AlertCircle } from "lucide-react";
+import { Plus, Edit, X, ShoppingCart, CheckCircle2, AlertCircle, Filter } from "lucide-react";
 import { useRouter } from "next/router";
 import { reservationService } from "@/services/reservationService";
 import { plantingService } from "@/services/plantingService";
@@ -43,6 +43,7 @@ const ReservationsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [selectedPlantingId, setSelectedPlantingId] = useState<string>("");
+  const [selectedPlantTypeFilter, setSelectedPlantTypeFilter] = useState<string>("");
 
   useEffect(() => {
     loadData();
@@ -167,6 +168,7 @@ const ReservationsPage: React.FC = () => {
   const handleOpenDialog = (reservation: ReservationWithDetails | null = null) => {
     setEditingReservation(reservation);
     setSelectedPlantingId(reservation?.planting_id || (plantingIdFilter as string) || "");
+    setSelectedPlantTypeFilter("");
     setIsDialogOpen(true);
   };
   
@@ -174,9 +176,25 @@ const ReservationsPage: React.FC = () => {
     setIsDialogOpen(false);
     setEditingReservation(null);
     setSelectedPlantingId("");
+    setSelectedPlantTypeFilter("");
   };
 
   const activePlantings = plantings.filter(p => p.status === "active");
+
+  const filteredActivePlantings = useMemo(() => {
+    if (!selectedPlantTypeFilter) return activePlantings;
+    return activePlantings.filter(p => p.plant_type_id === selectedPlantTypeFilter);
+  }, [activePlantings, selectedPlantTypeFilter]);
+
+  const uniquePlantTypes = useMemo(() => {
+    const types = new Map<string, PlantType>();
+    activePlantings.forEach(p => {
+      if (p.plant_types && p.plant_type_id) {
+        types.set(p.plant_type_id, p.plant_types);
+      }
+    });
+    return Array.from(types.values());
+  }, [activePlantings]);
 
   const getPlantingName = (plantingId: string | null) => {
     if (!plantingId) return "Unknown Planting";
@@ -278,17 +296,43 @@ const ReservationsPage: React.FC = () => {
           </DialogHeader>
           <form onSubmit={handleSaveReservation} className="space-y-4 pt-4">
             <div className="space-y-2">
+              <Label htmlFor="plant_type_filter" className="flex items-center gap-2">
+                <Filter className="w-4 h-4" />
+                Filter by Plant Type
+              </Label>
+              <Select value={selectedPlantTypeFilter} onValueChange={setSelectedPlantTypeFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All plant types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All plant types</SelectItem>
+                  {uniquePlantTypes.map(pt => (
+                    <SelectItem key={pt.id} value={pt.id}>
+                      {pt.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="planting_id">Planting Batch *</Label>
               <Select name="planting_id" required value={selectedPlantingId} onValueChange={setSelectedPlantingId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a planting batch" />
                 </SelectTrigger>
                 <SelectContent>
-                  {activePlantings.map(p => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.plant_types?.name} ({p.plant_types?.variety}) - Available: {formatNumber(getAvailableQuantity(p.id))}
-                    </SelectItem>
-                  ))}
+                  {filteredActivePlantings.length === 0 ? (
+                    <div className="px-2 py-1.5 text-sm text-gray-500">
+                      {selectedPlantTypeFilter ? "No batches available for selected plant type" : "No active planting batches available"}
+                    </div>
+                  ) : (
+                    filteredActivePlantings.map(p => (
+                      <SelectItem key={p.id} value={p.id}>
+                        Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - Qty: {formatNumber(p.quantity)} - Available: {formatNumber(getAvailableQuantity(p.id))}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               {selectedPlantingId && (
