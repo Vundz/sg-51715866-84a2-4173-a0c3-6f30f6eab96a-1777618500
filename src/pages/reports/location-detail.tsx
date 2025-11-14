@@ -10,6 +10,7 @@ import { plantingService } from "@/services/plantingService";
 import { plantTypeService } from "@/services/plantTypeService";
 import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
+import { formatNumber } from "@/lib/format";
 
 type LocationData = Database["public"]["Tables"]["locations"]["Row"];
 type PlantingData = Database["public"]["Tables"]["plantings"]["Row"];
@@ -115,7 +116,7 @@ export default function LocationDetailReportPage() {
               <div className="flex items-start justify-between flex-wrap gap-3">
                 <div>
                   <CardTitle className="text-xl">{detail.location.name}</CardTitle>
-                  <CardDescription className="mt-2">Capacity: {detail.location.capacity} | Planted: {detail.totalPlanted} | Available: {detail.availableSpace}</CardDescription>
+                  <CardDescription className="mt-2">Capacity: {formatNumber(detail.location.capacity)} | Planted: {formatNumber(detail.totalPlanted)} | Available: {formatNumber(detail.availableSpace)}</CardDescription>
                 </div>
                 <Badge variant="outline" className="text-teal-600">{detail.plantings.length} Active Planting(s)</Badge>
               </div>
@@ -128,7 +129,7 @@ export default function LocationDetailReportPage() {
                     <div key={planting.id} className="p-3 rounded-lg border">
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex-1"><p className="font-medium text-sm">{plantTypeName}</p><p className="text-xs text-gray-600">{planting.variety}</p></div>
-                        <Badge variant="outline" className="text-xs shrink-0">{planting.quantity} units</Badge>
+                        <Badge variant="outline" className="text-xs shrink-0">{formatNumber(planting.quantity)} units</Badge>
                       </div>
                       <Separator className="my-2" />
                       <div className="space-y-1 text-xs">

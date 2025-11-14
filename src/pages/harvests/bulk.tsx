@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
+import { formatNumber } from "@/lib/format";
 
 type HarvestPayload = Omit<Database["public"]["Tables"]["harvests"]["Row"], "id" | "created_at" | "updated_at">;
 
@@ -261,7 +262,7 @@ export default function BulkHarvestPage() {
                         <TableCell>{p.plant_types?.variety}</TableCell>
                         <TableCell className="font-mono text-xs">{p.batch_number}</TableCell>
                         <TableCell>{p.locations?.name}</TableCell>
-                        <TableCell className="font-semibold">{available}</TableCell>
+                        <TableCell className="font-semibold">{formatNumber(available)}</TableCell>
                         <TableCell>
                           <div className="space-y-1">
                             <Input

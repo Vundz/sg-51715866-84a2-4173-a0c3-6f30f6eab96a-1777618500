@@ -15,6 +15,7 @@ import { reservationService } from "@/services/reservationService";
 import { plantingService } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
+import { formatNumber } from "@/lib/format";
 
 type Reservation = Database["public"]["Tables"]["reservations"]["Row"];
 type Planting = Database["public"]["Tables"]["plantings"]["Row"];
@@ -204,7 +205,7 @@ export default function ReservationsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card><CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-gray-600">{plantingIdFilter ? "Filtered" : "Active"} Reservations</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{filteredReservations.filter(r => r.status === "active").length}</div></CardContent></Card>
-        <Card><CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-gray-600">Total Reserved</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{filteredReservations.filter(r => r.status === "active").reduce((sum, r) => sum + (r.quantity_reserved || 0), 0)}</div><p className="text-xs text-gray-500 mt-1">seedlings</p></CardContent></Card>
+        <Card><CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-gray-600">Total Reserved</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{formatNumber(filteredReservations.filter(r => r.status === "active").reduce((sum, r) => sum + (r.quantity_reserved || 0), 0))}</div><p className="text-xs text-gray-500 mt-1">seedlings</p></CardContent></Card>
         <Card><CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-gray-600">Pending Payments</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{filteredReservations.filter(r => r.status === "active" && r.payment_status === "pending").length}</div></CardContent></Card>
       </div>
 
@@ -220,10 +221,10 @@ export default function ReservationsPage() {
               <Select name="planting_id" required value={selectedPlantingId} onValueChange={setSelectedPlantingId}>
                 <SelectTrigger><SelectValue placeholder="Select a planting batch" /></SelectTrigger>
                 <SelectContent>
-                  {activePlantings.map(p => (<SelectItem key={p.id} value={p.id}>{p.plant_types?.name} ({p.plant_types?.variety}) - Available: {getAvailableQuantity(p.id)}</SelectItem>))}
+                  {activePlantings.map(p => (<SelectItem key={p.id} value={p.id}>{p.plant_types?.name} ({p.plant_types?.variety}) - Available: {formatNumber(getAvailableQuantity(p.id))}</SelectItem>))}
                 </SelectContent>
               </Select>
-              {selectedPlantingId && (<Alert className="mt-2"><AlertCircle className="h-4 w-4" /><AlertDescription>Available: <strong>{getAvailableQuantity(selectedPlantingId)}</strong> seedlings</AlertDescription></Alert>)}
+              {selectedPlantingId && (<Alert className="mt-2"><AlertCircle className="h-4 w-4" /><AlertDescription>Available: <strong>{formatNumber(getAvailableQuantity(selectedPlantingId))}</strong> seedlings</AlertDescription></Alert>)}
             </div>
 
             <div className="border-t pt-4">
@@ -270,7 +271,7 @@ export default function ReservationsPage() {
                 <TableRow key={r.id}>
                   <TableCell>{r.customer_name}</TableCell>
                   <TableCell>{r.plantings?.plant_types?.name} ({r.plantings?.batch_number})</TableCell>
-                  <TableCell>{r.quantity_reserved}</TableCell>
+                  <TableCell>{formatNumber(r.quantity_reserved)}</TableCell>
                   <TableCell>{new Date(r.reserved_date).toLocaleDateString()}</TableCell>
                   <TableCell>{r.payment_status}</TableCell>
                   <TableCell>

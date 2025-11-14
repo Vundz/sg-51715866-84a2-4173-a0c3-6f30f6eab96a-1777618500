@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Bar } from "react-chartjs-2";
 import "chart.js/auto";
 import type { Database } from "@/integrations/supabase/types";
+import { formatNumber } from "@/lib/format";
 
 type LocationData = Database["public"]["Tables"]["locations"]["Row"];
 type PlantingData = Database["public"]["Tables"]["plantings"]["Row"];
@@ -138,16 +139,16 @@ const LocationSummaryReport: React.FC = () => {
               <CardContent className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Capacity:</span>
-                  <span className="font-medium">{location.capacity}</span>
+                  <span className="font-medium">{formatNumber(location.capacity)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Planted:</span>
-                  <span className="font-medium">{location.totalPlanted}</span>
+                  <span className="font-medium">{formatNumber(location.totalPlanted)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Available:</span>
                   <span className={`font-medium ${location.availableSpace <= 0 ? "text-red-600 dark:text-red-400" : ""}`}>
-                    {location.availableSpace}
+                    {formatNumber(location.availableSpace)}
                   </span>
                 </div>
                 <Separator className="my-2" />

@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import "chart.js/auto";
 import { Bar } from "react-chartjs-2";
 import type { Database } from "@/integrations/supabase/types";
+import { formatNumber } from "@/lib/format";
 
 type PlantingData = Awaited<ReturnType<typeof plantingService.getPlantings>>[0];
 type PlantTypeData = Database["public"]["Tables"]["plant_types"]["Row"];
@@ -146,8 +147,8 @@ const PlantingsReportPage: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-gray-600">Location:</span><span className="font-medium">{getLocationName(p.location_id)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-600">Planted:</span><span className="font-medium">{p.quantity}</span></div>
-              <div className="flex justify-between"><span className="text-gray-600">Remaining:</span><span className={`font-medium ${p.remaining_quantity === 0 ? "text-gray-400" : ""}`}>{p.remaining_quantity ?? p.quantity}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Planted:</span><span className="font-medium">{formatNumber(p.quantity)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Remaining:</span><span className={`font-medium ${p.remaining_quantity === 0 ? "text-gray-400" : ""}`}>{formatNumber(p.remaining_quantity ?? p.quantity)}</span></div>
               <Separator className="my-2" />
               <div className="flex justify-between"><span className="text-gray-600">Planted Date:</span><span className="font-medium">{new Date(p.date_planted).toLocaleDateString()}</span></div>
               <div className="flex justify-between"><span className="text-gray-600">Expected Harvest:</span><span className="font-medium">{getExpectedHarvestDate(p)}</span></div>

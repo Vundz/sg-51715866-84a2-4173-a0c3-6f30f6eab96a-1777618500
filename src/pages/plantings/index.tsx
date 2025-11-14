@@ -16,6 +16,7 @@ import { reservationService } from "@/services/reservationService";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
+import { formatNumber } from "@/lib/format";
 
 type Planting = Database["public"]["Tables"]["plantings"]["Row"] & { 
   plant_types: Database["public"]["Tables"]["plant_types"]["Row"] | null,
@@ -561,13 +562,13 @@ export default function PlantingsPage() {
                         <span className="text-xs text-gray-500">{p.plant_types?.variety}</span>
                       </TableCell>
                       <TableCell>{p.locations?.name || 'N/A'}</TableCell>
-                      <TableCell>{p.remaining_quantity ?? p.quantity}</TableCell>
+                      <TableCell>{formatNumber(p.remaining_quantity ?? p.quantity)}</TableCell>
                       <TableCell>
                         <span className="font-medium text-blue-600">{trayUsage}</span>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span className={reserved > 0 ? "font-medium text-blue-600" : ""}>{reserved}</span>
+                          <span className={reserved > 0 ? "font-medium text-blue-600" : ""}>{formatNumber(reserved)}</span>
                           {reservationCount > 0 && (
                             <Link 
                               href={`/reservations?planting=${p.id}`}
@@ -582,7 +583,7 @@ export default function PlantingsPage() {
                       </TableCell>
                       <TableCell>
                         <span className={available <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
-                          {available}
+                          {formatNumber(available)}
                         </span>
                       </TableCell>
                       <TableCell>{new Date(p.date_planted).toLocaleDateString()}</TableCell>

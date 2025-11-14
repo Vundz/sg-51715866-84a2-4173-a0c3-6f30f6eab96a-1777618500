@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import Link from "next/link";
+import { formatNumber } from "@/lib/format";
 
 export default function HarvestsPage() {
   const [harvests, setHarvests] = useState<HarvestWithDetails[]>([]);
@@ -337,7 +338,7 @@ export default function HarvestsPage() {
                       const available = getAvailableQuantity(p.id);
                       return (
                         <SelectItem key={p.id} value={p.id} disabled={available <= 0}>
-                          {p.plant_types?.name} ({p.plant_types?.variety}) - Available: {available}
+                          {p.plant_types?.name} ({p.plant_types?.variety}) - Available: {formatNumber(available)}
                         </SelectItem>
                       );
                     })}
@@ -347,7 +348,7 @@ export default function HarvestsPage() {
                   <Alert className="mt-2">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
-                      Available: <strong>{getAvailableQuantity(selectedPlantingId)}</strong> seedlings
+                      Available: <strong>{formatNumber(getAvailableQuantity(selectedPlantingId))}</strong> seedlings
                     </AlertDescription>
                   </Alert>
                 )}
@@ -452,7 +453,7 @@ export default function HarvestsPage() {
                   return (
                     <TableRow key={h.id}>
                       <TableCell className="font-medium">{details?.plant_types?.name || "N/A"}<br/><span className="text-xs text-gray-500">{details?.plant_types?.variety}</span></TableCell>
-                      <TableCell>{h.quantity_harvested}</TableCell>
+                      <TableCell>{formatNumber(h.quantity_harvested)}</TableCell>
                       <TableCell>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
                       <TableCell>
                         <Badge variant={h.status === 'sold' ? 'default' : 'secondary'}>{h.status}</Badge>

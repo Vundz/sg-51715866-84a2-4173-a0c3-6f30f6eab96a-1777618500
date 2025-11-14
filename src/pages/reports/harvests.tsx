@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import "chart.js/auto";
 import { Bar } from "react-chartjs-2";
 import type { Database } from "@/integrations/supabase/types";
+import { formatNumber } from "@/lib/format";
 
 type HarvestData = Awaited<ReturnType<typeof harvestService.getHarvests>>[0];
 type PlantingData = Database["public"]["Tables"]["plantings"]["Row"];
@@ -154,10 +155,10 @@ const HarvestsReportPage: React.FC = () => {
               <CardContent className="space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Harvest Date:</span><span className="font-medium">{new Date(harvest.harvest_date).toLocaleDateString()}</span></div>
                 <Separator className="my-2" />
-                <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Planted:</span><span className="font-medium">{harvest.plantedQty}</span></div>
-                <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Harvested:</span><span className="font-medium">{harvest.quantity_harvested}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Planted:</span><span className="font-medium">{formatNumber(harvest.plantedQty)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Harvested:</span><span className="font-medium">{formatNumber(harvest.quantity_harvested)}</span></div>
                 <Separator className="my-2" />
-                <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Variance:</span><span className={`font-bold ${isPositive ? "text-green-600" : "text-red-600"}`}>{isPositive ? "+" : ""}{harvest.variance}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Variance:</span><span className={`font-bold ${isPositive ? "text-green-600" : "text-red-600"}`}>{isPositive ? "+" : ""}{formatNumber(harvest.variance)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Variance %:</span><span className={`font-bold ${isPositive ? "text-green-600" : "text-red-600"}`}>{isPositive ? "+" : ""}{harvest.variancePercent}%</span></div>
                 {harvest.notes && <><Separator className="my-2" /><div className="text-xs text-gray-600"><span className="font-medium">Notes: </span>{harvest.notes}</div></>}
               </CardContent>

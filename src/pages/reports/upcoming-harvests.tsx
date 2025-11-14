@@ -10,6 +10,7 @@ import { ArrowLeft, Download, FileSpreadsheet, FileText, Calendar, AlertCircle }
 import { plantingService } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
+import { formatNumber } from "@/lib/format";
 
 type PlantingData = Awaited<ReturnType<typeof plantingService.getPlantingsWithDetails>>[0];
 
@@ -107,8 +108,8 @@ const UpcomingHarvestsReport: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-gray-600">Location:</span><span className="font-medium">{h.locationName}</span></div>
-              <div className="flex justify-between"><span className="text-gray-600">Quantity:</span><span className="font-medium">{h.quantity}</span></div>
-              <div className="flex justify-between"><span className="text-gray-600">Remaining:</span><span className="font-medium">{h.remaining_quantity ?? h.quantity}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Quantity:</span><span className="font-medium">{formatNumber(h.quantity)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Remaining:</span><span className="font-medium">{formatNumber(h.remaining_quantity ?? h.quantity)}</span></div>
               <Separator className="my-2" />
               <div className="flex justify-between"><span className="text-gray-600">Planted:</span><span className="font-medium">{new Date(h.date_planted).toLocaleDateString()}</span></div>
               <div className="flex justify-between"><span className="text-gray-600">Expected:</span><span className="font-medium">{h.expectedHarvestDate.toLocaleDateString()}</span></div>
