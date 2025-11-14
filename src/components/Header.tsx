@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeSwitch } from "./ThemeSwitch";
-import { Menu, Leaf, Home, MapPin, Sprout, PackageOpen, Package, FileText, Shield, LogOut, LogIn, Loader2 } from "lucide-react";
+import { Menu, Leaf, Home, MapPin, Sprout, PackageOpen, Package, FileText, Shield, LogOut, LogIn, Loader2, Calendar } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function Header() {
@@ -26,6 +26,7 @@ export function Header() {
     { href: "/plantings", label: "Plantings", icon: PackageOpen },
     { href: "/harvests", label: "Harvests", icon: Package },
     { href: "/treatments", label: "Treatments", icon: Sprout },
+    { href: "/reservations", label: "Reservations", icon: Calendar },
     { href: "/reports", label: "Reports", icon: FileText },
   ];
 
