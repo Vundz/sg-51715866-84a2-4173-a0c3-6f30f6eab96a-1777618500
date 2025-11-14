@@ -1,114 +1,115 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
-type Planting = Database["public"]["Tables"]["plantings"]["Row"];
-type PlantingInsert = Database["public"]["Tables"]["plantings"]["Insert"];
-type PlantingUpdate = Database["public"]["Tables"]["plantings"]["Update"];
+export type Planting = Database["public"]["Tables"]["plantings"]["Row"];
+export type PlantingWithDetails = Planting & {
+  plant_types: Database["public"]["Tables"]["plant_types"]["Row"] | null;
+  locations: Database["public"]["Tables"]["locations"]["Row"] | null;
+};
 
 export const plantingService = {
   async getPlantings() {
     const { data, error } = await supabase
       .from("plantings")
-      .select(`
-        *,
-        plant_types!plantings_plant_type_id_fkey (
-          id,
-          name,
-          variety,
-          description,
-          growth_duration
-        ),
-        locations!plantings_location_id_fkey (
-          id,
-          name,
-          type,
-          capacity
-        )
-      `)
+      .select("*")
       .order("date_planted", { ascending: false });
-
-    if (error) throw error;
-    return data as (Planting & {
-      plant_types: Database["public"]["Tables"]["plant_types"]["Row"];
-      locations: Database["public"]["Tables"]["locations"]["Row"];
-    })[];
-  },
-
-  async getPlantingById(id: string) {
-    const { data, error } = await supabase
-      .from("plantings")
-      .select(`
-        *,
-        plant_types!plantings_plant_type_id_fkey (*),
-        locations!plantings_location_id_fkey (*)
-      `)
-      .eq("id", id)
-      .single();
-
     if (error) throw error;
     return data;
   },
 
-  async createPlanting(planting: PlantingInsert) {
+  async getPlantingsWithDetails(): Promise<PlantingWithDetails[]> {
+    const { data, error } = await supabase
+      .from("plantings")
+      .select(`
+        *,
+        plant_types (*),
+        locations (*)
+      `)
+      .order("date_planted", { ascending: false });
+
+    if (error) throw error;
+    return data as PlantingWithDetails[];
+  },
+
+  async getPlanting(id: string) {
+    const { data, error } = await supabase
+      .from("plantings")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async createPlanting(planting: Omit<Planting, "id" | "created_at" | "updated_at">) {
     const { data, error } = await supabase
       .from("plantings")
       .insert([planting])
-      .select()
-      .single();
-
+      .select();
     if (error) throw error;
-    return data as Planting;
+    return data[0];
+  },
+  
+  // Alias for createPlanting
+  async addPlanting(planting: Omit<Planting, "id" | "created_at" | "updated_at">) {
+    return this.createPlanting(planting);
   },
 
-  async updatePlanting(id: string, updates: PlantingUpdate) {
+  async updatePlanting(id: string, planting: Partial<Planting>) {
     const { data, error } = await supabase
       .from("plantings")
-      .update(updates)
+      .update(planting)
       .eq("id", id)
-      .select()
-      .single();
-
+      .select();
     if (error) throw error;
-    return data as Planting;
+    return data[0];
   },
 
   async deletePlanting(id: string) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("plantings")
       .delete()
       .eq("id", id);
-
-    if (error) throw error;
-    return true;
-  },
-
-  async getActivePlantings() {
-    const { data, error } = await supabase
-      .from("plantings")
-      .select(`
-        *,
-        plant_types!plantings_plant_type_id_fkey (*),
-        locations!plantings_location_id_fkey (*)
-      `)
-      .eq("status", "active")
-      .order("date_planted", { ascending: false });
-
     if (error) throw error;
     return data;
   },
-
+  
   async getPlantingsByLocation(locationId: string) {
     const { data, error } = await supabase
       .from("plantings")
       .select(`
         *,
-        plant_types!plantings_plant_type_id_fkey (*)
+        plant_types (
+          name,
+          variety
+        )
       `)
-      .eq("location_id", locationId)
-      .order("date_planted", { ascending: false });
-
+      .eq('location_id', locationId)
+      .eq('status', 'active');
+      
     if (error) throw error;
     return data;
-  }
+  },
+
+  async getTotalPlantedQuantity(plantTypeId: string) {
+    const { data, error, count } = await supabase
+      .from("plantings")
+      .select("quantity", { count: 'exact', head: true })
+      .eq("plant_type_id", plantTypeId);
+    
+    if (error) {
+      console.error("Error fetching total planted quantity", error);
+      return 0;
+    }
+    
+    // This is tricky. Let's fetch and sum.
+    const { data: quantities, error: qError } = await supabase
+        .from('plantings')
+        .select('quantity')
+        .eq('plant_type_id', plantTypeId);
+
+    if(qError) return 0;
+    
+    return quantities.reduce((sum, p) => sum + p.quantity, 0);
+  },
 };

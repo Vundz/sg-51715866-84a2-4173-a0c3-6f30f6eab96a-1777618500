@@ -66,7 +66,7 @@ export default function PlantingsPage() {
     try {
       setLoading(true);
       const [plantingsData, plantTypesData, locationsData, reservationsData] = await Promise.all([
-        plantingService.getPlantings(),
+        plantingService.getPlantingsWithDetails(),
         plantTypeService.getPlantTypes(),
         locationService.getLocations(),
         reservationService.getReservations()
@@ -169,40 +169,44 @@ export default function PlantingsPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    const selectedPlantType = plantTypes.find(pt => pt.id === (formData.get("plant_type_id") as string));
-    if (!selectedPlantType) {
-        toast({ title: "Error", description: "Selected plant type not found.", variant: "destructive" });
+    const plantTypeId = plantTypes.find(pt => pt.name === selectedPlantTypeName && pt.variety === selectedVariety)?.id;
+    if (!plantTypeId) {
+        toast({ title: "Error", description: "Selected plant type and variety combination not found.", variant: "destructive" });
         return;
     }
 
     const datePlanted = new Date(formData.get("date_planted") as string);
+    const selectedPlantType = plantTypes.find(pt => pt.id === plantTypeId);
     const expectedHarvestDate = new Date(datePlanted);
-    expectedHarvestDate.setDate(datePlanted.getDate() + (selectedPlantType.growth_duration || 0));
+    if (selectedPlantType?.growth_duration) {
+      expectedHarvestDate.setDate(datePlanted.getDate() + selectedPlantType.growth_duration);
+    }
+    
+    const batch_number = generateBatchNumber(selectedPlantTypeName, selectedVariety, datePlanted.toISOString().split('T')[0]);
 
     const plantingData = {
-      plant_type_id: formData.get("plant_type_id") as string,
+      plant_type_id: plantTypeId,
       location_id: formData.get("location_id") as string,
       quantity: parseInt(formData.get("quantity") as string),
       date_planted: formData.get("date_planted") as string,
       expected_harvest_date: expectedHarvestDate.toISOString().split('T')[0],
-      batch_number: formData.get("batch_number") as string,
-      status: formData.get("status") as string,
+      batch_number: batch_number,
+      status: editingPlanting ? formData.get("status") as string : "active",
       notes: formData.get("notes") as string,
-      variety: formData.get("variety") as string,
+      variety: selectedVariety,
     };
     
     const finalPlantingData = {
         ...plantingData,
-        remaining_quantity: plantingData.quantity,
+        remaining_quantity: editingPlanting?.remaining_quantity ?? plantingData.quantity,
     }
 
     try {
-      let savedPlanting;
       if (editingPlanting) {
         await plantingService.updatePlanting(editingPlanting.id, finalPlantingData);
         toast({ title: "Success", description: "Planting updated successfully." });
       } else {
-        savedPlanting = await plantingService.addPlanting(finalPlantingData);
+        await plantingService.addPlanting(finalPlantingData);
         toast({ title: "Success", description: "Planting created successfully." });
       }
       
@@ -253,10 +257,8 @@ export default function PlantingsPage() {
   };
   
   const getExpectedHarvestDate = (planting: Planting) => {
-    if (!planting.plant_types?.growth_duration) return "N/A";
-    const date = new Date(planting.date_planted);
-    date.setDate(date.getDate() + planting.plant_types.growth_duration);
-    return date.toLocaleDateString();
+    if (!planting.expected_harvest_date) return "N/A";
+    return new Date(planting.expected_harvest_date).toLocaleDateString();
   };
 
   const handleClearFilters = () => {
@@ -331,6 +333,7 @@ export default function PlantingsPage() {
                   Variety <span className="text-red-500">*</span>
                 </Label>
                 <Select 
+                  name="variety"
                   value={selectedVariety} 
                   onValueChange={setSelectedVariety}
                   disabled={!selectedPlantTypeName}
@@ -578,7 +581,7 @@ export default function PlantingsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className={available === 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
+                        <span className={available <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
                           {available}
                         </span>
                       </TableCell>

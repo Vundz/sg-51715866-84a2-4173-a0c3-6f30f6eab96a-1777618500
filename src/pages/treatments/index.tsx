@@ -10,22 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Edit, Trash2, TestTube2, ChevronsRight } from "lucide-react";
-import { treatmentService, TreatmentWithDetails } from "@/services/treatmentService";
+import { treatmentService } from "@/services/treatmentService";
+import type { TreatmentWithDetails } from "@/services/treatmentService";
 import { plantingService } from "@/services/plantingService";
+import type { PlantingWithDetails } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
-import type { Database } from "@/integrations/supabase/types";
-
-type Treatment = Database["public"]["Tables"]["treatments"]["Row"];
-type Planting = Database["public"]["Tables"]["plantings"]["Row"];
-type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
-
-type PlantingWithDetails = Planting & {
-  plant_types: PlantType;
-};
-
-type TreatmentWithDetails = Treatment & {
-  plantings: PlantingWithDetails[];
-};
 
 export default function TreatmentsPage() {
   const [treatments, setTreatments] = useState<TreatmentWithDetails[]>([]);
@@ -35,6 +24,7 @@ export default function TreatmentsPage() {
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [selectedPlantingIds, setSelectedPlantingIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -46,10 +36,10 @@ export default function TreatmentsPage() {
       setLoading(true);
       const [treatmentsData, plantingsData] = await Promise.all([
         treatmentService.getTreatments(),
-        plantingService.getPlantings(),
+        plantingService.getPlantingsWithDetails(),
       ]);
-      setTreatments(treatmentsData as TreatmentWithDetails[]);
-      setPlantings(plantingsData as PlantingWithDetails[]);
+      setTreatments(treatmentsData);
+      setPlantings(plantingsData);
     } catch (error) {
       console.error("Error loading data:", error);
       toast({ title: "Error", description: "Failed to load data.", variant: "destructive" });
@@ -57,6 +47,11 @@ export default function TreatmentsPage() {
       setLoading(false);
     }
   };
+
+  const filteredTreatments = treatments.filter(t => 
+    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.type.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const activePlantings = plantings.filter(p => p.status === "active");
   
@@ -73,10 +68,15 @@ export default function TreatmentsPage() {
     e.preventDefault();
 
     const formData = new FormData(e.currentTarget);
-    const planting_ids = formData.getAll("planting_ids") as string[];
     
-    if (planting_ids.length === 0) {
-      toast({ title: "Error", description: "Please select at least one planting.", variant: "destructive" });
+    if (isBulkMode && selectedPlantingIds.length === 0) {
+      toast({ title: "Error", description: "Please select at least one planting for bulk application.", variant: "destructive" });
+      return;
+    }
+    
+    const singlePlantingId = formData.get("planting_id") as string;
+    if (!isBulkMode && !singlePlantingId) {
+      toast({ title: "Error", description: "Please select a planting.", variant: "destructive" });
       return;
     }
 
@@ -84,7 +84,7 @@ export default function TreatmentsPage() {
       name: formData.get("name") as string,
       type: formData.get("type") as string,
       application_date: formData.get("application_date") as string,
-      planting_ids: planting_ids,
+      planting_ids: isBulkMode ? selectedPlantingIds : [singlePlantingId],
       dosage: formData.get("dosage") as string,
       application_method: formData.get("application_method") as string,
       notes: formData.get("notes") as string,
@@ -94,17 +94,17 @@ export default function TreatmentsPage() {
     try {
       if (editingTreatment) {
         await treatmentService.updateTreatment(editingTreatment.id, treatmentData);
+        toast({ title: "Success", description: "Treatment updated." });
       } else {
-        await treatmentService.createTreatment(treatmentData);
+        await treatmentService.addTreatment(treatmentData);
+        toast({ title: "Success", description: "Treatment created." });
       }
       
       await loadData();
       setIsDialogOpen(false);
-      setEditingTreatment(null);
-      setSelectedPlantingIds([]);
     } catch (error) {
       console.error("Error saving treatment:", error);
-      alert("Failed to save treatment. Please try again.");
+      toast({ title: "Error", description: "Failed to save treatment.", variant: "destructive" });
     }
   };
   
@@ -114,18 +114,25 @@ export default function TreatmentsPage() {
     try {
       await treatmentService.deleteTreatment(id);
       await loadData();
+      toast({ title: "Success", description: "Treatment deleted." });
     } catch (error) {
       console.error("Error deleting treatment:", error);
-      alert("Failed to delete treatment. Please try again.");
+      toast({ title: "Error", description: "Failed to delete treatment.", variant: "destructive" });
     }
   };
 
   const handleOpenDialog = (treatment: TreatmentWithDetails | null = null, bulk = false) => {
     setEditingTreatment(treatment);
     setIsBulkMode(bulk);
-    setSelectedPlantingIds(treatment && treatment.planting_ids ? treatment.planting_ids : []);
+    setSelectedPlantingIds(treatment?.plantings.map(p => p.id) || []);
     setIsDialogOpen(true);
   };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setEditingTreatment(null);
+    setSelectedPlantingIds([]);
+  }
   
   const togglePlantingSelection = (plantingId: string) => {
     setSelectedPlantingIds(prev =>
@@ -172,11 +179,11 @@ export default function TreatmentsPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                <Label htmlFor="planting_ids">Select Planting *</Label>
-                <Select name="planting_ids" required defaultValue={editingTreatment?.planting_ids?.[0]}>
+                <Label htmlFor="planting_id">Select Planting *</Label>
+                <Select name="planting_id" required defaultValue={editingTreatment?.plantings?.[0]?.id}>
                   <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
                   <SelectContent>
-                    {plantings.map(p => (
+                    {activePlantings.map(p => (
                       <SelectItem key={p.id} value={p.id}>{p.plant_types?.name} ({p.batch_number})</SelectItem>
                     ))}
                   </SelectContent>
@@ -184,44 +191,57 @@ export default function TreatmentsPage() {
               </div>
             )}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label htmlFor="chemical_name">Chemical/Fertilizer Name *</Label><Input id="chemical_name" name="chemical_name" defaultValue={editingTreatment?.chemical_name || ""} required /></div>
-              <div className="space-y-2"><Label htmlFor="treatment_type">Treatment Type *</Label><Select name="treatment_type" required defaultValue={editingTreatment?.treatment_type || undefined}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="fungicide">Fungicide</SelectItem><SelectItem value="pesticide">Pesticide</SelectItem><SelectItem value="fertilizer">Fertilizer</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="name">Chemical/Fertilizer Name *</Label><Input id="name" name="name" defaultValue={editingTreatment?.name || ""} required /></div>
+              <div className="space-y-2"><Label htmlFor="type">Treatment Type *</Label><Select name="type" required defaultValue={editingTreatment?.type || undefined}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="fungicide">Fungicide</SelectItem><SelectItem value="pesticide">Pesticide</SelectItem><SelectItem value="fertilizer">Fertilizer</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label htmlFor="dosage">Dosage</Label><Input id="dosage" name="dosage" defaultValue={editingTreatment?.dosage || ""} /></div>
               <div className="space-y-2"><Label htmlFor="application_method">Application Method</Label><Select name="application_method" defaultValue={editingTreatment?.application_method || undefined}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="drench">Drench</SelectItem><SelectItem value="spray">Spray</SelectItem><SelectItem value="granular">Granular</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label htmlFor="date_applied">Application Date *</Label><Input id="date_applied" name="date_applied" type="date" defaultValue={editingTreatment?.date_applied || new Date().toISOString().split("T")[0]} required /></div>
+              <div className="space-y-2"><Label htmlFor="application_date">Application Date *</Label><Input id="application_date" name="application_date" type="date" defaultValue={editingTreatment?.application_date ? new Date(editingTreatment.application_date).toISOString().split('T')[0] : new Date().toISOString().split("T")[0]} required /></div>
               <div className="space-y-2"><Label htmlFor="applied_by">Applied By</Label><Input id="applied_by" name="applied_by" defaultValue={editingTreatment?.applied_by || ""} /></div>
             </div>
             <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" name="notes" defaultValue={editingTreatment?.notes || ""} /></div>
-            <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button><Button type="submit" className="bg-cyan-600 hover:bg-cyan-700">Save Treatment</Button></div>
+            <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="outline" onClick={handleCloseDialog}>Cancel</Button><Button type="submit" className="bg-cyan-600 hover:bg-cyan-700">Save Treatment</Button></div>
           </form>
         </DialogContent>
       </Dialog>
       
       <Card>
-        <CardHeader><CardTitle>Treatment History</CardTitle><CardDescription>A log of all treatments applied.</CardDescription></CardHeader>
+        <CardHeader>
+          <CardTitle>Treatment History</CardTitle>
+          <CardDescription>A log of all treatments applied.</CardDescription>
+          <Input 
+            placeholder="Search by name or type..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="max-w-sm mt-2"
+          />
+        </CardHeader>
         <CardContent>
           <Table>
             <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Name</TableHead><TableHead>Type</TableHead><TableHead>Applied To</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={7} className="text-center">Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center">Loading...</TableCell></TableRow>
               ) : filteredTreatments.map(t => (
                 <TableRow key={t.id}>
+                  <TableCell>{new Date(t.application_date).toLocaleDateString()}</TableCell>
                   <TableCell>{t.name}</TableCell>
                   <TableCell>{t.type}</TableCell>
                   <TableCell>{t.plantings.map(p => p.batch_number).join(', ')}</TableCell>
-                  <TableCell>{new Date(t.application_date).toLocaleDateString()}</TableCell>
-                  <TableCell>{t.applied_by}</TableCell>
-                  <TableCell>
-                    <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(t)}><Edit className="w-4 h-4" /></Button>
-                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteTreatment(t.id)}><Trash2 className="w-4 h-4" /></Button>
+                  <TableCell className="text-right">
+                    <div className="flex gap-1 justify-end">
+                      <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(t)}><Edit className="w-4 h-4" /></Button>
+                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteTreatment(t.id)}><Trash2 className="w-4 h-4" /></Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
+               {filteredTreatments.length === 0 && (
+                 <TableRow><TableCell colSpan={5} className="text-center h-24">No treatments found.</TableCell></TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

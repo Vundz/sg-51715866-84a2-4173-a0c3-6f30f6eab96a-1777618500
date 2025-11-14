@@ -7,7 +7,7 @@ export type Planting = Database["public"]["Tables"]["plantings"]["Row"] & {
     plant_types: { name: string } | null;
 };
 export type TreatmentWithDetails = Treatment & {
-  plantings: { id: string, batch_number: string }[];
+  plantings: { id: string, batch_number: string | null }[];
 };
 
 export const treatmentService = {
@@ -16,15 +16,20 @@ export const treatmentService = {
       .from("treatments")
       .select(`
         *,
-        plantings ( id, batch_number )
+        planting_treatments(
+          plantings(id, batch_number)
+        )
       `);
 
     if (error) throw error;
     
-    return data.map(t => ({
-        ...t,
-        plantings: Array.isArray(t.plantings) ? t.plantings : []
-    }));
+    return data.map(t => {
+      const plantings = t.planting_treatments.map((pt: any) => pt.plantings).filter(Boolean);
+      return {
+          ...t,
+          plantings: plantings,
+      } as TreatmentWithDetails;
+    });
   },
 
   async getTreatment(id: string) {
@@ -32,20 +37,24 @@ export const treatmentService = {
       .from("treatments")
       .select(`
         *,
-        plantings ( id, batch_number )
+        planting_treatments(
+          plantings(id, batch_number)
+        )
       `)
       .eq("id", id)
       .single();
 
     if (error) throw error;
     
+    const plantings = data.planting_treatments.map((pt: any) => pt.plantings).filter(Boolean);
+    
     return {
         ...data,
-        plantings: Array.isArray(data.plantings) ? data.plantings : []
-    };
+        plantings: plantings
+    } as TreatmentWithDetails;
   },
 
-  async addTreatment(treatment: Omit<Treatment, "id" | "created_at" | "updated_at"> & { planting_ids: string[] }) {
+  async createTreatment(treatment: Omit<Treatment, "id" | "created_at" | "updated_at"> & { planting_ids: string[] }) {
     const { planting_ids, ...treatmentData } = treatment;
     const { data: insertData, error: insertError } = await supabase
       .from("treatments")
@@ -70,6 +79,10 @@ export const treatmentService = {
     }
 
     return newTreatment;
+  },
+  
+  addTreatment(treatment: Omit<Treatment, "id" | "created_at" | "updated_at"> & { planting_ids: string[] }) {
+    return this.createTreatment(treatment);
   },
 
   async updateTreatment(id: string, treatment: Partial<Omit<Treatment, "id" | "created_at" | "updated_at">> & { planting_ids?: string[] }) {

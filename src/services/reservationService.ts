@@ -1,82 +1,72 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
-type Reservation = Database["public"]["Tables"]["reservations"]["Row"];
-type ReservationInsert = Database["public"]["Tables"]["reservations"]["Insert"];
-type ReservationUpdate = Database["public"]["Tables"]["reservations"]["Update"];
+export type Reservation = Database["public"]["Tables"]["reservations"]["Row"];
 
 export const reservationService = {
   async getReservations() {
     const { data, error } = await supabase
       .from("reservations")
-      .select(`
-        *,
-        plantings (
-          *,
-          plant_types (*),
-          locations (*)
-        )
-      `)
-      .order("created_at", { ascending: true });
-
-    if (error) throw error;
-    return data as (Reservation & {
-      plantings: Database["public"]["Tables"]["plantings"]["Row"] & {
-        plant_types: Database["public"]["Tables"]["plant_types"]["Row"];
-        locations: Database["public"]["Tables"]["locations"]["Row"];
-      };
-    })[];
-  },
-
-  async getReservationById(id: string) {
-    const { data, error } = await supabase
-      .from("reservations")
-      .select(`
-        *,
-        plantings (
-          *,
-          plant_types (*),
-          locations (*)
-        )
-      `)
-      .eq("id", id)
-      .single();
+      .select("*")
+      .order("reserved_date", { ascending: false });
 
     if (error) throw error;
     return data;
   },
 
-  async createReservation(reservation: ReservationInsert) {
+  async getReservationsWithDetails() {
+    const { data, error } = await supabase
+      .from("reservations")
+      .select(`
+        *,
+        plantings (
+          *,
+          plant_types (*),
+          locations (*)
+        )
+      `)
+      .order("reserved_date", { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getReservation(id: string) {
+    const { data, error } = await supabase
+      .from("reservations")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async createReservation(reservation: Omit<Reservation, "id" | "created_at" | "updated_at">) {
     const { data, error } = await supabase
       .from("reservations")
       .insert([reservation])
-      .select()
-      .single();
-
+      .select();
     if (error) throw error;
-    return data as Reservation;
+    return data[0];
   },
 
-  async updateReservation(id: string, updates: ReservationUpdate) {
+  async updateReservation(id: string, reservation: Partial<Reservation>) {
     const { data, error } = await supabase
       .from("reservations")
-      .update(updates)
+      .update(reservation)
       .eq("id", id)
-      .select()
-      .single();
-
+      .select();
     if (error) throw error;
-    return data as Reservation;
+    return data[0];
   },
 
   async deleteReservation(id: string) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("reservations")
       .delete()
       .eq("id", id);
-
     if (error) throw error;
-    return true;
+    return data;
   },
 
   async getActiveReservations() {
@@ -85,15 +75,17 @@ export const reservationService = {
       .select(`
         *,
         plantings (
-          *,
-          plant_types (*),
-          locations (*)
+          id,
+          batch_number,
+          plant_types (
+            name,
+            variety
+          )
         )
       `)
-      .eq("status", "pending")
-      .order("created_at", { ascending: true });
-
+      .eq('status', 'active');
+      
     if (error) throw error;
     return data;
-  }
+  },
 };
