@@ -1,26 +1,24 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
 export type Treatment = Database["public"]["Tables"]["treatments"]["Row"];
 export type Planting = Database["public"]["Tables"]["plantings"]["Row"];
 
-// This type represents a single row from the join table with the full treatment and planting record expanded.
 export type TreatmentWithPlantings = {
-  treatment_id: string;
-  planting_id: string;
-  treatments: Treatment;
+  treatments: Treatment | null;
   plantings: {
-    id: string;
-    batch_number: string | null;
+      id: string;
+      batch_number: string | null;
   } | null;
-};
+  planting_id: string;
+}
 
 export const treatmentService = {
   async getTreatments(): Promise<TreatmentWithPlantings[]> {
     const { data, error } = await supabase
       .from("planting_treatments")
       .select(`
-        treatment_id,
         planting_id,
         treatments (*),
         plantings (id, batch_number)
@@ -38,7 +36,6 @@ export const treatmentService = {
      const { data, error } = await supabase
       .from("planting_treatments")
       .select(`
-        treatment_id,
         planting_id,
         treatments (*),
         plantings (id, batch_number)
@@ -58,6 +55,7 @@ export const treatmentService = {
       .single();
 
     if (treatmentError) throw treatmentError;
+    if (!treatmentData) throw new Error("Failed to create treatment record.");
 
     // 2. Create the links in the join table
     const plantingTreatments = planting_ids.map(planting_id => ({
@@ -70,9 +68,8 @@ export const treatmentService = {
       .insert(plantingTreatments);
 
     if (ptError) {
-      // Rollback logic could be added here if needed
+      // If linking fails, roll back by deleting the just-created treatment
       console.error("Failed to link treatment to plantings", ptError);
-      // Delete the just-created treatment
       await supabase.from("treatments").delete().eq("id", treatmentData.id);
       throw ptError;
     }
@@ -118,7 +115,7 @@ export const treatmentService = {
   },
 
   async deleteTreatment(id: string) {
-    // RLS and cascade delete should handle the join table, but to be safe:
+    // RLS and cascade delete on the FK should handle the join table, but being explicit is safer.
     await supabase.from("planting_treatments").delete().eq("treatment_id", id);
     
     const { data, error } = await supabase
