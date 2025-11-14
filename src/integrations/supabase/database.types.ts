@@ -155,6 +155,36 @@ export type Database = {
         }
         Relationships: []
       }
+      planting_treatments: {
+        Row: {
+          planting_id: string
+          treatment_id: string
+        }
+        Insert: {
+          planting_id: string
+          treatment_id: string
+        }
+        Update: {
+          planting_id?: string
+          treatment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planting_treatments_planting_id_fkey"
+            columns: ["planting_id"]
+            isOneToOne: false
+            referencedRelation: "plantings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planting_treatments_treatment_id_fkey"
+            columns: ["treatment_id"]
+            isOneToOne: false
+            referencedRelation: "treatments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plantings: {
         Row: {
           batch_number: string

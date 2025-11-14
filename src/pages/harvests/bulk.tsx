@@ -10,6 +10,8 @@ import { Search, ArrowLeft, Save } from "lucide-react";
 import { plantingService, PlantingWithDetails } from "@/services/plantingService";
 import { harvestService } from "@/services/harvestService";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type HarvestPayload = Omit<Database["public"]["Tables"]["harvests"]["Row"], "id" | "created_at" | "updated_at">;
@@ -17,6 +19,7 @@ type HarvestPayload = Omit<Database["public"]["Tables"]["harvests"]["Row"], "id"
 interface SelectedHarvest {
   planting: PlantingWithDetails;
   quantity: number;
+  error?: string;
 }
 
 export default function BulkHarvestPage() {
@@ -25,6 +28,7 @@ export default function BulkHarvestPage() {
   const [selectedHarvests, setSelectedHarvests] = useState<Record<string, SelectedHarvest>>({});
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const router = useRouter();
 
@@ -56,11 +60,31 @@ export default function BulkHarvestPage() {
     );
   }, [plantings, searchQuery]);
 
+  const getAvailableQuantity = (planting: PlantingWithDetails): number => {
+    return planting.remaining_quantity ?? planting.quantity;
+  };
+
+  const validateQuantity = (plantingId: string, quantity: number, available: number): string => {
+    if (quantity <= 0) {
+      return "Quantity must be greater than 0";
+    }
+    if (quantity > available) {
+      return `Exceeds available: ${available}`;
+    }
+    return "";
+  };
+
   const handleSelect = (planting: PlantingWithDetails) => {
     setSelectedHarvests(prev => {
       const newSelected = { ...prev };
       if (newSelected[planting.id]) {
         delete newSelected[planting.id];
+        // Clear validation error for this planting
+        setValidationErrors(prevErrors => {
+          const newErrors = { ...prevErrors };
+          delete newErrors[planting.id];
+          return newErrors;
+        });
       } else {
         newSelected[planting.id] = { planting, quantity: 0 };
       }
@@ -69,36 +93,61 @@ export default function BulkHarvestPage() {
   };
 
   const handleQuantityChange = (plantingId: string, quantity: string) => {
-    const qty = parseInt(quantity, 10);
+    const qty = parseInt(quantity, 10) || 0;
     const planting = plantings.find(p => p.id === plantingId);
     if (!planting) return;
 
-    const available = planting.remaining_quantity ?? planting.quantity;
-    const finalQty = Math.max(0, Math.min(qty, available));
+    const available = getAvailableQuantity(planting);
+    const error = validateQuantity(plantingId, qty, available);
 
     setSelectedHarvests(prev => ({
       ...prev,
-      [plantingId]: { ...prev[plantingId], quantity: finalQty },
+      [plantingId]: { 
+        ...prev[plantingId], 
+        quantity: qty,
+        error 
+      },
     }));
+
+    setValidationErrors(prev => {
+      const newErrors = { ...prev };
+      if (error) {
+        newErrors[plantingId] = error;
+      } else {
+        delete newErrors[plantingId];
+      }
+      return newErrors;
+    });
   };
   
   const handleSubmit = async () => {
-    const harvestsToCreate: HarvestPayload[] = Object.values(selectedHarvests)
-      .filter(h => h.quantity > 0)
-      .map(h => ({
-        planting_id: h.planting.id,
-        quantity_harvested: h.quantity,
-        harvest_date: new Date().toISOString().split('T')[0],
-        status: "harvested",
-        quality: "good",
-        is_closed: false,
-        notes: "Bulk harvest entry",
-      }));
-      
-    if (harvestsToCreate.length === 0) {
-      toast({ title: "Nothing to Save", description: "Please select plantings and enter quantities.", variant: "destructive" });
+    // Filter harvests with valid quantities
+    const validHarvests = Object.values(selectedHarvests).filter(h => h.quantity > 0 && !h.error);
+    const invalidHarvests = Object.values(selectedHarvests).filter(h => h.quantity > 0 && h.error);
+
+    if (invalidHarvests.length > 0) {
+      toast({ 
+        title: "Validation Error", 
+        description: `${invalidHarvests.length} planting(s) have invalid quantities. Please correct the highlighted rows.`,
+        variant: "destructive" 
+      });
       return;
     }
+
+    if (validHarvests.length === 0) {
+      toast({ title: "Nothing to Save", description: "Please select plantings and enter valid quantities.", variant: "destructive" });
+      return;
+    }
+    
+    const harvestsToCreate: HarvestPayload[] = validHarvests.map(h => ({
+      planting_id: h.planting.id,
+      quantity_harvested: h.quantity,
+      harvest_date: new Date().toISOString().split('T')[0],
+      status: "harvested",
+      quality: "good",
+      is_closed: false,
+      notes: "Bulk harvest entry",
+    }));
     
     setIsSaving(true);
     try {
@@ -114,6 +163,8 @@ export default function BulkHarvestPage() {
   };
 
   const selectionCount = Object.keys(selectedHarvests).length;
+  const validCount = Object.values(selectedHarvests).filter(h => h.quantity > 0 && !h.error).length;
+  const errorCount = Object.keys(validationErrors).length;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -124,6 +175,15 @@ export default function BulkHarvestPage() {
         </Button>
       </Link>
       <h1 className="text-4xl font-bold">Bulk Harvest</h1>
+      
+      {errorCount > 0 && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {errorCount} planting(s) have invalid quantities. Please review the highlighted rows below.
+          </AlertDescription>
+        </Alert>
+      )}
       
       <Card>
         <CardHeader>
@@ -150,38 +210,57 @@ export default function BulkHarvestPage() {
                   <TableHead>Batch</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Available Qty</TableHead>
-                  <TableHead className="w-[150px]">Harvest Qty</TableHead>
+                  <TableHead className="w-[200px]">Harvest Qty</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow><TableCell colSpan={7} className="text-center h-24">Loading plantings...</TableCell></TableRow>
                 ) : filteredPlantings.length > 0 ? (
-                  filteredPlantings.map(p => (
-                    <TableRow key={p.id} data-state={selectedHarvests[p.id] ? 'selected' : ''}>
-                      <TableCell>
-                        <Checkbox
-                          checked={!!selectedHarvests[p.id]}
-                          onCheckedChange={() => handleSelect(p)}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">{p.plant_types?.name}</TableCell>
-                      <TableCell>{p.plant_types?.variety}</TableCell>
-                      <TableCell className="font-mono text-xs">{p.batch_number}</TableCell>
-                      <TableCell>{p.locations?.name}</TableCell>
-                      <TableCell>{p.remaining_quantity ?? p.quantity}</TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={selectedHarvests[p.id]?.quantity || ""}
-                          onChange={(e) => handleQuantityChange(p.id, e.target.value)}
-                          disabled={!selectedHarvests[p.id]}
-                          placeholder="0"
-                          max={p.remaining_quantity ?? p.quantity}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  filteredPlantings.map(p => {
+                    const available = getAvailableQuantity(p);
+                    const hasError = validationErrors[p.id];
+                    const isSelected = !!selectedHarvests[p.id];
+                    
+                    return (
+                      <TableRow 
+                        key={p.id} 
+                        data-state={isSelected ? 'selected' : ''}
+                        className={hasError ? 'bg-red-50 dark:bg-red-950/20' : ''}
+                      >
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => handleSelect(p)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">{p.plant_types?.name}</TableCell>
+                        <TableCell>{p.plant_types?.variety}</TableCell>
+                        <TableCell className="font-mono text-xs">{p.batch_number}</TableCell>
+                        <TableCell>{p.locations?.name}</TableCell>
+                        <TableCell className="font-semibold">{available}</TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Input
+                              type="number"
+                              value={selectedHarvests[p.id]?.quantity || ""}
+                              onChange={(e) => handleQuantityChange(p.id, e.target.value)}
+                              disabled={!isSelected}
+                              placeholder="0"
+                              max={available}
+                              className={hasError ? "border-red-500 focus-visible:ring-red-500" : ""}
+                            />
+                            {hasError && (
+                              <p className="text-xs text-red-600 flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3" />
+                                {hasError}
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow><TableCell colSpan={7} className="text-center h-24">No active plantings found.</TableCell></TableRow>
                 )}
@@ -192,10 +271,26 @@ export default function BulkHarvestPage() {
       </Card>
       
       <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
-        <span className="font-medium">{selectionCount} item(s) selected</span>
-        <Button onClick={handleSubmit} disabled={isSaving || selectionCount === 0} className="gap-2">
+        <div className="space-y-1">
+          <span className="font-medium block">{selectionCount} item(s) selected</span>
+          {errorCount > 0 && (
+            <span className="text-sm text-red-600">
+              {errorCount} error(s) - {validCount} valid harvest(s) ready
+            </span>
+          )}
+          {errorCount === 0 && validCount > 0 && (
+            <span className="text-sm text-green-600">
+              All {validCount} harvest(s) are valid
+            </span>
+          )}
+        </div>
+        <Button 
+          onClick={handleSubmit} 
+          disabled={isSaving || validCount === 0 || errorCount > 0} 
+          className="gap-2"
+        >
           <Save className="w-4 h-4" />
-          {isSaving ? "Saving..." : `Save ${Object.values(selectedHarvests).filter(h => h.quantity > 0).length} Harvest(s)`}
+          {isSaving ? "Saving..." : `Save ${validCount} Harvest(s)`}
         </Button>
       </div>
     </div>

@@ -12,6 +12,8 @@ import { Plus, Edit, Trash2, Package, Printer } from "lucide-react";
 import { harvestService, HarvestWithDetails } from "@/services/harvestService";
 import { plantingService, PlantingWithDetails } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 
 export default function HarvestsPage() {
@@ -29,6 +31,10 @@ export default function HarvestsPage() {
     date_to: "",
     status: "",
   });
+  const [selectedPlantingId, setSelectedPlantingId] = useState<string>("");
+  const [harvestQuantity, setHarvestQuantity] = useState<number>(0);
+  const [quantityError, setQuantityError] = useState<string>("");
+  const { toast } = useToast();
 
   useEffect(() => {
     loadInitialData();
@@ -86,6 +92,49 @@ export default function HarvestsPage() {
   const getRemainingQuantity = (planting: PlantingWithDetails) => {
     const harvested = harvestedQuantities[planting.id] || 0;
     return planting.quantity - harvested;
+  };
+
+  const getAvailableQuantity = (plantingId: string): number => {
+    const planting = plantings.find(p => p.id === plantingId);
+    if (!planting) return 0;
+    const harvested = harvestedQuantities[plantingId] || 0;
+    return planting.quantity - harvested;
+  };
+
+  const validateHarvestQuantity = (quantity: number, plantingId: string): boolean => {
+    if (!plantingId) {
+      setQuantityError("Please select a planting first");
+      return false;
+    }
+    
+    const available = getAvailableQuantity(plantingId);
+    
+    if (quantity <= 0) {
+      setQuantityError("Quantity must be greater than 0");
+      return false;
+    }
+    
+    if (quantity > available) {
+      setQuantityError(`Quantity exceeds available: ${available} seedlings`);
+      return false;
+    }
+    
+    setQuantityError("");
+    return true;
+  };
+
+  const handlePlantingChange = (plantingId: string) => {
+    setSelectedPlantingId(plantingId);
+    setHarvestQuantity(0);
+    setQuantityError("");
+  };
+
+  const handleQuantityChange = (value: string) => {
+    const qty = parseInt(value) || 0;
+    setHarvestQuantity(qty);
+    if (selectedPlantingId) {
+      validateHarvestQuantity(qty, selectedPlantingId);
+    }
   };
 
   const handlePrintDispatchSlip = (harvest: HarvestWithDetails) => {
@@ -175,6 +224,19 @@ export default function HarvestsPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
+    const plantingId = formData.get("planting_id") as string;
+    const quantity = parseInt(formData.get("quantity_harvested") as string);
+    
+    // Validate before saving
+    if (!validateHarvestQuantity(quantity, plantingId)) {
+      toast({ 
+        title: "Validation Error", 
+        description: quantityError,
+        variant: "destructive" 
+      });
+      return;
+    }
+
     const harvestData = {
       planting_id: formData.get("planting_id") as string,
       quantity_harvested: parseInt(formData.get("quantity_harvested") as string),
@@ -195,6 +257,9 @@ export default function HarvestsPage() {
       await loadInitialData();
       setIsDialogOpen(false);
       setEditingHarvest(null);
+      setSelectedPlantingId("");
+      setHarvestQuantity(0);
+      setQuantityError("");
     } catch (error) {
       console.error("Error saving harvest:", error);
       alert("Failed to save harvest. Please try again.");
@@ -256,19 +321,32 @@ export default function HarvestsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="planting_id">Planting Batch</Label>
-                <Select name="planting_id" defaultValue={editingHarvest?.planting_id} required>
+                <Select 
+                  name="planting_id" 
+                  defaultValue={editingHarvest?.planting_id}
+                  onValueChange={handlePlantingChange}
+                  required
+                >
                   <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
                   <SelectContent>
                     {plantings.filter(p => p.status === "active").map(p => {
-                      const remaining = getRemainingQuantity(p);
+                      const available = getAvailableQuantity(p.id);
                       return (
-                        <SelectItem key={p.id} value={p.id} disabled={remaining <= 0}>
-                          {p.plant_types?.name} ({p.plant_types?.variety}) - Remaining: {remaining}
+                        <SelectItem key={p.id} value={p.id} disabled={available <= 0}>
+                          {p.plant_types?.name} ({p.plant_types?.variety}) - Available: {available}
                         </SelectItem>
                       );
                     })}
                   </SelectContent>
                 </Select>
+                {selectedPlantingId && (
+                  <Alert className="mt-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      Available: <strong>{getAvailableQuantity(selectedPlantingId)}</strong> seedlings
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="harvest_date">Harvest Date</Label>
@@ -278,7 +356,22 @@ export default function HarvestsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="quantity_harvested">Quantity Harvested</Label>
-                <Input id="quantity_harvested" name="quantity_harvested" type="number" defaultValue={editingHarvest?.quantity_harvested} required />
+                <Input 
+                  id="quantity_harvested" 
+                  name="quantity_harvested" 
+                  type="number" 
+                  defaultValue={editingHarvest?.quantity_harvested}
+                  value={harvestQuantity || ""}
+                  onChange={(e) => handleQuantityChange(e.target.value)}
+                  className={quantityError ? "border-red-500 focus-visible:ring-red-500" : ""}
+                  required 
+                />
+                {quantityError && (
+                  <p className="text-sm text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {quantityError}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="quality">Quality</Label>
@@ -312,8 +405,19 @@ export default function HarvestsPage() {
               <Textarea id="notes" name="notes" defaultValue={editingHarvest?.notes ?? ""} />
             </div>
             <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Save Harvest</Button>
+              <Button type="button" variant="outline" onClick={() => {
+                setIsDialogOpen(false);
+                setSelectedPlantingId("");
+                setHarvestQuantity(0);
+                setQuantityError("");
+              }}>Cancel</Button>
+              <Button 
+                type="submit" 
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={!!quantityError || harvestQuantity === 0}
+              >
+                Save Harvest
+              </Button>
             </div>
           </form>
         </DialogContent>
