@@ -1,104 +1,85 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
-type Harvest = Database["public"]["Tables"]["harvests"]["Row"];
-type HarvestInsert = Database["public"]["Tables"]["harvests"]["Insert"];
-type HarvestUpdate = Database["public"]["Tables"]["harvests"]["Update"];
+export type Harvest = Database["public"]["Tables"]["harvests"]["Row"];
+export type Planting = Database["public"]["Tables"]["plantings"]["Row"];
+export type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
+
+export type HarvestWithDetails = Harvest & {
+  plantings: (Planting & {
+    plant_types: PlantType | null;
+  }) | null;
+};
 
 export const harvestService = {
-  async getHarvests() {
+  async getHarvests(): Promise<HarvestWithDetails[]> {
     const { data, error } = await supabase
       .from("harvests")
       .select(`
         *,
-        plantings!harvests_planting_id_fkey (
-          id,
-          batch_number,
-          date_planted,
-          quantity,
-          plant_types!plantings_plant_type_id_fkey (
-            id,
+        plantings (
+          *,
+          plant_types (
             name,
             variety
-          ),
-          locations!plantings_location_id_fkey (
-            id,
-            name
           )
         )
-      `)
-      .order("harvest_date", { ascending: false });
-
-    if (error) throw error;
-    return data as (Harvest & {
-      plantings: Database["public"]["Tables"]["plantings"]["Row"] & {
-        plant_types: Database["public"]["Tables"]["plant_types"]["Row"];
-        locations: Database["public"]["Tables"]["locations"]["Row"];
-      };
-    })[];
+      `);
+    if (error) {
+      console.error("Error getting harvests with details:", error);
+      throw error;
+    }
+    return data as HarvestWithDetails[];
   },
 
-  async getHarvestById(id: string) {
+  async getHarvest(id: string) {
     const { data, error } = await supabase
       .from("harvests")
       .select(`
         *,
-        plantings!harvests_planting_id_fkey (
+        plantings (
           *,
-          plant_types!plantings_plant_type_id_fkey (*),
-          locations!plantings_location_id_fkey (*)
+          plant_types (
+            name,
+            variety
+          )
         )
       `)
       .eq("id", id)
       .single();
 
     if (error) throw error;
-    return data;
+    return data as HarvestWithDetails;
   },
 
-  async createHarvest(harvest: HarvestInsert) {
+  async createHarvest(harvest: Omit<Harvest, "id" | "created_at" | "updated_at">) {
     const { data, error } = await supabase
       .from("harvests")
       .insert([harvest])
       .select()
       .single();
-
     if (error) throw error;
-    return data as Harvest;
+    return data;
   },
 
-  async updateHarvest(id: string, updates: HarvestUpdate) {
+  async updateHarvest(id: string, harvest: Partial<Harvest>) {
     const { data, error } = await supabase
       .from("harvests")
-      .update(updates)
+      .update(harvest)
       .eq("id", id)
       .select()
       .single();
-
     if (error) throw error;
-    return data as Harvest;
+    return data;
   },
 
   async deleteHarvest(id: string) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("harvests")
       .delete()
       .eq("id", id);
-
     if (error) throw error;
-    return true;
-  },
-
-  async getHarvestsByPlanting(plantingId: string) {
-    const { data, error } = await supabase
-      .from("harvests")
-      .select("*")
-      .eq("planting_id", plantingId)
-      .order("harvest_date", { ascending: false });
-
-    if (error) throw error;
-    return data as Harvest[];
+    return data;
   },
 
   async getTotalHarvestedQuantity(plantingId: string) {
@@ -107,9 +88,10 @@ export const harvestService = {
       .select("quantity_harvested")
       .eq("planting_id", plantingId);
 
-    if (error) throw error;
-    
-    const total = data.reduce((sum, h) => sum + (h.quantity_harvested || 0), 0);
-    return total;
+    if (error) {
+      console.error("Error getting total harvested quantity:", error);
+      return 0;
+    }
+    return data.reduce((sum, h) => sum + h.quantity_harvested, 0);
   }
 };

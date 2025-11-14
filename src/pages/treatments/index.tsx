@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,17 +10,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Edit, Trash2, TestTube2, ChevronsRight } from "lucide-react";
-import { treatmentService } from "@/services/treatmentService";
-import type { TreatmentWithDetails } from "@/services/treatmentService";
-import { plantingService } from "@/services/plantingService";
-import type { PlantingWithDetails } from "@/services/plantingService";
+import { treatmentService, TreatmentWithPlantings } from "@/services/treatmentService";
+import { plantingService, PlantingWithDetails } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
+import { group } from "console";
+
+// We need to group the results from the service by treatment
+interface GroupedTreatment {
+  id: string;
+  name: string;
+  type: string;
+  application_date: string;
+  dosage: string;
+  application_method: string;
+  notes: string | null;
+  applied_by: string | null;
+  plantings: {
+    id: string;
+    batch_number: string | null;
+  }[];
+}
 
 export default function TreatmentsPage() {
-  const [treatments, setTreatments] = useState<TreatmentWithDetails[]>([]);
+  const [treatments, setTreatments] = useState<GroupedTreatment[]>([]);
   const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingTreatment, setEditingTreatment] = useState<TreatmentWithDetails | null>(null);
+  const [editingTreatment, setEditingTreatment] = useState<GroupedTreatment | null>(null);
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [selectedPlantingIds, setSelectedPlantingIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +53,9 @@ export default function TreatmentsPage() {
         treatmentService.getTreatments(),
         plantingService.getPlantingsWithDetails(),
       ]);
-      setTreatments(treatmentsData);
+
+      const groupedTreatments = groupTreatments(treatmentsData);
+      setTreatments(groupedTreatments);
       setPlantings(plantingsData);
     } catch (error) {
       console.error("Error loading data:", error);
@@ -48,13 +65,47 @@ export default function TreatmentsPage() {
     }
   };
 
-  const filteredTreatments = treatments.filter(t => 
-    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.type.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const groupTreatments = (data: TreatmentWithPlantings[]): GroupedTreatment[] => {
+    const treatmentMap = new Map<string, GroupedTreatment>();
+
+    data.forEach(item => {
+      if (!item.treatments) return;
+
+      const treatmentId = item.treatments.id;
+      if (!treatmentMap.has(treatmentId)) {
+        treatmentMap.set(treatmentId, {
+          id: treatmentId,
+          name: item.treatments.name,
+          type: item.treatments.type,
+          application_date: item.treatments.application_date,
+          dosage: item.treatments.dosage,
+          application_method: item.treatments.application_method,
+          notes: item.treatments.notes,
+          applied_by: item.treatments.applied_by,
+          plantings: [],
+        });
+      }
+
+      const existingTreatment = treatmentMap.get(treatmentId)!;
+      if (item.plantings && !existingTreatment.plantings.some(p => p.id === item.plantings!.id)) {
+        existingTreatment.plantings.push({
+            id: item.plantings.id,
+            batch_number: item.plantings.batch_number
+        });
+      }
+    });
+
+    return Array.from(treatmentMap.values());
+  };
+
+  const filteredTreatments = useMemo(() => 
+    treatments.filter(t =>
+      t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.type.toLowerCase().includes(searchQuery.toLowerCase())
+    ), [treatments, searchQuery]);
 
   const activePlantings = plantings.filter(p => p.status === "active");
-  
+
   const getPlantingDetails = (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
     return {
@@ -66,7 +117,6 @@ export default function TreatmentsPage() {
 
   const handleSaveTreatment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
     const formData = new FormData(e.currentTarget);
     
     if (isBulkMode && selectedPlantingIds.length === 0) {
@@ -75,7 +125,7 @@ export default function TreatmentsPage() {
     }
     
     const singlePlantingId = formData.get("planting_id") as string;
-    if (!isBulkMode && !singlePlantingId) {
+    if (!isBulkMode && !singlePlantingId && !editingTreatment) {
       toast({ title: "Error", description: "Please select a planting.", variant: "destructive" });
       return;
     }
@@ -84,24 +134,25 @@ export default function TreatmentsPage() {
       name: formData.get("name") as string,
       type: formData.get("type") as string,
       application_date: formData.get("application_date") as string,
-      planting_ids: isBulkMode ? selectedPlantingIds : [singlePlantingId],
       dosage: formData.get("dosage") as string,
       application_method: formData.get("application_method") as string,
       notes: formData.get("notes") as string,
       applied_by: formData.get("applied_by") as string,
     };
+    
+    const finalPlantingIds = isBulkMode ? selectedPlantingIds : editingTreatment ? selectedPlantingIds : [singlePlantingId];
 
     try {
       if (editingTreatment) {
-        await treatmentService.updateTreatment(editingTreatment.id, treatmentData);
+        await treatmentService.updateTreatment(editingTreatment.id, treatmentData, finalPlantingIds);
         toast({ title: "Success", description: "Treatment updated." });
       } else {
-        await treatmentService.addTreatment(treatmentData);
+        await treatmentService.createTreatment(treatmentData, finalPlantingIds);
         toast({ title: "Success", description: "Treatment created." });
       }
       
       await loadData();
-      setIsDialogOpen(false);
+      handleCloseDialog();
     } catch (error) {
       console.error("Error saving treatment:", error);
       toast({ title: "Error", description: "Failed to save treatment.", variant: "destructive" });
@@ -121,9 +172,9 @@ export default function TreatmentsPage() {
     }
   };
 
-  const handleOpenDialog = (treatment: TreatmentWithDetails | null = null, bulk = false) => {
+  const handleOpenDialog = (treatment: GroupedTreatment | null = null, bulk = false) => {
     setEditingTreatment(treatment);
-    setIsBulkMode(bulk);
+    setIsBulkMode(bulk || (treatment !== null && treatment.plantings.length > 1));
     setSelectedPlantingIds(treatment?.plantings.map(p => p.id) || []);
     setIsDialogOpen(true);
   };
@@ -180,7 +231,7 @@ export default function TreatmentsPage() {
             ) : (
               <div className="space-y-2">
                 <Label htmlFor="planting_id">Select Planting *</Label>
-                <Select name="planting_id" required defaultValue={editingTreatment?.plantings?.[0]?.id}>
+                <Select name="planting_id" required defaultValue={editingTreatment?.plantings?.[0]?.id} onValueChange={(val) => setSelectedPlantingIds([val])}>
                   <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
                   <SelectContent>
                     {activePlantings.map(p => (

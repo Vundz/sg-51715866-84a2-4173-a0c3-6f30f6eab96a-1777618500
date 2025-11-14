@@ -9,12 +9,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Package, Printer } from "lucide-react";
-import { harvestService } from "@/services/harvestService";
+import { harvestService, HarvestWithDetails } from "@/services/harvestService";
 import { plantingService } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 
-type Harvest = Database["public"]["Tables"]["harvests"]["Row"];
 type Planting = Database["public"]["Tables"]["plantings"]["Row"];
 type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
 type Location = Database["public"]["Tables"]["locations"]["Row"];
@@ -22,10 +21,6 @@ type Location = Database["public"]["Tables"]["locations"]["Row"];
 type PlantingWithDetails = Planting & {
   plant_types: PlantType;
   locations: Location;
-};
-
-export type HarvestWithDetails = Harvest & {
-  plantings: PlantingWithDetails;
 };
 
 export default function HarvestsPage() {
