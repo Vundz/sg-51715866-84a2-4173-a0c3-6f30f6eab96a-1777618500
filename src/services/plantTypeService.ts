@@ -1,10 +1,7 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
-type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
-type PlantTypeInsert = Database["public"]["Tables"]["plant_types"]["Insert"];
-type PlantTypeUpdate = Database["public"]["Tables"]["plant_types"]["Update"];
+export type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
 
 export const plantTypeService = {
   async getPlantTypes() {
@@ -14,7 +11,7 @@ export const plantTypeService = {
       .order("name", { ascending: true });
 
     if (error) throw error;
-    return data as PlantType[];
+    return data;
   },
 
   async getPlantTypeById(id: string) {
@@ -28,27 +25,23 @@ export const plantTypeService = {
     return data as PlantType;
   },
 
-  async createPlantType(plantType: PlantTypeInsert) {
+  async createPlantType(plantType: Omit<PlantType, "id" | "created_at" | "updated_at">) {
     const { data, error } = await supabase
       .from("plant_types")
       .insert([plantType])
-      .select()
-      .single();
-
+      .select();
     if (error) throw error;
-    return data as PlantType;
+    return data[0];
   },
 
-  async updatePlantType(id: string, updates: PlantTypeUpdate) {
+  async updatePlantType(id: string, plantType: Partial<PlantType>) {
     const { data, error } = await supabase
       .from("plant_types")
-      .update(updates)
+      .update(plantType)
       .eq("id", id)
-      .select()
-      .single();
-
+      .select();
     if (error) throw error;
-    return data as PlantType;
+    return data[0];
   },
 
   async deletePlantType(id: string) {

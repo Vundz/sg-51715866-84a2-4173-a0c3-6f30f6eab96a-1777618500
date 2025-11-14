@@ -43,10 +43,12 @@ export default function PlantTypesPage() {
   const handleSavePlantType = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    
     const plantTypeData = {
       name: formData.get("name") as string,
       variety: formData.get("variety") as string,
-      growth_duration: parseInt(formData.get("growth_duration") as string, 10),
+      growth_duration: parseInt(formData.get("growth_duration") as string),
+      germination_rate: parseInt(formData.get("germination_rate") as string),
     };
 
     try {
@@ -121,12 +123,12 @@ export default function PlantTypesPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingPlantType ? "Edit" : "Add"} Plant Type</DialogTitle>
+            <DialogTitle>{editingPlantType ? "Edit Plant Type" : "Add Plant Type"}</DialogTitle>
             <DialogDescription>
               {editingPlantType ? "Update the details for this plant type." : "Create a new plant type and variety."}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSavePlantType} className="space-y-4 pt-4">
+          <form onSubmit={handleSavePlantType} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Plant Name</Label>
               <Input id="name" name="name" defaultValue={editingPlantType?.name} required />
@@ -135,9 +137,15 @@ export default function PlantTypesPage() {
               <Label htmlFor="variety">Variety</Label>
               <Input id="variety" name="variety" defaultValue={editingPlantType?.variety} required />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="growth_duration">Growth Duration (days)</Label>
-              <Input id="growth_duration" name="growth_duration" type="number" defaultValue={editingPlantType?.growth_duration} required />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="growth_duration">Growth Duration (days)</Label>
+                <Input id="growth_duration" name="growth_duration" type="number" defaultValue={editingPlantType?.growth_duration} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="germination_rate">Germination Rate (%)</Label>
+                <Input id="germination_rate" name="germination_rate" type="number" min="0" max="100" defaultValue={editingPlantType?.germination_rate ?? ''} />
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
@@ -159,9 +167,10 @@ export default function PlantTypesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
+                  <TableHead>Plant Name</TableHead>
                   <TableHead>Variety</TableHead>
                   <TableHead>Growth Duration</TableHead>
+                  <TableHead>Germination Rate</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -176,6 +185,7 @@ export default function PlantTypesPage() {
                       <TableCell className="font-medium">{pt.name}</TableCell>
                       <TableCell>{pt.variety}</TableCell>
                       <TableCell>{pt.growth_duration} days</TableCell>
+                      <TableCell>{pt.germination_rate ? `${pt.germination_rate}%` : 'N/A'}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">
                           <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(pt)}><Edit className="w-4 h-4" /></Button>
