@@ -44,11 +44,13 @@ export default function PlantTypesPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
+    const germinationRateValue = formData.get("germination_rate") as string;
+
     const plantTypeData = {
       name: formData.get("name") as string,
       variety: formData.get("variety") as string,
       growth_duration: parseInt(formData.get("growth_duration") as string),
-      germination_rate: parseInt(formData.get("germination_rate") as string),
+      germination_rate: germinationRateValue ? parseInt(germinationRateValue, 10) : null,
     };
 
     try {
