@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Package, Printer } from "lucide-react";
-import { harvestService, HarvestWithDetails } from "@/services/harvestService";
+import { harvestService } from "@/services/harvestService";
 import { plantingService } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
@@ -24,6 +24,10 @@ type PlantingWithDetails = Planting & {
   locations: Location;
 };
 
+export type HarvestWithDetails = Harvest & {
+  plantings: PlantingWithDetails;
+};
+
 export default function HarvestsPage() {
   const [harvests, setHarvests] = useState<HarvestWithDetails[]>([]);
   const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
@@ -31,6 +35,8 @@ export default function HarvestsPage() {
   const [editingHarvest, setEditingHarvest] = useState<HarvestWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [harvestedQuantities, setHarvestedQuantities] = useState<Record<string, number>>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredHarvests, setFilteredHarvests] = useState<HarvestWithDetails[]>([]);
   const [filters, setFilters] = useState({
     planting_id: "",
     date_from: "",
@@ -68,6 +74,16 @@ export default function HarvestsPage() {
 
   useEffect(() => {
     let filtered = harvests;
+    if (searchQuery) {
+        filtered = filtered.filter(h => 
+            h.plantings.plant_types.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            h.plantings.plant_types.variety.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            h.plantings.batch_number?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }
+    if (filters.planting_id) {
+        filtered = filtered.filter(h => h.planting_id === filters.planting_id);
+    }
     if (filters.date_from) {
       filtered = filtered.filter(h => new Date(h.harvest_date) >= new Date(filters.date_from));
     }
@@ -146,7 +162,6 @@ export default function HarvestsPage() {
           <div class="info-row"><span class="label">Plant Type:</span><span class="value">${details.plant_types.name}</span></div>
           <div class="info-row"><span class="label">Variety:</span><span class="value">${details.plant_types.variety}</span></div>
           <div class="info-row"><span class="label">Batch:</span><span class="value">${details.batch_number || details.id}</span></div>
-          <div class="info-row"><span class="label">Quality:</span><span class="value">${(harvest.quality_grade || 'N/A').toUpperCase()}</span></div>
         </div>
         <div class="section">
           <div class="section-title">Location Details</div>
@@ -178,7 +193,7 @@ export default function HarvestsPage() {
       planting_id: formData.get("planting_id") as string,
       quantity_harvested: parseInt(formData.get("quantity_harvested") as string),
       harvest_date: formData.get("harvest_date") as string,
-      quality_grade: formData.get("quality_grade") as string,
+      status: formData.get("status") as string,
       notes: (formData.get("notes") as string) || null,
     };
 
@@ -311,15 +326,15 @@ export default function HarvestsPage() {
                 <TableHead>Planting</TableHead>
                 <TableHead>Qty Harvested</TableHead>
                 <TableHead>Harvest Date</TableHead>
-                <TableHead>Quality</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {harvests.length === 0 ? (
+              {filteredHarvests.length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center h-24">No harvests recorded yet.</TableCell></TableRow>
               ) : (
-                harvests.map(h => {
+                filteredHarvests.map(h => {
                   const details = h.plantings;
                   return (
                     <TableRow key={h.id}>
@@ -327,13 +342,7 @@ export default function HarvestsPage() {
                       <TableCell>{h.quantity_harvested}</TableCell>
                       <TableCell>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
                       <TableCell>
-                        <Badge variant={h.quality_grade === "excellent" || h.quality_grade === "good" ? "default" : "destructive"}
-                          className={
-                            h.quality_grade === "excellent" ? "bg-green-100 text-green-800" :
-                            h.quality_grade === "good" ? "bg-blue-100 text-blue-800" :
-                            h.quality_grade === "fair" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"
-                          }
-                        >{h.quality_grade}</Badge>
+                        <Badge variant={h.status === 'sold' ? 'default' : 'secondary'}>{h.status}</Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">

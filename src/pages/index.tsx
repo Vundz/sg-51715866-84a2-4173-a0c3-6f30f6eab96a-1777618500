@@ -1,10 +1,16 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
-import { BarChart, LineChart, PieChart, Users, DollarSign, Package, TrendingUp } from "lucide-react";
+import { BarChart, LineChart, PieChart, Users, DollarSign, Package, TrendingUp, Sprout, ShoppingCart, Calendar, MapPin, ArrowRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { harvestService } from "@/services/harvestService";
 import { plantingService } from "@/services/plantingService";
 import { reservationService } from "@/services/reservationService";
+import { locationService } from "@/services/locationService";
+import { treatmentService } from "@/services/treatmentService";
+import { plantTypeService } from "@/services/plantTypeService";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 // Helper to format numbers
 const formatNumber = (num: number) => {
@@ -28,40 +34,57 @@ export default function DashboardPage() {
     activeReservations: 0,
     trayUtilization: 0,
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const plantings = getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || [];
-    const harvests = getStorageData<Harvest[]>(STORAGE_KEYS.HARVESTS) || [];
-    const locations = getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || [];
-    const treatments = getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || [];
-    const plantTypes = getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || [];
-    const reservations = getStorageData<Reservation[]>(STORAGE_KEYS.RESERVATIONS) || [];
+    const fetchData = async () => {
+      try {
+        const [
+          plantingsData,
+          harvestsData,
+          locationsData,
+          treatmentsData,
+          plantTypesData,
+          reservationsData,
+        ] = await Promise.all([
+          plantingService.getPlantings(),
+          harvestService.getHarvests(),
+          locationService.getLocations(),
+          treatmentService.getTreatments(),
+          plantTypeService.getPlantTypes(),
+          reservationService.getReservations(),
+        ]);
 
-    const upcoming = plantings.filter(p => {
-      if (p.status !== "active") return false;
-      const pt = plantTypes.find(plt => plt.id === p.plantTypeId);
-      if (!pt?.growthDuration) return false;
-      const expected = new Date(p.datePlanted);
-      expected.setDate(expected.getDate() + pt.growthDuration);
-      const daysUntil = Math.ceil((expected.getTime() - new Date().getTime()) / (1000 * 3600 * 24));
-      return daysUntil >= 0 && daysUntil <= 7;
-    }).length;
+        const upcoming = plantingsData.filter(p => {
+          if (p.status !== "active" || !p.expected_harvest_date) return false;
+          const expected = new Date(p.expected_harvest_date);
+          const daysUntil = Math.ceil((expected.getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+          return daysUntil >= 0 && daysUntil <= 7;
+        }).length;
 
-    // Calculate total tray utilization (quantity / 220 for each active planting)
-    const totalTrays = plantings
-      .filter(p => p.status === 'active')
-      .reduce((sum, p) => sum + (p.quantity / 220), 0);
+        const totalTrays = plantingsData
+          .filter(p => p.status === 'active')
+          .reduce((sum, p) => sum + ((p.remaining_quantity ?? p.quantity) / 220), 0);
+        
+        setStats({
+          activePlantings: plantingsData.filter(p => p.status === 'active').length,
+          totalHarvests: harvestsData.length,
+          locations: locationsData.length,
+          treatments: treatmentsData.length,
+          upcomingHarvests: upcoming,
+          plantTypes: plantTypesData.length,
+          activeReservations: reservationsData.filter(r => r.status === 'active').length,
+          trayUtilization: Math.round(totalTrays),
+        });
 
-    setStats({
-      activePlantings: plantings.filter(p => p.status === 'active').length,
-      totalHarvests: harvests.length,
-      locations: locations.length,
-      treatments: treatments.length,
-      upcomingHarvests: upcoming,
-      plantTypes: plantTypes.length,
-      activeReservations: reservations.filter(r => r.status === 'active').length,
-      trayUtilization: Math.round(totalTrays), // Round to whole number
-    });
+      } catch (error) {
+        console.error("Failed to fetch dashboard stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
   }, []);
 
   const statCards = [
