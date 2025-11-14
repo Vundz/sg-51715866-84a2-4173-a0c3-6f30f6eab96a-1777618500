@@ -160,3 +160,5 @@ const PlantingsReportPage: React.FC = () => {
     </div>
   );
 }
+
+export default PlantingsReportPage;
