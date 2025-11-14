@@ -12,6 +12,7 @@ import { Plus, Edit, Trash2, Package, Printer } from "lucide-react";
 import { harvestService, HarvestWithDetails } from "@/services/harvestService";
 import { plantingService, PlantingWithDetails } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
 
 export default function HarvestsPage() {
   const [harvests, setHarvests] = useState<HarvestWithDetails[]>([]);
@@ -235,10 +236,15 @@ export default function HarvestsPage() {
           <h1 className="text-4xl font-bold flex items-center gap-3"><Package className="w-10 h-10 text-blue-600" />Harvests</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">Record and manage harvests from your plantings.</p>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Harvest
-        </Button>
+        <div className="flex items-center gap-2">
+            <Link href="/harvests/bulk">
+                <Button variant="outline">Bulk Harvest</Button>
+            </Link>
+            <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Harvest
+            </Button>
+        </div>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

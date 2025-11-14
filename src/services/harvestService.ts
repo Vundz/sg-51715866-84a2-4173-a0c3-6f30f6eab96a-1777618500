@@ -60,6 +60,19 @@ export const harvestService = {
     return data;
   },
 
+  async createBulkHarvests(harvests: Omit<Harvest, "id" | "created_at" | "updated_at">[]) {
+    const { data, error } = await supabase
+      .from("harvests")
+      .insert(harvests)
+      .select();
+      
+    if (error) {
+      console.error("Error creating bulk harvests:", error);
+      throw error;
+    }
+    return data;
+  },
+
   async updateHarvest(id: string, harvest: Partial<Harvest>) {
     const { data, error } = await supabase
       .from("harvests")
