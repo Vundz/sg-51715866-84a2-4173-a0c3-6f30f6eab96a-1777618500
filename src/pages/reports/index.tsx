@@ -2,46 +2,65 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BarChart, Calendar, Package, MapPin, Sprout, TrendingUp, FileText as ReportIcon, ArrowRight } from "lucide-react";
-import { Planting, Harvest, PlantType, Location, Treatment } from "@/types";
-import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
+import { BarChart, Calendar, Package, MapPin, Sprout, TrendingUp, FileText as ReportIcon, ArrowRight, TestTube2 } from "lucide-react";
+import { plantingService } from "@/services/plantingService";
+import { harvestService } from "@/services/harvestService";
+import { locationService } from "@/services/locationService";
+import { treatmentService } from "@/services/treatmentService";
+import { plantTypeService } from "@/services/plantTypeService";
 
 export default function ReportsPage() {
-  const [plantings, setPlantings] = useState<Planting[]>([]);
-  const [harvests, setHarvests] = useState<Harvest[]>([]);
-  const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [treatments, setTreatments] = useState<Treatment[]>([]);
+    const [stats, setStats] = useState({
+        upcomingHarvests: 0,
+        activePlantings: 0,
+        totalHarvests: 0,
+        totalTreatments: 0,
+        totalLocations: 0,
+        activeLocations: 0,
+    });
+    const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
-    setHarvests(getStorageData<Harvest[]>(STORAGE_KEYS.HARVESTS) || []);
-    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
-    setLocations(getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || []);
-    setTreatments(getStorageData<Treatment[]>(STORAGE_KEYS.TREATMENTS) || []);
-  }, []);
+    useEffect(() => {
+        const fetchReportStats = async () => {
+            try {
+                setLoading(true);
+                const [
+                    plantingsData,
+                    harvestsData,
+                    locationsData,
+                    treatmentsData,
+                ] = await Promise.all([
+                    plantingService.getPlantingsWithDetails(),
+                    harvestService.getHarvests(),
+                    locationService.getLocations(),
+                    treatmentService.getTreatments(),
+                ]);
 
-  const upcomingHarvestsCount = plantings.filter(p => {
-    if (p.status !== "active") return false;
-    const plantType = plantTypes.find(pt => pt.id === p.plantTypeId);
-    if (!plantType?.growthDuration) return false;
-    
-    const plantingDate = new Date(p.datePlanted);
-    const expectedDate = new Date(plantingDate);
-    expectedDate.setDate(expectedDate.getDate() + plantType.growthDuration);
-    
-    const today = new Date();
-    const daysUntil = Math.ceil((expectedDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    
-    return daysUntil >= 0 && daysUntil <= 7;
-  }).length;
+                const upcoming = plantingsData.filter(p => {
+                    if (p.status !== "active" || !p.expected_harvest_date) return false;
+                    const expected = new Date(p.expected_harvest_date);
+                    const daysUntil = Math.ceil((expected.getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+                    return daysUntil >= 0 && daysUntil <= 7;
+                }).length;
+                
+                const activePlantings = plantingsData.filter(p => p.status === "active");
 
-  const activePlantingsCount = plantings.filter(p => p.status === "active").length;
-  const harvestsCount = harvests.length;
-  const treatmentsCount = treatments.length;
-  const activeLocationsCount = locations.filter(loc => 
-    plantings.some(p => p.locationId === loc.id && p.status === "active")
-  ).length;
+                setStats({
+                    upcomingHarvests: upcoming,
+                    activePlantings: activePlantings.length,
+                    totalHarvests: harvestsData.length,
+                    totalTreatments: treatmentsData.length,
+                    totalLocations: locationsData.length,
+                    activeLocations: [...new Set(activePlantings.map(p => p.location_id))].length,
+                });
+            } catch (error) {
+                console.error("Failed to load report stats", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchReportStats();
+    }, []);
 
   const reports = [
     {
@@ -52,7 +71,7 @@ export default function ReportsPage() {
       iconBg: "bg-green-100 dark:bg-green-900",
       iconColor: "text-green-600 dark:text-green-400",
       borderColor: "border-l-green-500",
-      count: activePlantingsCount,
+      count: stats.activePlantings,
       countLabel: "Active Plantings",
       href: "/reports/plantings"
     },
@@ -64,7 +83,7 @@ export default function ReportsPage() {
       iconBg: "bg-orange-100 dark:bg-orange-900",
       iconColor: "text-orange-600 dark:text-orange-400",
       borderColor: "border-l-orange-500",
-      count: upcomingHarvestsCount,
+      count: stats.upcomingHarvests,
       countLabel: "Next 7 Days",
       href: "/reports/upcoming-harvests"
     },
@@ -76,7 +95,7 @@ export default function ReportsPage() {
       iconBg: "bg-blue-100 dark:bg-blue-900",
       iconColor: "text-blue-600 dark:text-blue-400",
       borderColor: "border-l-blue-500",
-      count: harvestsCount,
+      count: stats.totalHarvests,
       countLabel: "Total Harvests",
       href: "/reports/harvests"
     },
@@ -88,7 +107,7 @@ export default function ReportsPage() {
       iconBg: "bg-purple-100 dark:bg-purple-900",
       iconColor: "text-purple-600 dark:text-purple-400",
       borderColor: "border-l-purple-500",
-      count: locations.length,
+      count: stats.totalLocations,
       countLabel: "Total Locations",
       href: "/reports/location-summary"
     },
@@ -100,7 +119,7 @@ export default function ReportsPage() {
       iconBg: "bg-teal-100 dark:bg-teal-900",
       iconColor: "text-teal-600 dark:text-teal-400",
       borderColor: "border-l-teal-500",
-      count: activeLocationsCount,
+      count: stats.activeLocations,
       countLabel: "Active Locations",
       href: "/reports/location-detail"
     },
@@ -108,15 +127,19 @@ export default function ReportsPage() {
       id: "treatments",
       title: "Treatment Report",
       description: "Application history and tracking",
-      icon: ReportIcon,
+      icon: TestTube2,
       iconBg: "bg-red-100 dark:bg-red-900",
       iconColor: "text-red-600 dark:text-red-400",
       borderColor: "border-l-red-500",
-      count: treatmentsCount,
+      count: stats.totalTreatments,
       countLabel: "Total Treatments",
       href: "/reports/treatments"
     }
   ];
+
+  if (loading) {
+    return <div>Loading reports...</div>;
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">

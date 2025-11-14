@@ -5,34 +5,50 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileSpreadsheet, FileText, MapPin } from "lucide-react";
-import { Location, Planting } from "@/types";
-import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
 import { locationService } from "@/services/locationService";
 import { plantingService } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
 import { Bar } from "react-chartjs-2";
 import "chart.js/auto";
+import type { Database } from "@/integrations/supabase/types";
 
-type LocationData = Awaited<ReturnType<typeof locationService.getLocations>>[0];
+type LocationData = Database["public"]["Tables"]["locations"]["Row"];
+type PlantingData = Database["public"]["Tables"]["plantings"]["Row"];
 
 const LocationSummaryReport: React.FC = () => {
   const [locations, setLocations] = useState<LocationData[]>([]);
-  const [plantings, setPlantings] = useState<Planting[]>([]);
+  const [plantings, setPlantings] = useState<PlantingData[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLocations(getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || []);
-    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [locationsData, plantingsData] = await Promise.all([
+          locationService.getLocations(),
+          plantingService.getPlantings(),
+        ]);
+        setLocations(locationsData);
+        setPlantings(plantingsData as PlantingData[]);
+      } catch (error) {
+        console.error("Error fetching report data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
   const locationSummary = useMemo(() => {
     return locations.map(location => {
       const locationPlantings = plantings.filter(p => 
-        p.locationId === location.id && p.status === "active"
+        p.location_id === location.id && p.status === "active"
       );
       const totalPlanted = locationPlantings.reduce((sum, p) => sum + p.quantity, 0);
-      const availableSpace = location.capacity - totalPlanted;
-      const utilizationPercent = location.capacity > 0 
-        ? ((totalPlanted / location.capacity) * 100).toFixed(1) 
+      const capacity = location.capacity ?? 0;
+      const availableSpace = capacity - totalPlanted;
+      const utilizationPercent = capacity > 0 
+        ? ((totalPlanted / capacity) * 100).toFixed(1) 
         : "0";
       
       return {
@@ -45,17 +61,11 @@ const LocationSummaryReport: React.FC = () => {
     });
   }, [locations, plantings]);
 
-  const exportToCSV = () => {
-    console.log("Exporting to CSV is not implemented yet.");
-  };
+  const exportToCSV = () => console.log("Exporting to CSV is not implemented yet.");
+  const exportToExcel = () => console.log("Exporting to Excel is not implemented yet.");
+  const exportToPDF = () => window.print();
 
-  const exportToExcel = () => {
-    console.log("Exporting to Excel is not implemented yet.");
-  };
-
-  const exportToPDF = () => {
-    window.print();
-  };
+  if (loading) return <div>Loading report...</div>
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">

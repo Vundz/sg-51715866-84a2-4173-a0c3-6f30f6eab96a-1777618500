@@ -5,21 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileSpreadsheet, FileText, TrendingUp } from "lucide-react";
-import { Location, Planting, PlantType } from "@/types";
-import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
 import { locationService } from "@/services/locationService";
 import { plantingService } from "@/services/plantingService";
-import { harvestService } from "@/services/harvestService";
+import { plantTypeService } from "@/services/plantTypeService";
 import { useToast } from "@/hooks/use-toast";
+import type { Database } from "@/integrations/supabase/types";
 
-type LocationData = Awaited<ReturnType<typeof locationService.getLocations>>[0];
-type PlantingData = Awaited<ReturnType<typeof plantingService.getPlantings>>[0];
-type HarvestData = Awaited<ReturnType<typeof harvestService.getHarvests>>[0];
+type LocationData = Database["public"]["Tables"]["locations"]["Row"];
+type PlantingData = Database["public"]["Tables"]["plantings"]["Row"];
+type PlantTypeData = Database["public"]["Tables"]["plant_types"]["Row"];
 
 interface LocationDetail {
-  location: Location;
+  location: LocationData;
   plantings: Array<{
-    planting: Planting;
+    planting: PlantingData;
     plantTypeName: string;
     expectedHarvestDate: Date;
   }>;
@@ -28,14 +27,30 @@ interface LocationDetail {
 }
 
 export default function LocationDetailReportPage() {
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [plantings, setPlantings] = useState<Planting[]>([]);
-  const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
+  const [locations, setLocations] = useState<LocationData[]>([]);
+  const [plantings, setPlantings] = useState<PlantingData[]>([]);
+  const [plantTypes, setPlantTypes] = useState<PlantTypeData[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLocations(getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || []);
-    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
-    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [locationsData, plantingsData, plantTypesData] = await Promise.all([
+          locationService.getLocations(),
+          plantingService.getPlantings(),
+          plantTypeService.getPlantTypes(),
+        ]);
+        setLocations(locationsData);
+        setPlantings(plantingsData as PlantingData[]);
+        setPlantTypes(plantTypesData);
+      } catch (error) {
+        console.error("Error fetching report data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
   const getPlantTypeDetails = (plantTypeId: string) => plantTypes.find(pt => pt.id === plantTypeId);
@@ -44,13 +59,13 @@ export default function LocationDetailReportPage() {
     return locations
       .map(location => {
         const locationPlantings = plantings
-          .filter(p => p.locationId === location.id && p.status === "active")
+          .filter(p => p.location_id === location.id && p.status === "active")
           .map(planting => {
-            const plantType = getPlantTypeDetails(planting.plantTypeId);
-            const plantingDate = new Date(planting.datePlanted);
+            const plantType = getPlantTypeDetails(planting.plant_type_id);
+            const plantingDate = new Date(planting.date_planted);
             const expectedHarvestDate = new Date(plantingDate);
-            if (plantType?.growthDuration) {
-              expectedHarvestDate.setDate(expectedHarvestDate.getDate() + plantType.growthDuration);
+            if (plantType?.growth_duration) {
+              expectedHarvestDate.setDate(expectedHarvestDate.getDate() + plantType.growth_duration);
             }
             return {
               planting,
@@ -61,7 +76,7 @@ export default function LocationDetailReportPage() {
           .sort((a, b) => a.expectedHarvestDate.getTime() - b.expectedHarvestDate.getTime());
         
         const totalPlanted = locationPlantings.reduce((sum, lp) => sum + lp.planting.quantity, 0);
-        const availableSpace = location.capacity - totalPlanted;
+        const availableSpace = (location.capacity ?? 0) - totalPlanted;
         
         return { location, plantings: locationPlantings, totalPlanted, availableSpace };
       })
@@ -71,6 +86,8 @@ export default function LocationDetailReportPage() {
   const exportToCSV = () => console.log("Exporting CSV...");
   const exportToExcel = () => console.log("Exporting Excel...");
   const exportToPDF = () => window.print();
+  
+  if (loading) return <div>Loading report...</div>;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
@@ -115,7 +132,7 @@ export default function LocationDetailReportPage() {
                       </div>
                       <Separator className="my-2" />
                       <div className="space-y-1 text-xs">
-                        <div className="flex justify-between"><span className="text-gray-600">Planted:</span><span>{new Date(planting.datePlanted).toLocaleDateString()}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">Planted:</span><span>{new Date(planting.date_planted).toLocaleDateString()}</span></div>
                         <div className="flex justify-between"><span className="text-gray-600">Ready:</span><span className={daysUntilHarvest <= 7 ? "font-medium text-orange-600" : ""}>{expectedHarvestDate.toLocaleDateString()}</span></div>
                         {daysUntilHarvest <= 14 && <div className="flex justify-between mt-1 pt-1 border-t"><span className="text-gray-600">Days left:</span><span className={`font-medium ${daysUntilHarvest <= 3 ? "text-red-600" : daysUntilHarvest <= 7 ? "text-orange-600" : "text-green-600"}`}>{daysUntilHarvest}</span></div>}
                       </div>

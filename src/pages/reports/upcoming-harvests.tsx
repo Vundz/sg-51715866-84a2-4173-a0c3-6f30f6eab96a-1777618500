@@ -7,55 +7,57 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileSpreadsheet, FileText, Calendar, AlertCircle } from "lucide-react";
-import { Planting, PlantType, Location } from "@/types";
-import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
 import { plantingService } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
+import type { Database } from "@/integrations/supabase/types";
 
 type PlantingData = Awaited<ReturnType<typeof plantingService.getPlantingsWithDetails>>[0];
 
 const UpcomingHarvestsReport: React.FC = () => {
   const [plantings, setPlantings] = useState<PlantingData[]>([]);
-  const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [loading, setLoading] = useState(true);
   const [daysThreshold, setDaysThreshold] = useState("7");
 
   useEffect(() => {
-    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
-    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
-    setLocations(getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || []);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const plantingsData = await plantingService.getPlantingsWithDetails();
+        setPlantings(plantingsData);
+      } catch (error) {
+        console.error("Error fetching report data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
-
-  const getPlantTypeDetails = (plantTypeId: string) => plantTypes.find(pt => pt.id === plantTypeId);
-  const getLocationName = (locationId: string) => locations.find(l => l.id === locationId)?.name || "N/A";
 
   const upcomingHarvests = useMemo(() => {
     const today = new Date();
     const threshold = parseInt(daysThreshold);
     return plantings
-      .filter(p => p.status === "active")
+      .filter(p => p.status === "active" && p.expected_harvest_date)
       .map(p => {
-        const plantType = getPlantTypeDetails(p.plantTypeId);
-        const expectedHarvestDate = new Date(p.datePlanted);
-        if (plantType?.growthDuration) {
-          expectedHarvestDate.setDate(expectedHarvestDate.getDate() + plantType.growthDuration);
-        }
+        const expectedHarvestDate = new Date(p.expected_harvest_date);
         const daysUntilHarvest = Math.ceil((expectedHarvestDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         return {
           ...p,
-          plantTypeName: plantType?.name || "N/A",
-          locationName: getLocationName(p.locationId),
+          plantTypeName: p.plant_types?.name || "N/A",
+          locationName: p.locations?.name || "N/A",
           expectedHarvestDate,
           daysUntilHarvest,
         };
       })
       .filter(p => p.daysUntilHarvest >= 0 && p.daysUntilHarvest <= threshold)
       .sort((a, b) => a.daysUntilHarvest - b.daysUntilHarvest);
-  }, [plantings, plantTypes, locations, daysThreshold]);
+  }, [plantings, daysThreshold]);
 
   const exportToCSV = () => console.log("Exporting CSV...");
   const exportToExcel = () => console.log("Exporting Excel...");
   const exportToPDF = () => window.print();
+
+  if (loading) return <div>Loading report...</div>;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
@@ -106,9 +108,9 @@ const UpcomingHarvestsReport: React.FC = () => {
             <CardContent className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-gray-600">Location:</span><span className="font-medium">{h.locationName}</span></div>
               <div className="flex justify-between"><span className="text-gray-600">Quantity:</span><span className="font-medium">{h.quantity}</span></div>
-              <div className="flex justify-between"><span className="text-gray-600">Remaining:</span><span className="font-medium">{h.remainingQuantity ?? h.quantity}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Remaining:</span><span className="font-medium">{h.remaining_quantity ?? h.quantity}</span></div>
               <Separator className="my-2" />
-              <div className="flex justify-between"><span className="text-gray-600">Planted:</span><span className="font-medium">{new Date(h.datePlanted).toLocaleDateString()}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Planted:</span><span className="font-medium">{new Date(h.date_planted).toLocaleDateString()}</span></div>
               <div className="flex justify-between"><span className="text-gray-600">Expected:</span><span className="font-medium">{h.expectedHarvestDate.toLocaleDateString()}</span></div>
             </CardContent>
           </Card>

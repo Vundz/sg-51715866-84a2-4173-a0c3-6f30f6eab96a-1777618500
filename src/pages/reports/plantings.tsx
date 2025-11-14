@@ -8,21 +8,23 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileSpreadsheet, FileText, Sprout } from "lucide-react";
-import { Planting, PlantType, Location } from "@/types";
-import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
 import { plantingService } from "@/services/plantingService";
 import { plantTypeService } from "@/services/plantTypeService";
+import { locationService } from "@/services/locationService";
 import { useToast } from "@/hooks/use-toast";
 import "chart.js/auto";
 import { Bar } from "react-chartjs-2";
+import type { Database } from "@/integrations/supabase/types";
 
 type PlantingData = Awaited<ReturnType<typeof plantingService.getPlantings>>[0];
-type PlantTypeData = Awaited<ReturnType<typeof plantTypeService.getPlantTypes>>[0];
+type PlantTypeData = Database["public"]["Tables"]["plant_types"]["Row"];
+type LocationData = Database["public"]["Tables"]["locations"]["Row"];
 
 const PlantingsReportPage: React.FC = () => {
   const [plantings, setPlantings] = useState<PlantingData[]>([]);
-  const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [plantTypes, setPlantTypes] = useState<PlantTypeData[]>([]);
+  const [locations, setLocations] = useState<LocationData[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -30,35 +32,52 @@ const PlantingsReportPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState("all");
 
   useEffect(() => {
-    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
-    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
-    setLocations(getStorageData<Location[]>(STORAGE_KEYS.LOCATIONS) || []);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [plantingsData, plantTypesData, locationsData] = await Promise.all([
+          plantingService.getPlantings(),
+          plantTypeService.getPlantTypes(),
+          locationService.getLocations(),
+        ]);
+        setPlantings(plantingsData as PlantingData[]);
+        setPlantTypes(plantTypesData);
+        setLocations(locationsData);
+      } catch (error) {
+        console.error("Error fetching report data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
-
+  
   const getPlantTypeDetails = (plantTypeId: string) => plantTypes.find(pt => pt.id === plantTypeId);
   const getLocationName = (locationId: string) => locations.find(l => l.id === locationId)?.name || "N/A";
 
   const filteredPlantings = useMemo(() => {
     return plantings.filter(p => {
-      const pDate = new Date(p.datePlanted);
+      const pDate = new Date(p.date_planted);
       const matchesDate = (!startDate || pDate >= new Date(startDate)) && (!endDate || pDate <= new Date(endDate));
-      const matchesPlantType = plantTypeFilter === "all" || p.plantTypeId === plantTypeFilter;
+      const matchesPlantType = plantTypeFilter === "all" || p.plant_type_id === plantTypeFilter;
       const matchesStatus = statusFilter === "all" || p.status === statusFilter;
       return matchesDate && matchesPlantType && matchesStatus;
     });
   }, [plantings, startDate, endDate, plantTypeFilter, statusFilter]);
 
-  const getExpectedHarvestDate = (planting: Planting) => {
-    const plantType = getPlantTypeDetails(planting.plantTypeId);
-    if (!plantType?.growthDuration) return "N/A";
-    const date = new Date(planting.datePlanted);
-    date.setDate(date.getDate() + plantType.growthDuration);
+  const getExpectedHarvestDate = (planting: PlantingData) => {
+    const plantType = getPlantTypeDetails(planting.plant_type_id);
+    if (!plantType?.growth_duration) return "N/A";
+    const date = new Date(planting.date_planted);
+    date.setDate(date.getDate() + plantType.growth_duration);
     return date.toLocaleDateString();
   };
 
   const exportToCSV = () => console.log("Exporting to CSV...");
   const exportToExcel = () => console.log("Exporting to Excel...");
   const exportToPDF = () => window.print();
+
+  if (loading) return <div>Loading report...</div>
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
@@ -116,7 +135,7 @@ const PlantingsReportPage: React.FC = () => {
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <CardTitle className="text-base">{getPlantTypeDetails(p.plantTypeId)?.name}</CardTitle>
+                  <CardTitle className="text-base">{getPlantTypeDetails(p.plant_type_id)?.name}</CardTitle>
                   <CardDescription className="text-sm mt-1">{p.variety}</CardDescription>
                 </div>
                 <Badge className={
@@ -126,11 +145,11 @@ const PlantingsReportPage: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-gray-600">Location:</span><span className="font-medium">{getLocationName(p.locationId)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Location:</span><span className="font-medium">{getLocationName(p.location_id)}</span></div>
               <div className="flex justify-between"><span className="text-gray-600">Planted:</span><span className="font-medium">{p.quantity}</span></div>
-              <div className="flex justify-between"><span className="text-gray-600">Remaining:</span><span className={`font-medium ${p.remainingQuantity === 0 ? "text-gray-400" : ""}`}>{p.remainingQuantity ?? p.quantity}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Remaining:</span><span className={`font-medium ${p.remaining_quantity === 0 ? "text-gray-400" : ""}`}>{p.remaining_quantity ?? p.quantity}</span></div>
               <Separator className="my-2" />
-              <div className="flex justify-between"><span className="text-gray-600">Planted Date:</span><span className="font-medium">{new Date(p.datePlanted).toLocaleDateString()}</span></div>
+              <div className="flex justify-between"><span className="text-gray-600">Planted Date:</span><span className="font-medium">{new Date(p.date_planted).toLocaleDateString()}</span></div>
               <div className="flex justify-between"><span className="text-gray-600">Expected Harvest:</span><span className="font-medium">{getExpectedHarvestDate(p)}</span></div>
             </CardContent>
           </Card>

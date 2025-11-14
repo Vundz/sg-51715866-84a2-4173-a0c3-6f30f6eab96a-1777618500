@@ -8,49 +8,66 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileSpreadsheet, FileText, Package } from "lucide-react";
-import { Harvest, Planting, PlantType } from "@/types";
-import { getStorageData, STORAGE_KEYS } from "@/lib/storage";
 import { harvestService } from "@/services/harvestService";
 import { plantingService } from "@/services/plantingService";
+import { plantTypeService } from "@/services/plantTypeService";
 import { useToast } from "@/hooks/use-toast";
 import "chart.js/auto";
 import { Bar } from "react-chartjs-2";
+import type { Database } from "@/integrations/supabase/types";
 
 type HarvestData = Awaited<ReturnType<typeof harvestService.getHarvests>>[0];
-type PlantingData = Awaited<ReturnType<typeof plantingService.getPlantings>>[0];
+type PlantingData = Database["public"]["Tables"]["plantings"]["Row"];
+type PlantTypeData = Database["public"]["Tables"]["plant_types"]["Row"];
 
 const HarvestsReportPage: React.FC = () => {
   const [harvests, setHarvests] = useState<HarvestData[]>([]);
-  const [plantings, setPlantings] = useState<Planting[]>([]);
-  const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
+  const [plantings, setPlantings] = useState<PlantingData[]>([]);
+  const [plantTypes, setPlantTypes] = useState<PlantTypeData[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [plantTypeFilter, setPlantTypeFilter] = useState("all");
 
   useEffect(() => {
-    setHarvests(getStorageData<Harvest[]>(STORAGE_KEYS.HARVESTS) || []);
-    setPlantings(getStorageData<Planting[]>(STORAGE_KEYS.PLANTINGS) || []);
-    setPlantTypes(getStorageData<PlantType[]>(STORAGE_KEYS.PLANT_TYPES) || []);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [harvestsData, plantingsData, plantTypesData] = await Promise.all([
+          harvestService.getHarvests(),
+          plantingService.getPlantings(),
+          plantTypeService.getPlantTypes(),
+        ]);
+        setHarvests(harvestsData as HarvestData[]);
+        setPlantings(plantingsData as PlantingData[]);
+        setPlantTypes(plantTypesData);
+      } catch (error) {
+        console.error("Error fetching report data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
   const harvestsReport = useMemo(() => {
     return harvests
       .filter(harvest => {
-        const harvestDate = new Date(harvest.harvestDate);
+        const harvestDate = new Date(harvest.harvest_date);
         const matchesDate = (!startDate || harvestDate >= new Date(startDate)) &&
                            (!endDate || harvestDate <= new Date(endDate));
         
-        const planting = plantings.find(p => p.id === harvest.plantingId);
-        const matchesPlantType = plantTypeFilter === "all" || planting?.plantTypeId === plantTypeFilter;
+        const planting = plantings.find(p => p.id === harvest.planting_id);
+        const matchesPlantType = plantTypeFilter === "all" || planting?.plant_type_id === plantTypeFilter;
         
         return matchesDate && matchesPlantType;
       })
       .map(harvest => {
-        const planting = plantings.find(p => p.id === harvest.plantingId);
-        const plantType = plantTypes.find(pt => pt.id === planting?.plantTypeId);
+        const planting = plantings.find(p => p.id === harvest.planting_id);
+        const plantType = plantTypes.find(pt => pt.id === planting?.plant_type_id);
         const plantedQty = planting?.quantity || 0;
-        const variance = harvest.quantityHarvested - plantedQty;
+        const variance = harvest.quantity_harvested - plantedQty;
         const variancePercent = plantedQty > 0 ? ((variance / plantedQty) * 100).toFixed(1) : "0";
         
         return {
@@ -64,10 +81,11 @@ const HarvestsReportPage: React.FC = () => {
       });
   }, [harvests, plantings, plantTypes, startDate, endDate, plantTypeFilter]);
 
-  // Implement export functions if needed, similar to other report pages
   const exportToCSV = () => console.log("Exporting to CSV...");
   const exportToExcel = () => console.log("Exporting to Excel...");
   const exportToPDF = () => window.print();
+  
+  if (loading) return <div>Loading report...</div>
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
@@ -134,10 +152,10 @@ const HarvestsReportPage: React.FC = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Harvest Date:</span><span className="font-medium">{new Date(harvest.harvestDate).toLocaleDateString()}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Harvest Date:</span><span className="font-medium">{new Date(harvest.harvest_date).toLocaleDateString()}</span></div>
                 <Separator className="my-2" />
                 <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Planted:</span><span className="font-medium">{harvest.plantedQty}</span></div>
-                <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Harvested:</span><span className="font-medium">{harvest.quantityHarvested}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Harvested:</span><span className="font-medium">{harvest.quantity_harvested}</span></div>
                 <Separator className="my-2" />
                 <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Variance:</span><span className={`font-bold ${isPositive ? "text-green-600" : "text-red-600"}`}>{isPositive ? "+" : ""}{harvest.variance}</span></div>
                 <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Variance %:</span><span className={`font-bold ${isPositive ? "text-green-600" : "text-red-600"}`}>{isPositive ? "+" : ""}{harvest.variancePercent}%</span></div>
