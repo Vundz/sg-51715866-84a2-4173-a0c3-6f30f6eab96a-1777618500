@@ -25,6 +25,7 @@ export type Database = {
           planting_id: string
           quality: string
           quantity_harvested: number
+          status: string | null
           updated_at: string | null
         }
         Insert: {
@@ -36,6 +37,7 @@ export type Database = {
           planting_id: string
           quality?: string
           quantity_harvested: number
+          status?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -47,6 +49,7 @@ export type Database = {
           planting_id?: string
           quality?: string
           quantity_harvested?: number
+          status?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -123,6 +126,7 @@ export type Database = {
         Row: {
           created_at: string | null
           description: string | null
+          germination_rate: number | null
           growth_duration: number
           id: string
           name: string
@@ -132,6 +136,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           description?: string | null
+          germination_rate?: number | null
           growth_duration: number
           id?: string
           name: string
@@ -141,6 +146,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           description?: string | null
+          germination_rate?: number | null
           growth_duration?: number
           id?: string
           name?: string
