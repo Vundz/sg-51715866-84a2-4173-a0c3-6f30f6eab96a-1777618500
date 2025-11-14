@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -470,7 +469,13 @@ const ReservationsPage: React.FC = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {r.plantings?.plant_types?.name} ({r.plantings?.batch_number})
+                        <div>
+                          <div className="font-medium">{r.plantings?.plant_types?.name}</div>
+                          {r.plantings?.variety && (
+                            <div className="text-sm text-gray-500">Variety: {r.plantings.variety}</div>
+                          )}
+                          <div className="text-xs text-gray-400">Batch: {r.plantings?.batch_number}</div>
+                        </div>
                       </TableCell>
                       <TableCell>{formatNumber(r.quantity_reserved)}</TableCell>
                       <TableCell>{new Date(r.reserved_date).toLocaleDateString()}</TableCell>
