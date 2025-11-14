@@ -9,6 +9,7 @@ import { Plus, Edit, Trash2, Leaf } from "lucide-react";
 import { plantTypeService } from "@/services/plantTypeService";
 import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 
 type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
 
@@ -49,6 +50,7 @@ export default function PlantTypesPage() {
     const plantTypeData = {
       name: formData.get("name") as string,
       variety: formData.get("variety") as string,
+      description: formData.get("description") as string,
       growth_duration: parseInt(formData.get("growth_duration") as string),
       germination_rate: germinationRateValue ? parseInt(germinationRateValue, 10) : null,
     };
@@ -61,7 +63,7 @@ export default function PlantTypesPage() {
           description: "Plant type updated successfully.",
         });
       } else {
-        await plantTypeService.createPlantType(plantTypeData);
+        await plantTypeService.createPlantType(plantTypeData as Omit<PlantType, "id" | "created_at" | "updated_at">);
         toast({
           title: "Success",
           description: "Plant type created successfully.",
@@ -139,6 +141,10 @@ export default function PlantTypesPage() {
               <Label htmlFor="variety">Variety</Label>
               <Input id="variety" name="variety" defaultValue={editingPlantType?.variety} required />
             </div>
+             <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea id="description" name="description" defaultValue={editingPlantType?.description ?? ''} />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="growth_duration">Growth Duration (days)</Label>
@@ -179,7 +185,7 @@ export default function PlantTypesPage() {
               <TableBody>
                 {plantTypes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center h-24">No plant types created yet.</TableCell>
+                    <TableCell colSpan={5} className="text-center h-24">No plant types created yet.</TableCell>
                   </TableRow>
                 ) : (
                   plantTypes.map(pt => (

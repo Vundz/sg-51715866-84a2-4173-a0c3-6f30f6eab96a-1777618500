@@ -140,14 +140,17 @@ export default function TreatmentsPage() {
       applied_by: formData.get("applied_by") as string,
     };
     
-    const finalPlantingIds = isBulkMode ? selectedPlantingIds : editingTreatment ? selectedPlantingIds : [singlePlantingId];
+    const finalPlantingIds = isBulkMode ? selectedPlantingIds : editingTreatment ? editingTreatment.plantings.map(p => p.id) : [singlePlantingId];
 
     try {
       if (editingTreatment) {
         await treatmentService.updateTreatment(editingTreatment.id, treatmentData, finalPlantingIds);
         toast({ title: "Success", description: "Treatment updated." });
       } else {
-        await treatmentService.createTreatment(treatmentData, finalPlantingIds);
+        const treatmentPayload = {
+            ...treatmentData,
+        }
+        await treatmentService.createTreatment(treatmentPayload, finalPlantingIds);
         toast({ title: "Success", description: "Treatment created." });
       }
       

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileSpreadsheet, FileText, TestTube2 } from "lucide-react";
-import { treatmentService, TreatmentWithDetails } from "@/services/treatmentService";
+import { treatmentService, TreatmentWithPlantings } from "@/services/treatmentService";
 import { plantingService } from "@/services/plantingService";
 import { plantTypeService } from "@/services/plantTypeService";
 import { useToast } from "@/hooks/use-toast";
@@ -20,7 +20,7 @@ type PlantingData = Database["public"]["Tables"]["plantings"]["Row"];
 type PlantTypeData = Database["public"]["Tables"]["plant_types"]["Row"];
 
 export default function TreatmentsReportPage() {
-  const [treatments, setTreatments] = useState<TreatmentWithDetails[]>([]);
+  const [treatments, setTreatments] = useState<TreatmentWithPlantings[]>([]);
   const [plantings, setPlantings] = useState<PlantingData[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantTypeData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,23 +53,23 @@ export default function TreatmentsReportPage() {
   const treatmentsReport = useMemo(() => {
     return treatments
       .filter(t => {
-        const tDate = new Date(t.application_date);
+        if (!t.treatments) return false;
+        const tDate = new Date(t.treatments.application_date);
         const matchesDate = (!startDate || tDate >= new Date(startDate)) && (!endDate || tDate <= new Date(endDate));
-        const matchesType = typeFilter === "all" || t.type === typeFilter;
+        const matchesType = typeFilter === "all" || t.treatments.type === typeFilter;
         return matchesDate && matchesType;
       })
-      .flatMap(treatment => 
-        (treatment.plantings || []).map(tp => {
-          const planting = plantings.find(p => p.id === tp.id);
+      .map(item => {
+          const planting = plantings.find(p => p.id === item.planting_id);
           const plantType = plantTypes.find(pt => pt.id === planting?.plant_type_id);
           return {
-            ...treatment,
-            plantingId: tp.id,
+            ...item.treatments,
+            id: `${item.treatments?.id}-${item.planting_id}`, // Create unique key for rendering
+            plantingId: item.planting_id,
             plantTypeName: plantType?.name || 'N/A',
             variety: planting?.variety || 'N/A',
           };
-        })
-      )
+      })
       .sort((a, b) => new Date(b.application_date).getTime() - new Date(a.application_date).getTime());
   }, [treatments, plantings, plantTypes, startDate, endDate, typeFilter]);
 
@@ -121,7 +121,7 @@ export default function TreatmentsReportPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {treatmentsReport.map((t, index) => (
-          <Card key={`${t.id}-${index}`} className="hover:shadow-md transition-shadow">
+          <Card key={t.id} className="hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="flex-1"><CardTitle className="text-base">{t.plantTypeName}</CardTitle><CardDescription className="text-sm mt-1">{t.variety}</CardDescription></div>

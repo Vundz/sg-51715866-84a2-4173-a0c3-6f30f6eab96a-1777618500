@@ -10,18 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Package, Printer } from "lucide-react";
 import { harvestService, HarvestWithDetails } from "@/services/harvestService";
-import { plantingService } from "@/services/plantingService";
+import { plantingService, PlantingWithDetails } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
-import type { Database } from "@/integrations/supabase/types";
-
-type Planting = Database["public"]["Tables"]["plantings"]["Row"];
-type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
-type Location = Database["public"]["Tables"]["locations"]["Row"];
-
-type PlantingWithDetails = Planting & {
-  plant_types: PlantType;
-  locations: Location;
-};
 
 export default function HarvestsPage() {
   const [harvests, setHarvests] = useState<HarvestWithDetails[]>([]);
@@ -48,10 +38,10 @@ export default function HarvestsPage() {
       setLoading(true);
       const [harvestsData, plantingsData] = await Promise.all([
         harvestService.getHarvests(),
-        plantingService.getPlantings()
+        plantingService.getPlantingsWithDetails()
       ]);
-      setHarvests(harvestsData as HarvestWithDetails[]);
-      setPlantings(plantingsData as PlantingWithDetails[]);
+      setHarvests(harvestsData);
+      setPlantings(plantingsData);
 
       const quantities: Record<string, number> = {};
       for (const p of plantingsData) {
@@ -71,9 +61,9 @@ export default function HarvestsPage() {
     let filtered = harvests;
     if (searchQuery) {
         filtered = filtered.filter(h => 
-            h.plantings.plant_types.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            h.plantings.plant_types.variety.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            h.plantings.batch_number?.toLowerCase().includes(searchQuery.toLowerCase())
+            h.plantings?.plant_types?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            h.plantings?.plant_types?.variety.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            h.plantings?.batch_number?.toLowerCase().includes(searchQuery.toLowerCase())
         );
     }
     if (filters.planting_id) {
@@ -154,13 +144,13 @@ export default function HarvestsPage() {
         <div class="highlight">QUANTITY: ${harvest.quantity_harvested} UNITS</div>
         <div class="section">
           <div class="section-title">Product Information</div>
-          <div class="info-row"><span class="label">Plant Type:</span><span class="value">${details.plant_types.name}</span></div>
-          <div class="info-row"><span class="label">Variety:</span><span class="value">${details.plant_types.variety}</span></div>
+          <div class="info-row"><span class="label">Plant Type:</span><span class="value">${details.plant_types?.name}</span></div>
+          <div class="info-row"><span class="label">Variety:</span><span class="value">${details.plant_types?.variety}</span></div>
           <div class="info-row"><span class="label">Batch:</span><span class="value">${details.batch_number || details.id}</span></div>
         </div>
         <div class="section">
           <div class="section-title">Location Details</div>
-          <div class="info-row"><span class="label">Greenhouse:</span><span class="value">${details.locations.name}</span></div>
+          <div class="info-row"><span class="label">Greenhouse:</span><span class="value">${details.locations?.name}</span></div>
           <div class="info-row"><span class="label">Planting Date:</span><span class="value">${new Date(details.date_planted).toLocaleDateString()}</span></div>
         </div>
         ${harvest.notes ? `<div class="section"><div class="section-title">Notes</div><div class="notes">${harvest.notes}</div></div>` : ""}
@@ -190,6 +180,8 @@ export default function HarvestsPage() {
       harvest_date: formData.get("harvest_date") as string,
       status: formData.get("status") as string,
       notes: (formData.get("notes") as string) || null,
+      quality: formData.get("quality") as string,
+      is_closed: formData.get("is_closed") === 'on',
     };
 
     try {
@@ -265,7 +257,7 @@ export default function HarvestsPage() {
                       const remaining = getRemainingQuantity(p);
                       return (
                         <SelectItem key={p.id} value={p.id} disabled={remaining <= 0}>
-                          {p.plant_types.name} ({p.plant_types.variety}) - Remaining: {remaining}
+                          {p.plant_types?.name} ({p.plant_types?.variety}) - Remaining: {remaining}
                         </SelectItem>
                       );
                     })}
@@ -283,6 +275,19 @@ export default function HarvestsPage() {
                 <Input id="quantity_harvested" name="quantity_harvested" type="number" defaultValue={editingHarvest?.quantity_harvested} required />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="quality">Quality</Label>
+                <Select name="quality" defaultValue={editingHarvest?.quality ?? 'good'}>
+                  <SelectTrigger><SelectValue placeholder="Select quality" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="excellent">Excellent</SelectItem>
+                    <SelectItem value="good">Good</SelectItem>
+                    <SelectItem value="fair">Fair</SelectItem>
+                    <SelectItem value="poor">Poor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+             <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <Select name="status" defaultValue={editingHarvest?.status ?? 'harvested'}>
                   <SelectTrigger>
@@ -296,7 +301,6 @@ export default function HarvestsPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
             <div className="space-y-2">
               <Label htmlFor="notes">Notes</Label>
               <Textarea id="notes" name="notes" defaultValue={editingHarvest?.notes ?? ""} />

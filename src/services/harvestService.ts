@@ -4,10 +4,12 @@ import type { Database } from "@/integrations/supabase/types";
 export type Harvest = Database["public"]["Tables"]["harvests"]["Row"];
 export type Planting = Database["public"]["Tables"]["plantings"]["Row"];
 export type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
+export type Location = Database["public"]["Tables"]["locations"]["Row"];
 
 export type HarvestWithDetails = Harvest & {
   plantings: (Planting & {
     plant_types: PlantType | null;
+    locations: Location | null;
   }) | null;
 };
 
@@ -19,10 +21,8 @@ export const harvestService = {
         *,
         plantings (
           *,
-          plant_types (
-            name,
-            variety
-          )
+          plant_types (*),
+          locations (*)
         )
       `);
     if (error) {
@@ -39,10 +39,8 @@ export const harvestService = {
         *,
         plantings (
           *,
-          plant_types (
-            name,
-            variety
-          )
+          plant_types (*),
+          locations (*)
         )
       `)
       .eq("id", id)

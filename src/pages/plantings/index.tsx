@@ -118,7 +118,7 @@ export default function PlantingsPage() {
   // Get unique varieties and locations for filter dropdowns
   const uniqueVarieties = useMemo(() => {
     const varieties = new Set(plantings.map(p => p.plant_types?.variety).filter(Boolean));
-    return Array.from(varieties as string[]).sort();
+    return Array.from(varieties).sort();
   }, [plantings]);
 
   const uniqueLocations = useMemo(() => {
