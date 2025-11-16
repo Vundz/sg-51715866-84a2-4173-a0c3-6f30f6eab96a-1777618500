@@ -100,6 +100,19 @@ export const adminService = {
     return true;
   },
 
+  /**
+   * Reset user password (admin only)
+   * Sends a password reset email to the user
+   */
+  async resetUserPassword(email: string): Promise<boolean> {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    });
+
+    if (error) throw error;
+    return true;
+  },
+
   async isAdmin(userId: string): Promise<boolean> {
     if (!userId) return false;
     try {

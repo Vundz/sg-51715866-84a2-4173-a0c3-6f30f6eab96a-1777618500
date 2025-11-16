@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { adminService } from "@/services/adminService";
-import { Plus, Pencil, Trash2, AlertCircle, CheckCircle2, Loader2, Users, Key } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertCircle, CheckCircle2, Loader2, Users, Key, KeyRound } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -34,6 +34,9 @@ export default function UserManagementPage() {
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [selectedUserForReset, setSelectedUserForReset] = useState<Profile | null>(null);
+  const [resettingPassword, setResettingPassword] = useState(false);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -132,6 +135,38 @@ export default function UserManagementPage() {
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.message || "Failed to delete user.");
+    }
+  };
+
+  const handleOpenResetPasswordDialog = (user: Profile) => {
+    setSelectedUserForReset(user);
+    setError(null);
+    setSuccess(null);
+    setResetPasswordDialogOpen(true);
+  };
+
+  const handleResetPassword = async () => {
+    if (!selectedUserForReset?.email) {
+      setError("User email not found.");
+      return;
+    }
+
+    setResettingPassword(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await adminService.resetUserPassword(selectedUserForReset.email);
+      setSuccess(`Password reset email sent to ${selectedUserForReset.email}`);
+      setTimeout(() => {
+        setResetPasswordDialogOpen(false);
+        setSuccess(null);
+        setSelectedUserForReset(null);
+      }, 3000);
+    } catch (err: any) {
+      setError(err.message || "Failed to send password reset email.");
+    } finally {
+      setResettingPassword(false);
     }
   };
 
@@ -261,6 +296,15 @@ export default function UserManagementPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => handleOpenResetPasswordDialog(u)}
+                          title="Reset password"
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleDelete(u.id, u.email)}
                           className="text-red-600 hover:text-red-700"
                           title="Delete user"
@@ -377,6 +421,77 @@ export default function UserManagementPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Password Reset Dialog */}
+      <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5" />
+              Reset User Password
+            </DialogTitle>
+            <DialogDescription>
+              Send a password reset email to this user
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedUserForReset && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>User Email</Label>
+                <p className="text-sm font-medium">{selectedUserForReset.email}</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Full Name</Label>
+                <p className="text-sm">{selectedUserForReset.full_name || "N/A"}</p>
+              </div>
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  A password reset link will be sent to the user's email address. 
+                  They will be able to set a new password using this link.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
+          {success && (
+            <Alert className="border-green-500">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-600">{success}</AlertDescription>
+            </Alert>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setResetPasswordDialogOpen(false);
+                setSelectedUserForReset(null);
+              }}
+              disabled={resettingPassword}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleResetPassword}
+              disabled={resettingPassword}
+              className="gap-2"
+            >
+              {resettingPassword && <Loader2 className="h-4 w-4 animate-spin" />}
+              Send Reset Email
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
