@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter } from "lucide-react";
+import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter, Upload, Download } from "lucide-react";
 import { plantingService } from "@/services/plantingService";
 import { plantTypeService } from "@/services/plantTypeService";
 import { locationService } from "@/services/locationService";
@@ -56,6 +56,13 @@ export default function PlantingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "location" | "variety" | "status">("all");
   const [filterValue, setFilterValue] = useState("");
+  
+  // CSV Import states
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvData, setCsvData] = useState<any[]>([]);
+  const [csvErrors, setCsvErrors] = useState<string[]>([]);
+  const [isProcessingCsv, setIsProcessingCsv] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -268,6 +275,203 @@ export default function PlantingsPage() {
     setFilterValue("");
   };
 
+  // CSV Import Functions
+  const downloadCsvTemplate = () => {
+    const headers = ["Plant Type", "Variety", "Location", "Quantity", "Date Planted", "Notes"];
+    const example = ["Tomato", "Cherry Red", "Greenhouse A", "1000", "2025-01-15", "First batch"];
+    const csv = [headers.join(","), example.join(",")].join("\n");
+    
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "plantings_template.csv";
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const parseCsvFile = async (file: File) => {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = (e) => reject(e);
+      reader.readAsText(file);
+    });
+  };
+
+  const validateAndParseCsv = async (file: File) => {
+    setIsProcessingCsv(true);
+    setCsvErrors([]);
+    setCsvData([]);
+
+    try {
+      const csvText = await parseCsvFile(file);
+      const lines = csvText.split("\n").map(line => line.trim()).filter(line => line);
+      
+      if (lines.length < 2) {
+        setCsvErrors(["CSV file must contain at least a header row and one data row"]);
+        setIsProcessingCsv(false);
+        return;
+      }
+
+      const headers = lines[0].split(",").map(h => h.trim());
+      const requiredHeaders = ["Plant Type", "Variety", "Location", "Quantity", "Date Planted"];
+      
+      const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+      if (missingHeaders.length > 0) {
+        setCsvErrors([`Missing required columns: ${missingHeaders.join(", ")}`]);
+        setIsProcessingCsv(false);
+        return;
+      }
+
+      const parsedData = [];
+      const errors: string[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(",").map(v => v.trim());
+        if (values.length < requiredHeaders.length) continue;
+
+        const row: any = {};
+        headers.forEach((header, index) => {
+          row[header] = values[index] || "";
+        });
+
+        // Validate row data
+        const rowErrors: string[] = [];
+        
+        // Check plant type exists
+        const plantTypeName = row["Plant Type"];
+        const variety = row["Variety"];
+        const matchingPlantType = plantTypes.find(pt => 
+          pt.name.toLowerCase() === plantTypeName.toLowerCase() && 
+          pt.variety.toLowerCase() === variety.toLowerCase()
+        );
+        
+        if (!matchingPlantType) {
+          rowErrors.push(`Row ${i}: Plant type "${plantTypeName}" with variety "${variety}" not found`);
+        }
+
+        // Check location exists
+        const locationName = row["Location"];
+        const matchingLocation = locations.find(l => 
+          l.name.toLowerCase() === locationName.toLowerCase()
+        );
+        
+        if (!matchingLocation) {
+          rowErrors.push(`Row ${i}: Location "${locationName}" not found`);
+        }
+
+        // Validate quantity
+        const quantity = parseInt(row["Quantity"]);
+        if (isNaN(quantity) || quantity <= 0) {
+          rowErrors.push(`Row ${i}: Invalid quantity "${row["Quantity"]}"`);
+        }
+
+        // Validate date
+        const datePlanted = new Date(row["Date Planted"]);
+        if (isNaN(datePlanted.getTime())) {
+          rowErrors.push(`Row ${i}: Invalid date "${row["Date Planted"]}"`);
+        }
+
+        if (rowErrors.length === 0) {
+          parsedData.push({
+            plantType: matchingPlantType,
+            location: matchingLocation,
+            quantity,
+            datePlanted: row["Date Planted"],
+            notes: row["Notes"] || "",
+            rowNumber: i
+          });
+        } else {
+          errors.push(...rowErrors);
+        }
+      }
+
+      if (errors.length > 0) {
+        setCsvErrors(errors);
+      }
+      
+      setCsvData(parsedData);
+    } catch (error) {
+      setCsvErrors(["Failed to parse CSV file. Please ensure it's a valid CSV format."]);
+    } finally {
+      setIsProcessingCsv(false);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCsvFile(file);
+      validateAndParseCsv(file);
+    }
+  };
+
+  const handleBulkImport = async () => {
+    if (csvData.length === 0) {
+      toast({ title: "Error", description: "No valid data to import", variant: "destructive" });
+      return;
+    }
+
+    setIsProcessingCsv(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      for (const row of csvData) {
+        try {
+          const datePlanted = new Date(row.datePlanted);
+          const expectedHarvestDate = new Date(datePlanted);
+          if (row.plantType?.growth_duration) {
+            expectedHarvestDate.setDate(datePlanted.getDate() + row.plantType.growth_duration);
+          }
+
+          const batchNumber = generateBatchNumber(
+            row.plantType.name,
+            row.plantType.variety,
+            row.datePlanted
+          );
+
+          const plantingData = {
+            plant_type_id: row.plantType.id,
+            location_id: row.location.id,
+            quantity: row.quantity,
+            remaining_quantity: row.quantity,
+            date_planted: row.datePlanted,
+            expected_harvest_date: expectedHarvestDate.toISOString().split('T')[0],
+            batch_number: batchNumber,
+            status: "active",
+            notes: row.notes,
+            variety: row.plantType.variety,
+          };
+
+          await plantingService.addPlanting(plantingData);
+          successCount++;
+        } catch (error) {
+          console.error(`Error importing row ${row.rowNumber}:`, error);
+          failCount++;
+        }
+      }
+
+      await loadData();
+      
+      toast({ 
+        title: "Import Complete", 
+        description: `Successfully imported ${successCount} plantings${failCount > 0 ? `, ${failCount} failed` : ""}.` 
+      });
+
+      setIsImportDialogOpen(false);
+      setCsvFile(null);
+      setCsvData([]);
+      setCsvErrors([]);
+    } catch (error) {
+      console.error("Error during bulk import:", error);
+      toast({ title: "Error", description: "Failed to complete bulk import", variant: "destructive" });
+    } finally {
+      setIsProcessingCsv(false);
+    }
+  };
+
   if (!user) {
     return (
       <div className="max-w-7xl mx-auto p-8 text-center">
@@ -294,10 +498,16 @@ export default function PlantingsPage() {
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">Track all your seedling batches from planting to harvest.</p>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="bg-lime-600 hover:bg-lime-700">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Planting
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setIsImportDialogOpen(true)} variant="outline" className="border-lime-600 text-lime-600 hover:bg-lime-50">
+            <Upload className="w-4 h-4 mr-2" />
+            Bulk Import
+          </Button>
+          <Button onClick={() => handleOpenDialog()} className="bg-lime-600 hover:bg-lime-700">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Planting
+          </Button>
+        </div>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -422,6 +632,133 @@ export default function PlantingsPage() {
               <Button type="submit" className="bg-lime-600 hover:bg-lime-700">Save Planting</Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Bulk Import Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Bulk Import Plantings</DialogTitle>
+            <DialogDescription>
+              Upload a CSV file to import multiple plantings at once
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 pt-4">
+            {/* Download Template */}
+            <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div>
+                <h3 className="font-medium text-blue-900 dark:text-blue-100">Need a template?</h3>
+                <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                  Download our CSV template with the correct column format
+                </p>
+              </div>
+              <Button onClick={downloadCsvTemplate} variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-2" />
+                Download Template
+              </Button>
+            </div>
+
+            {/* File Upload */}
+            <div className="space-y-2">
+              <Label htmlFor="csvFile">Upload CSV File</Label>
+              <Input
+                id="csvFile"
+                type="file"
+                accept=".csv"
+                onChange={handleFileSelect}
+                disabled={isProcessingCsv}
+              />
+              <p className="text-xs text-gray-500">
+                Required columns: Plant Type, Variety, Location, Quantity, Date Planted
+              </p>
+            </div>
+
+            {/* Processing Indicator */}
+            {isProcessingCsv && (
+              <div className="text-center py-4">
+                <p className="text-gray-600">Processing CSV file...</p>
+              </div>
+            )}
+
+            {/* Errors Display */}
+            {csvErrors.length > 0 && (
+              <div className="p-4 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
+                <h3 className="font-medium text-red-900 dark:text-red-100 mb-2">Validation Errors</h3>
+                <ul className="list-disc list-inside space-y-1 text-sm text-red-700 dark:text-red-300">
+                  {csvErrors.map((error, index) => (
+                    <li key={index}>{error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Preview Table */}
+            {csvData.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="font-medium">Preview ({csvData.length} valid rows)</h3>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Row</TableHead>
+                        <TableHead>Plant Type</TableHead>
+                        <TableHead>Variety</TableHead>
+                        <TableHead>Location</TableHead>
+                        <TableHead>Quantity</TableHead>
+                        <TableHead>Date Planted</TableHead>
+                        <TableHead>Notes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {csvData.slice(0, 10).map((row, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{row.rowNumber}</TableCell>
+                          <TableCell>{row.plantType?.name}</TableCell>
+                          <TableCell>{row.plantType?.variety}</TableCell>
+                          <TableCell>{row.location?.name}</TableCell>
+                          <TableCell>{formatNumber(row.quantity)}</TableCell>
+                          <TableCell>{new Date(row.datePlanted).toLocaleDateString()}</TableCell>
+                          <TableCell className="max-w-[200px] truncate">{row.notes || "-"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {csvData.length > 10 && (
+                  <p className="text-sm text-gray-500 text-center">
+                    Showing first 10 rows. {csvData.length - 10} more will be imported.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-2 pt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  setIsImportDialogOpen(false);
+                  setCsvFile(null);
+                  setCsvData([]);
+                  setCsvErrors([]);
+                }}
+                disabled={isProcessingCsv}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleBulkImport}
+                disabled={csvData.length === 0 || csvErrors.length > 0 || isProcessingCsv}
+                className="bg-lime-600 hover:bg-lime-700"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Import {csvData.length} Plantings
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
       
