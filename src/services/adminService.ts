@@ -123,15 +123,15 @@ export const adminService = {
   },
 
   /**
-   * Check if user exists in auth.users
+   * Check if username already exists
    */
-  async userExists(email: string): Promise<boolean> {
+  async usernameExists(username: string): Promise<boolean> {
     try {
       const { data, error } = await supabase
         .from("profiles")
         .select("id")
-        .eq("email", email)
-        .single();
+        .eq("username", username)
+        .maybeSingle();
       
       return !error && !!data;
     } catch {
@@ -140,9 +140,40 @@ export const adminService = {
   },
 
   /**
-   * Create a new user with email and password
+   * Check if email already exists
    */
-  async createUser(email: string, password: string, fullName: string, role: UserRole): Promise<Profile> {
+  async emailExists(email: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+      
+      return !error && !!data;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Check if user exists in auth.users (legacy method)
+   */
+  async userExists(email: string): Promise<boolean> {
+    return this.emailExists(email);
+  },
+
+  /**
+   * Create a new user with username as primary identifier
+   * Email is optional
+   */
+  async createUser(
+    username: string, 
+    password: string, 
+    fullName: string, 
+    role: UserRole,
+    email?: string
+  ): Promise<Profile> {
     try {
       // Validate password strength first
       const strengthResult = this.validatePasswordStrength(password);
@@ -150,19 +181,32 @@ export const adminService = {
         throw new Error("Password is too weak. Please use a stronger password with at least 8 characters, including uppercase, lowercase, numbers, and special characters.");
       }
 
-      // Check if user already exists
-      const exists = await this.userExists(email);
-      if (exists) {
-        throw new Error("A user with this email already exists.");
+      // Check if username already exists
+      const usernameInUse = await this.usernameExists(username);
+      if (usernameInUse) {
+        throw new Error(`Username "${username}" is already taken. Please choose a different username.`);
       }
 
-      // Create the auth user with email confirmation disabled for admin-created users
+      // If email provided, check if it's already in use
+      if (email) {
+        const emailInUse = await this.emailExists(email);
+        if (emailInUse) {
+          throw new Error(`A user with email "${email}" already exists.`);
+        }
+      }
+
+      // Generate a unique email for auth if none provided
+      // Use username@local.khulisapp format for local accounts
+      const authEmail = email || `${username}@local.khulisapp`;
+
+      // Create the auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
+        email: authEmail,
         password,
         options: {
           data: {
             full_name: fullName,
+            username: username,
           },
           emailRedirectTo: `${window.location.origin}/`,
         },
@@ -180,20 +224,28 @@ export const adminService = {
       // Wait a moment for the profile trigger to complete
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Update the profile with the correct role and full name
+      // Update the profile with username, role, and email (if provided)
+      const updateData: any = {
+        username: username,
+        full_name: fullName,
+        role: role,
+      };
+      
+      // Only set email if it was provided by admin (not the auto-generated one)
+      if (email) {
+        updateData.email = email;
+      }
+
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .update({ 
-          full_name: fullName,
-          role: role 
-        })
+        .update(updateData)
         .eq("id", authData.user.id)
         .select()
         .single();
 
       if (profileError) {
         console.error("Profile update error:", profileError);
-        throw new Error(`User created but failed to set role. Please edit the user manually.`);
+        throw new Error(`User created but failed to set details. Please edit the user manually.`);
       }
 
       return profileData;
@@ -204,9 +256,40 @@ export const adminService = {
   },
 
   /**
-   * Update user role and details
+   * Update user role, details, and username
    */
-  async updateUser(userId: string, updates: Partial<Pick<Profile, "full_name" | "role">>): Promise<Profile> {
+  async updateUser(
+    userId: string, 
+    updates: Partial<Pick<Profile, "full_name" | "role" | "username" | "email">>
+  ): Promise<Profile> {
+    // If updating username, check for duplicates
+    if (updates.username) {
+      const { data: existingUser } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", updates.username)
+        .neq("id", userId)
+        .maybeSingle();
+      
+      if (existingUser) {
+        throw new Error(`Username "${updates.username}" is already taken.`);
+      }
+    }
+
+    // If updating email, check for duplicates
+    if (updates.email) {
+      const { data: existingUser } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", updates.email)
+        .neq("id", userId)
+        .maybeSingle();
+      
+      if (existingUser) {
+        throw new Error(`Email "${updates.email}" is already taken.`);
+      }
+    }
+
     const { data, error } = await supabase
       .from("profiles")
       .update(updates)
