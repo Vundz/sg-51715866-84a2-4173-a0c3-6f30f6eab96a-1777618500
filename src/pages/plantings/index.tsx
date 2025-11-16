@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter, Upload, Download } from "lucide-react";
 import { plantingService } from "@/services/plantingService";
 import { plantTypeService } from "@/services/plantTypeService";
@@ -63,6 +64,8 @@ export default function PlantingsPage() {
   const [csvData, setCsvData] = useState<any[]>([]);
   const [csvErrors, setCsvErrors] = useState<string[]>([]);
   const [isProcessingCsv, setIsProcessingCsv] = useState(false);
+  const [ignoreErrors, setIgnoreErrors] = useState(false);
+  const [invalidRows, setInvalidRows] = useState<any[]>([]);
 
   useEffect(() => {
     loadData();
@@ -303,6 +306,7 @@ export default function PlantingsPage() {
     setIsProcessingCsv(true);
     setCsvErrors([]);
     setCsvData([]);
+    setInvalidRows([]);
 
     try {
       const csvText = await parseCsvFile(file);
@@ -325,6 +329,7 @@ export default function PlantingsPage() {
       }
 
       const parsedData = [];
+      const invalidData = [];
       const errors: string[] = [];
 
       for (let i = 1; i < lines.length; i++) {
@@ -348,7 +353,7 @@ export default function PlantingsPage() {
         );
         
         if (!matchingPlantType) {
-          rowErrors.push(`Row ${i}: Plant type "${plantTypeName}" with variety "${variety}" not found`);
+          rowErrors.push(`Plant type "${plantTypeName}" with variety "${variety}" not found`);
         }
 
         // Check location exists
@@ -358,32 +363,39 @@ export default function PlantingsPage() {
         );
         
         if (!matchingLocation) {
-          rowErrors.push(`Row ${i}: Location "${locationName}" not found`);
+          rowErrors.push(`Location "${locationName}" not found`);
         }
 
         // Validate quantity
         const quantity = parseInt(row["Quantity"]);
         if (isNaN(quantity) || quantity <= 0) {
-          rowErrors.push(`Row ${i}: Invalid quantity "${row["Quantity"]}"`);
+          rowErrors.push(`Invalid quantity "${row["Quantity"]}"`);
         }
 
         // Validate date
         const datePlanted = new Date(row["Date Planted"]);
         if (isNaN(datePlanted.getTime())) {
-          rowErrors.push(`Row ${i}: Invalid date "${row["Date Planted"]}"`);
+          rowErrors.push(`Invalid date "${row["Date Planted"]}"`);
         }
 
+        const rowData = {
+          plantType: matchingPlantType,
+          location: matchingLocation,
+          quantity,
+          datePlanted: row["Date Planted"],
+          notes: row["Notes"] || "",
+          rowNumber: i,
+          rawData: row
+        };
+
         if (rowErrors.length === 0) {
-          parsedData.push({
-            plantType: matchingPlantType,
-            location: matchingLocation,
-            quantity,
-            datePlanted: row["Date Planted"],
-            notes: row["Notes"] || "",
-            rowNumber: i
-          });
+          parsedData.push(rowData);
         } else {
-          errors.push(...rowErrors);
+          invalidData.push({
+            ...rowData,
+            errors: rowErrors
+          });
+          errors.push(`Row ${i}: ${rowErrors.join(", ")}`);
         }
       }
 
@@ -392,6 +404,7 @@ export default function PlantingsPage() {
       }
       
       setCsvData(parsedData);
+      setInvalidRows(invalidData);
     } catch (error) {
       setCsvErrors(["Failed to parse CSV file. Please ensure it's a valid CSV format."]);
     } finally {
@@ -410,6 +423,15 @@ export default function PlantingsPage() {
   const handleBulkImport = async () => {
     if (csvData.length === 0) {
       toast({ title: "Error", description: "No valid data to import", variant: "destructive" });
+      return;
+    }
+
+    if (!ignoreErrors && csvErrors.length > 0) {
+      toast({ 
+        title: "Validation Errors", 
+        description: "Please fix all errors or enable 'Ignore errors and import valid data' to continue", 
+        variant: "destructive" 
+      });
       return;
     }
 
@@ -455,15 +477,26 @@ export default function PlantingsPage() {
 
       await loadData();
       
+      const skippedCount = invalidRows.length;
+      let message = `Successfully imported ${successCount} plantings`;
+      if (skippedCount > 0) {
+        message += `. Skipped ${skippedCount} rows with errors`;
+      }
+      if (failCount > 0) {
+        message += `. ${failCount} failed to save`;
+      }
+
       toast({ 
         title: "Import Complete", 
-        description: `Successfully imported ${successCount} plantings${failCount > 0 ? `, ${failCount} failed` : ""}.` 
+        description: message
       });
 
       setIsImportDialogOpen(false);
       setCsvFile(null);
       setCsvData([]);
       setCsvErrors([]);
+      setInvalidRows([]);
+      setIgnoreErrors(false);
     } catch (error) {
       console.error("Error during bulk import:", error);
       toast({ title: "Error", description: "Failed to complete bulk import", variant: "destructive" });
@@ -694,10 +727,42 @@ export default function PlantingsPage() {
               </div>
             )}
 
+            {/* Ignore Errors Option */}
+            {(csvData.length > 0 || invalidRows.length > 0) && (
+              <div className="space-y-4">
+                {/* Summary */}
+                <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-medium text-blue-900 dark:text-blue-100">Import Summary</h3>
+                      <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                        {csvData.length} valid rows • {invalidRows.length} rows with errors
+                      </p>
+                    </div>
+                    {invalidRows.length > 0 && (
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="ignoreErrors"
+                          checked={ignoreErrors}
+                          onCheckedChange={(checked) => setIgnoreErrors(checked as boolean)}
+                        />
+                        <Label
+                          htmlFor="ignoreErrors"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-700 cursor-pointer"
+                        >
+                          Ignore errors and import valid data
+                        </Label>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Preview Table */}
-            {csvData.length > 0 && (
+            {(csvData.length > 0 || invalidRows.length > 0) && (
               <div className="space-y-2">
-                <h3 className="font-medium">Preview ({csvData.length} valid rows)</h3>
+                <h3 className="font-medium">Data Preview</h3>
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
                     <TableHeader>
@@ -708,27 +773,48 @@ export default function PlantingsPage() {
                         <TableHead>Location</TableHead>
                         <TableHead>Quantity</TableHead>
                         <TableHead>Date Planted</TableHead>
-                        <TableHead>Notes</TableHead>
+                        <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {csvData.slice(0, 10).map((row, index) => (
-                        <TableRow key={index}>
+                      {/* Valid rows */}
+                      {csvData.slice(0, 5).map((row, index) => (
+                        <TableRow key={`valid-${index}`} className="bg-green-50 dark:bg-green-950">
                           <TableCell>{row.rowNumber}</TableCell>
                           <TableCell>{row.plantType?.name}</TableCell>
                           <TableCell>{row.plantType?.variety}</TableCell>
                           <TableCell>{row.location?.name}</TableCell>
                           <TableCell>{formatNumber(row.quantity)}</TableCell>
                           <TableCell>{new Date(row.datePlanted).toLocaleDateString()}</TableCell>
-                          <TableCell className="max-w-[200px] truncate">{row.notes || "-"}</TableCell>
+                          <TableCell>
+                            <Badge className="bg-green-600 text-white">Valid</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      
+                      {/* Invalid rows */}
+                      {invalidRows.slice(0, 5).map((row, index) => (
+                        <TableRow key={`invalid-${index}`} className="bg-red-50 dark:bg-red-950">
+                          <TableCell>{row.rowNumber}</TableCell>
+                          <TableCell>{row.rawData["Plant Type"]}</TableCell>
+                          <TableCell>{row.rawData["Variety"]}</TableCell>
+                          <TableCell>{row.rawData["Location"]}</TableCell>
+                          <TableCell>{row.rawData["Quantity"]}</TableCell>
+                          <TableCell>{row.rawData["Date Planted"]}</TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <Badge variant="destructive">Error</Badge>
+                              <p className="text-xs text-red-600 dark:text-red-400">{row.errors[0]}</p>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
-                {csvData.length > 10 && (
+                {(csvData.length + invalidRows.length) > 10 && (
                   <p className="text-sm text-gray-500 text-center">
-                    Showing first 10 rows. {csvData.length - 10} more will be imported.
+                    Showing first 10 rows. {csvData.length + invalidRows.length - 10} more rows in file.
                   </p>
                 )}
               </div>
@@ -744,6 +830,8 @@ export default function PlantingsPage() {
                   setCsvFile(null);
                   setCsvData([]);
                   setCsvErrors([]);
+                  setInvalidRows([]);
+                  setIgnoreErrors(false);
                 }}
                 disabled={isProcessingCsv}
               >
@@ -751,11 +839,11 @@ export default function PlantingsPage() {
               </Button>
               <Button 
                 onClick={handleBulkImport}
-                disabled={csvData.length === 0 || csvErrors.length > 0 || isProcessingCsv}
+                disabled={csvData.length === 0 || (!ignoreErrors && csvErrors.length > 0) || isProcessingCsv}
                 className="bg-lime-600 hover:bg-lime-700"
               >
                 <Upload className="w-4 h-4 mr-2" />
-                Import {csvData.length} Plantings
+                Import {csvData.length} {csvData.length === 1 ? 'Planting' : 'Plantings'}
               </Button>
             </div>
           </div>
