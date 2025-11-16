@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,12 @@ const ReservationsPage: React.FC = () => {
   const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
   const [editingReservation, setEditingReservation] = useState<ReservationWithDetails | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
+  const [selectedReservation, setSelectedReservation] = useState<ReservationWithDetails | null>(null);
+  const [newStatus, setNewStatus] = useState<"pending" | "completed" | "cancelled">("pending");
+  const [finalQuantity, setFinalQuantity] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [selectedPlantingId, setSelectedPlantingId] = useState<string>("");
   const [selectedPlantTypeFilter, setSelectedPlantTypeFilter] = useState<string>("");
@@ -51,17 +57,24 @@ const ReservationsPage: React.FC = () => {
 
   const filteredReservations = useMemo(() => {
     let filtered = reservations;
+    
     if (plantingIdFilter) {
       filtered = filtered.filter(r => r.planting_id === plantingIdFilter);
     }
+    
+    if (statusFilter && statusFilter !== "all") {
+      filtered = filtered.filter(r => r.status === statusFilter);
+    }
+    
     if (searchQuery) {
       filtered = filtered.filter(r =>
         r.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         r.plantings?.plant_types?.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
+    
     return filtered;
-  }, [reservations, searchQuery, plantingIdFilter]);
+  }, [reservations, searchQuery, statusFilter, plantingIdFilter]);
 
   const loadData = async () => {
     setLoading(true);
@@ -87,7 +100,7 @@ const ReservationsPage: React.FC = () => {
   
   const getReservedQuantity = (plantingId: string): number => {
     return reservations
-      .filter(r => r.planting_id === plantingId && r.status === "active")
+      .filter(r => r.planting_id === plantingId && r.status === "pending")
       .reduce((sum, r) => sum + r.quantity_reserved, 0);
   };
 
@@ -121,7 +134,7 @@ const ReservationsPage: React.FC = () => {
       amount_paid: parseFloat(formData.get("amount_paid") as string) || 0,
       total_amount: parseFloat(formData.get("total_amount") as string) || 0,
       notes: (formData.get("notes") as string) || null,
-      status: editingReservation?.status || "active",
+      status: editingReservation?.status || "pending",
     };
 
     try {
@@ -141,27 +154,34 @@ const ReservationsPage: React.FC = () => {
     }
   };
 
-  const handleCancelReservation = async (id: string) => {
-    if (!confirm("Are you sure you want to cancel this reservation? The reserved quantity will be returned to available stock.")) return;
-    try {
-      await reservationService.updateReservation(id, { status: "cancelled" });
-      await loadData();
-      toast({ title: "Reservation Cancelled" });
-    } catch (error) {
-      console.error("Error cancelling reservation:", error);
-      toast({ title: "Error", description: "Failed to cancel reservation.", variant: "destructive" });
-    }
+  const handleOpenStatusDialog = (reservation: ReservationWithDetails, status: "pending" | "completed" | "cancelled") => {
+    setSelectedReservation(reservation);
+    setNewStatus(status);
+    setFinalQuantity(reservation.quantity_reserved);
+    setIsStatusDialogOpen(true);
   };
 
-  const handleCompleteReservation = async (id: string) => {
-    if (!confirm("Mark this reservation as completed?")) return;
+  const handleUpdateStatus = async () => {
+    if (!selectedReservation) return;
+
     try {
-      await reservationService.updateReservation(id, { status: "completed" });
+      await reservationService.updateReservationStatus(
+        selectedReservation.id,
+        newStatus,
+        newStatus === "completed" ? finalQuantity : undefined
+      );
+      
+      toast({ 
+        title: "Success", 
+        description: `Reservation ${newStatus === "completed" ? "completed" : "cancelled"} successfully.${newStatus === "completed" ? ` Stock deducted: ${finalQuantity}` : " Stock returned to batch."}` 
+      });
+      
       await loadData();
-      toast({ title: "Reservation Completed" });
+      setIsStatusDialogOpen(false);
+      setSelectedReservation(null);
     } catch (error) {
-      console.error("Error completing reservation:", error);
-      toast({ title: "Error", description: "Failed to complete reservation.", variant: "destructive" });
+      console.error("Error updating status:", error);
+      toast({ title: "Error", description: "Failed to update reservation status.", variant: "destructive" });
     }
   };
 
@@ -201,6 +221,19 @@ const ReservationsPage: React.FC = () => {
     const planting = plantings.find(p => p.id === plantingId);
     if (!planting?.plant_types) return "Unknown Planting";
     return `${planting.plant_types.name}${planting.variety ? ` (${planting.variety})` : ""}`;
+  };
+
+  const getStatusBadgeProps = (status: string) => {
+    switch (status) {
+      case "pending":
+        return { variant: "default" as const, className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100" };
+      case "completed":
+        return { variant: "default" as const, className: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" };
+      case "cancelled":
+        return { variant: "destructive" as const, className: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100" };
+      default:
+        return { variant: "outline" as const };
+    }
   };
 
   if (loading) {
@@ -244,16 +277,16 @@ const ReservationsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-l-4 border-blue-500">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="border-l-4 border-yellow-500">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              {plantingIdFilter ? "Filtered" : "Active"} Reservations
+              Pending Orders
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-600">
-              {filteredReservations.filter(r => r.status === "active").length}
+            <div className="text-3xl font-bold text-yellow-600">
+              {reservations.filter(r => r.status === "pending").length}
             </div>
           </CardContent>
         </Card>
@@ -261,30 +294,96 @@ const ReservationsPage: React.FC = () => {
         <Card className="border-l-4 border-green-500">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              Total Reserved
+              Completed Orders
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600">
-              {formatNumber(filteredReservations.filter(r => r.status === "active").reduce((sum, r) => sum + (r.quantity_reserved || 0), 0))}
+              {reservations.filter(r => r.status === "completed").length}
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">seedlings</p>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-orange-500">
+        <Card className="border-l-4 border-red-500">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              Pending Payments
+              Cancelled Orders
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-orange-600">
-              {filteredReservations.filter(r => r.status === "active" && r.payment_status === "pending").length}
+            <div className="text-3xl font-bold text-red-600">
+              {reservations.filter(r => r.status === "cancelled").length}
             </div>
           </CardContent>
         </Card>
+
+        <Card className="border-l-4 border-blue-500">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              Total Reserved
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-blue-600">
+              {formatNumber(reservations.filter(r => r.status === "pending").reduce((sum, r) => sum + (r.quantity_reserved || 0), 0))}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">pending seedlings</p>
+          </CardContent>
+        </Card>
       </div>
+
+      <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {newStatus === "completed" ? "Complete Reservation" : "Cancel Reservation"}
+            </DialogTitle>
+            <DialogDescription>
+              {newStatus === "completed" 
+                ? "Enter the final quantity delivered to the customer. Stock will be deducted from the batch." 
+                : "This will return the reserved quantity back to the available stock."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {newStatus === "completed" && (
+              <div className="space-y-2">
+                <Label htmlFor="final_quantity">Final Quantity Delivered *</Label>
+                <Input
+                  id="final_quantity"
+                  type="number"
+                  min="1"
+                  max={selectedReservation?.quantity_reserved}
+                  value={finalQuantity}
+                  onChange={(e) => setFinalQuantity(parseInt(e.target.value))}
+                  required
+                />
+                <p className="text-sm text-gray-500">
+                  Originally reserved: {selectedReservation?.quantity_reserved}
+                </p>
+              </div>
+            )}
+            {newStatus === "cancelled" && selectedReservation && (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {selectedReservation.quantity_reserved} seedlings will be returned to available stock.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsStatusDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpdateStatus}
+              className={newStatus === "completed" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}
+            >
+              {newStatus === "completed" ? "Complete Order" : "Cancel Order"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -329,7 +428,7 @@ const ReservationsPage: React.FC = () => {
                   ) : (
                     filteredActivePlantings.map(p => (
                       <SelectItem key={p.id} value={p.id}>
-                        Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - Qty: {formatNumber(p.quantity)} - Available: {formatNumber(getAvailableQuantity(p.id))}
+                        Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - Available: {formatNumber(getAvailableQuantity(p.id))}
                       </SelectItem>
                     ))
                   )}
@@ -475,13 +574,24 @@ const ReservationsPage: React.FC = () => {
           <CardDescription>Track and manage customer reservations.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-4">
+          <div className="flex flex-col sm:flex-row gap-4 mb-4">
             <Input
               placeholder="Search by customer name or plant type..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="max-w-sm"
             />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Reservations</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="rounded-md border overflow-x-auto">
             <Table>
@@ -521,7 +631,16 @@ const ReservationsPage: React.FC = () => {
                           <div className="text-xs text-gray-400">Batch: {r.plantings?.batch_number}</div>
                         </div>
                       </TableCell>
-                      <TableCell>{formatNumber(r.quantity_reserved)}</TableCell>
+                      <TableCell>
+                        <div>
+                          <div>{formatNumber(r.quantity_reserved)}</div>
+                          {r.status === "completed" && r.final_quantity && r.final_quantity !== r.quantity_reserved && (
+                            <div className="text-xs text-green-600">
+                              Delivered: {formatNumber(r.final_quantity)}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>{new Date(r.reserved_date).toLocaleDateString()}</TableCell>
                       <TableCell>
                         <Badge variant={r.payment_status === "paid" ? "default" : "outline"}>
@@ -529,20 +648,13 @@ const ReservationsPage: React.FC = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge 
-                          variant={r.status === "active" ? "default" : r.status === "completed" ? "secondary" : "destructive"}
-                          className={
-                            r.status === "active" ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100" :
-                            r.status === "completed" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" :
-                            "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
-                          }
-                        >
+                        <Badge {...getStatusBadgeProps(r.status)}>
                           {r.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">
-                          {r.status === "active" && (
+                          {r.status === "pending" && (
                             <>
                               <Button 
                                 size="sm" 
@@ -556,7 +668,7 @@ const ReservationsPage: React.FC = () => {
                                 size="sm" 
                                 variant="ghost" 
                                 className="text-green-600 hover:text-green-700" 
-                                onClick={() => handleCompleteReservation(r.id)} 
+                                onClick={() => handleOpenStatusDialog(r, "completed")} 
                                 title="Complete"
                               >
                                 <CheckCircle2 className="w-4 h-4" />
@@ -565,7 +677,7 @@ const ReservationsPage: React.FC = () => {
                                 size="sm" 
                                 variant="ghost" 
                                 className="text-red-600 hover:text-red-700" 
-                                onClick={() => handleCancelReservation(r.id)} 
+                                onClick={() => handleOpenStatusDialog(r, "cancelled")} 
                                 title="Cancel"
                               >
                                 <X className="w-4 h-4" />
