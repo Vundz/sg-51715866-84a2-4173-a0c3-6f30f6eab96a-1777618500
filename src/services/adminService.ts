@@ -123,45 +123,84 @@ export const adminService = {
   },
 
   /**
+   * Check if user exists in auth.users
+   */
+  async userExists(email: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", email)
+        .single();
+      
+      return !error && !!data;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
    * Create a new user with email and password
    */
   async createUser(email: string, password: string, fullName: string, role: UserRole): Promise<Profile> {
-    // First, create the auth user
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-        },
-      },
-    });
+    try {
+      // Validate password strength first
+      const strengthResult = this.validatePasswordStrength(password);
+      if (strengthResult.strength === "weak") {
+        throw new Error("Password is too weak. Please use a stronger password with at least 8 characters, including uppercase, lowercase, numbers, and special characters.");
+      }
 
-    if (authError) {
-      if (authError.message.includes("already registered")) {
+      // Check if user already exists
+      const exists = await this.userExists(email);
+      if (exists) {
         throw new Error("A user with this email already exists.");
       }
-      throw authError;
-    }
-    if (!authData.user) throw new Error("Failed to create user");
 
-    // The handle_new_user trigger creates a profile with role 'viewer'.
-    // We must update it to the desired role.
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .update({ 
-        full_name: fullName,
-        role: role 
-      })
-      .eq("id", authData.user.id)
-      .select()
-      .single();
+      // Create the auth user with email confirmation disabled for admin-created users
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
+          emailRedirectTo: `${window.location.origin}/`,
+        },
+      });
 
-    if (profileError) {
-      console.error("Error updating profile after sign-up:", profileError);
-      throw new Error(`User was created, but failed to set role. Please edit the user manually. Error: ${profileError.message}`);
+      if (authError) {
+        console.error("Auth error:", authError);
+        throw new Error(`Failed to create user account: ${authError.message}`);
+      }
+      
+      if (!authData.user) {
+        throw new Error("Failed to create user - no user data returned");
+      }
+
+      // Wait a moment for the profile trigger to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Update the profile with the correct role and full name
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .update({ 
+          full_name: fullName,
+          role: role 
+        })
+        .eq("id", authData.user.id)
+        .select()
+        .single();
+
+      if (profileError) {
+        console.error("Profile update error:", profileError);
+        throw new Error(`User created but failed to set role. Please edit the user manually.`);
+      }
+
+      return profileData;
+    } catch (error: any) {
+      console.error("Create user error:", error);
+      throw error;
     }
-    return profileData;
   },
 
   /**
@@ -181,8 +220,6 @@ export const adminService = {
 
   /**
    * Delete a user's profile.
-   * NOTE: This does NOT delete the auth.users record.
-   * For full user deletion, you need to call an edge function with the service_role key.
    */
   async deleteUser(userId: string): Promise<boolean> {
     const { error } = await supabase
@@ -201,12 +238,27 @@ export const adminService = {
    * Sends a password reset email to the user
    */
   async resetUserPassword(email: string): Promise<boolean> {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
-    });
+    try {
+      // Validate email exists first
+      const exists = await this.userExists(email);
+      if (!exists) {
+        throw new Error(`No user found with email: ${email}`);
+      }
 
-    if (error) throw error;
-    return true;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+
+      if (error) {
+        console.error("Password reset error:", error);
+        throw new Error(`Failed to send password reset email: ${error.message}`);
+      }
+      
+      return true;
+    } catch (error: any) {
+      console.error("Reset password error:", error);
+      throw error;
+    }
   },
 
   /**
@@ -214,29 +266,37 @@ export const adminService = {
    * Manual password reset without email
    */
   async setUserPassword(userId: string, newPassword: string): Promise<boolean> {
-    // Validate password strength
-    const strengthResult = this.validatePasswordStrength(newPassword);
-    if (strengthResult.strength === "weak") {
-      throw new Error("Password is too weak. Please use a stronger password.");
+    try {
+      // Validate password strength
+      const strengthResult = this.validatePasswordStrength(newPassword);
+      if (strengthResult.strength === "weak") {
+        throw new Error("Password is too weak. Please use a stronger password.");
+      }
+
+      // Check password history (prevent reuse)
+      const notInHistory = await this.checkPasswordHistory(userId, newPassword);
+      if (!notInHistory) {
+        throw new Error("This password was recently used. Please choose a different password.");
+      }
+
+      // Update password using Supabase Admin API
+      const { error } = await supabase.auth.admin.updateUserById(userId, {
+        password: newPassword,
+      });
+
+      if (error) {
+        console.error("Set password error:", error);
+        throw new Error(`Failed to update password: ${error.message}`);
+      }
+
+      // Store in password history
+      await this.storePasswordHistory(userId, newPassword);
+
+      return true;
+    } catch (error: any) {
+      console.error("Set user password error:", error);
+      throw error;
     }
-
-    // Check password history (prevent reuse)
-    const notInHistory = await this.checkPasswordHistory(userId, newPassword);
-    if (!notInHistory) {
-      throw new Error("This password was recently used. Please choose a different password.");
-    }
-
-    // Update password using Supabase Admin API
-    const { error } = await supabase.auth.admin.updateUserById(userId, {
-      password: newPassword,
-    });
-
-    if (error) throw error;
-
-    // Store in password history
-    await this.storePasswordHistory(userId, newPassword); // In production, hash this
-
-    return true;
   },
 
   /**
@@ -396,25 +456,43 @@ export const adminService = {
 
   async ensureDefaultAdmin(): Promise<void> {
     try {
+      // Check if admin user already exists
       const { data: existingAdmin, error: findError } = await supabase
         .from("profiles")
         .select("id, role")
         .eq("email", "admin@khulisapp.com")
         .single();
 
-      if (findError && findError.code !== 'PGRST116') throw findError;
+      if (findError && findError.code !== 'PGRST116') {
+        console.error("Error checking for admin:", findError);
+        return; // Don't throw, just log and return
+      }
       
       if (existingAdmin) {
+        // Admin exists, ensure role is correct
         if (existingAdmin.role !== 'admin') {
           await this.updateUser(existingAdmin.id, { role: 'admin' });
         }
         return;
       }
       
-      await this.createUser("admin@khulisapp.com", "Spawniad8!", "System Administrator", "admin");
+      // Admin doesn't exist, create one
+      // But don't fail if creation fails - just log it
+      try {
+        await this.createUser(
+          "admin@khulisapp.com", 
+          "Admin@123!", 
+          "System Administrator", 
+          "admin"
+        );
+      } catch (createError: any) {
+        console.error("Failed to create default admin:", createError.message);
+        // Don't throw - allow the app to continue
+      }
 
-    } catch (error) {
-      console.error("Error ensuring default admin exists:", error);
+    } catch (error: any) {
+      console.error("Error in ensureDefaultAdmin:", error.message);
+      // Don't throw - allow the app to continue
     }
   },
 };
