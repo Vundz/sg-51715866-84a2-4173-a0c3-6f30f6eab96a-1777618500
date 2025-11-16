@@ -170,3 +170,5 @@ const HarvestsReportPage: React.FC = () => {
     </div>
   );
 }
+
+export default HarvestsReportPage;
