@@ -11,8 +11,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { adminService } from "@/services/adminService";
-import { Plus, Pencil, Trash2, AlertCircle, CheckCircle2, Loader2, Users, Key, KeyRound } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import { adminService, PasswordStrength } from "@/services/adminService";
+import { Plus, Pencil, Trash2, AlertCircle, CheckCircle2, Loader2, Users, Key, KeyRound, Mail, Lock, RefreshCw } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -35,11 +38,18 @@ export default function UserManagementPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [bulkPasswordDialogOpen, setBulkPasswordDialogOpen] = useState(false);
   const [selectedUserForReset, setSelectedUserForReset] = useState<Profile | null>(null);
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [resettingPassword, setResettingPassword] = useState(false);
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordStrength, setPasswordStrength] = useState<{ strength: PasswordStrength; score: number; feedback: string[] } | null>(null);
+  const [resetMethod, setResetMethod] = useState<"manual" | "email">("email");
+  const [bulkResults, setBulkResults] = useState<{ success: any[]; failed: any[] } | null>(null);
   
   const [formData, setFormData] = useState<FormData>({
     email: "",
@@ -59,6 +69,15 @@ export default function UserManagementPage() {
       loadUsers();
     }
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (newPassword) {
+      const result = adminService.validatePasswordStrength(newPassword);
+      setPasswordStrength(result);
+    } else {
+      setPasswordStrength(null);
+    }
+  }, [newPassword]);
 
   const loadUsers = async () => {
     try {
@@ -140,33 +159,131 @@ export default function UserManagementPage() {
 
   const handleOpenResetPasswordDialog = (user: Profile) => {
     setSelectedUserForReset(user);
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordStrength(null);
+    setResetMethod("email");
     setError(null);
     setSuccess(null);
     setResetPasswordDialogOpen(true);
   };
 
   const handleResetPassword = async () => {
-    if (!selectedUserForReset?.email) {
-      setError("User email not found.");
-      return;
-    }
+    if (!selectedUserForReset) return;
 
     setResettingPassword(true);
     setError(null);
     setSuccess(null);
 
     try {
-      await adminService.resetUserPassword(selectedUserForReset.email);
-      setSuccess(`Password reset email sent to ${selectedUserForReset.email}`);
+      if (resetMethod === "email") {
+        if (!selectedUserForReset.email) {
+          setError("User email not found.");
+          return;
+        }
+        await adminService.resetUserPassword(selectedUserForReset.email);
+        setSuccess(`Password reset email sent to ${selectedUserForReset.email}`);
+      } else {
+        // Manual password set
+        if (!newPassword || !confirmPassword) {
+          setError("Please enter and confirm the new password.");
+          return;
+        }
+        if (newPassword !== confirmPassword) {
+          setError("Passwords do not match.");
+          return;
+        }
+        if (passwordStrength && passwordStrength.strength === "weak") {
+          setError("Password is too weak. Please use a stronger password.");
+          return;
+        }
+        await adminService.setUserPassword(selectedUserForReset.id, newPassword);
+        setSuccess("Password updated successfully!");
+      }
+      
       setTimeout(() => {
         setResetPasswordDialogOpen(false);
         setSuccess(null);
         setSelectedUserForReset(null);
-      }, 3000);
+        setNewPassword("");
+        setConfirmPassword("");
+      }, 2000);
     } catch (err: any) {
-      setError(err.message || "Failed to send password reset email.");
+      setError(err.message || "Failed to reset password.");
     } finally {
       setResettingPassword(false);
+    }
+  };
+
+  const handleToggleUserSelection = (userId: string) => {
+    const newSelection = new Set(selectedUsers);
+    if (newSelection.has(userId)) {
+      newSelection.delete(userId);
+    } else {
+      newSelection.add(userId);
+    }
+    setSelectedUsers(newSelection);
+  };
+
+  const handleSelectAllUsers = () => {
+    if (selectedUsers.size === users.length) {
+      setSelectedUsers(new Set());
+    } else {
+      setSelectedUsers(new Set(users.map(u => u.id)));
+    }
+  };
+
+  const handleOpenBulkPasswordDialog = () => {
+    if (selectedUsers.size === 0) {
+      setError("Please select at least one user.");
+      return;
+    }
+    setBulkResults(null);
+    setError(null);
+    setSuccess(null);
+    setBulkPasswordDialogOpen(true);
+  };
+
+  const handleBulkResetPasswords = async (method: "email" | "temporary") => {
+    setResettingPassword(true);
+    setError(null);
+    setSuccess(null);
+    setBulkResults(null);
+
+    try {
+      const userIds = Array.from(selectedUsers);
+      
+      if (method === "email") {
+        const results = await adminService.bulkResetPasswords(userIds);
+        setBulkResults(results);
+        setSuccess(`Reset emails sent to ${results.success.length} users`);
+      } else {
+        const results = await adminService.bulkSetTemporaryPasswords(userIds);
+        setBulkResults(results);
+        setSuccess(`Temporary passwords set for ${results.success.length} users`);
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to perform bulk operation.");
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
+  const getPasswordStrengthColor = (strength: PasswordStrength) => {
+    switch (strength) {
+      case "weak": return "bg-red-500";
+      case "fair": return "bg-orange-500";
+      case "good": return "bg-yellow-500";
+      case "strong": return "bg-green-500";
+    }
+  };
+
+  const getPasswordStrengthValue = (strength: PasswordStrength) => {
+    switch (strength) {
+      case "weak": return 25;
+      case "fair": return 50;
+      case "good": return 75;
+      case "strong": return 100;
     }
   };
 
@@ -252,6 +369,37 @@ export default function UserManagementPage() {
         </Alert>
       )}
 
+      {/* Bulk Actions Bar */}
+      {selectedUsers.size > 0 && (
+        <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <p className="font-medium">
+                {selectedUsers.size} user{selectedUsers.size !== 1 ? "s" : ""} selected
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenBulkPasswordDialog}
+                  className="gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Bulk Password Reset
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedUsers(new Set())}
+                >
+                  Clear Selection
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Users Table */}
       <Card>
         <CardHeader>
@@ -262,6 +410,12 @@ export default function UserManagementPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={selectedUsers.size === users.length && users.length > 0}
+                    onCheckedChange={handleSelectAllUsers}
+                  />
+                </TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Full Name</TableHead>
                 <TableHead>Role</TableHead>
@@ -273,6 +427,12 @@ export default function UserManagementPage() {
               {users.length > 0 ? (
                 users.map((u) => (
                   <TableRow key={u.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedUsers.has(u.id)}
+                        onCheckedChange={() => handleToggleUserSelection(u.id)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{u.email}</TableCell>
                     <TableCell>{u.full_name || "-"}</TableCell>
                     <TableCell>
@@ -318,7 +478,7 @@ export default function UserManagementPage() {
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center text-muted-foreground py-8"
                   >
                     No users found.
@@ -426,34 +586,115 @@ export default function UserManagementPage() {
 
       {/* Password Reset Dialog */}
       <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <KeyRound className="h-5 w-5" />
               Reset User Password
             </DialogTitle>
             <DialogDescription>
-              Send a password reset email to this user
+              Choose how to reset the password for this user
             </DialogDescription>
           </DialogHeader>
           
           {selectedUserForReset && (
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>User Email</Label>
-                <p className="text-sm font-medium">{selectedUserForReset.email}</p>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
+                <div>
+                  <Label className="text-xs text-muted-foreground">User Email</Label>
+                  <p className="text-sm font-medium">{selectedUserForReset.email}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Full Name</Label>
+                  <p className="text-sm">{selectedUserForReset.full_name || "N/A"}</p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Full Name</Label>
-                <p className="text-sm">{selectedUserForReset.full_name || "N/A"}</p>
-              </div>
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  A password reset link will be sent to the user's email address. 
-                  They will be able to set a new password using this link.
-                </AlertDescription>
-              </Alert>
+
+              <Tabs value={resetMethod} onValueChange={(v) => setResetMethod(v as "manual" | "email")}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="email" className="gap-2">
+                    <Mail className="h-4 w-4" />
+                    Email Link
+                  </TabsTrigger>
+                  <TabsTrigger value="manual" className="gap-2">
+                    <Lock className="h-4 w-4" />
+                    Set Password
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="email" className="space-y-4 mt-4">
+                  <Alert>
+                    <Mail className="h-4 w-4" />
+                    <AlertDescription>
+                      A password reset link will be sent to <strong>{selectedUserForReset.email}</strong>. 
+                      The user will receive an email with instructions to set a new password.
+                    </AlertDescription>
+                  </Alert>
+                </TabsContent>
+
+                <TabsContent value="manual" className="space-y-4 mt-4">
+                  <Alert>
+                    <Lock className="h-4 w-4" />
+                    <AlertDescription>
+                      Set a new password directly for this user. The password will be updated immediately without sending an email.
+                    </AlertDescription>
+                  </Alert>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="newPassword">New Password *</Label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Enter new password"
+                    />
+                  </div>
+
+                  {passwordStrength && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <Label className="text-sm">Password Strength</Label>
+                        <span className="text-xs font-medium capitalize">
+                          {passwordStrength.strength}
+                        </span>
+                      </div>
+                      <Progress 
+                        value={getPasswordStrengthValue(passwordStrength.strength)} 
+                        className="h-2"
+                      />
+                      <div className={`h-1 rounded-full ${getPasswordStrengthColor(passwordStrength.strength)}`} 
+                           style={{ width: `${getPasswordStrengthValue(passwordStrength.strength)}%` }} 
+                      />
+                      {passwordStrength.feedback.length > 0 && (
+                        <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                          {passwordStrength.feedback.map((fb, idx) => (
+                            <li key={idx}>{fb}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                    />
+                  </div>
+
+                  {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>Passwords do not match</AlertDescription>
+                    </Alert>
+                  )}
+                </TabsContent>
+              </Tabs>
             </div>
           )}
 
@@ -478,6 +719,8 @@ export default function UserManagementPage() {
               onClick={() => {
                 setResetPasswordDialogOpen(false);
                 setSelectedUserForReset(null);
+                setNewPassword("");
+                setConfirmPassword("");
               }}
               disabled={resettingPassword}
             >
@@ -489,7 +732,153 @@ export default function UserManagementPage() {
               className="gap-2"
             >
               {resettingPassword && <Loader2 className="h-4 w-4 animate-spin" />}
-              Send Reset Email
+              {resetMethod === "email" ? "Send Reset Email" : "Set Password"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Password Reset Dialog */}
+      <Dialog open={bulkPasswordDialogOpen} onOpenChange={setBulkPasswordDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5" />
+              Bulk Password Reset
+            </DialogTitle>
+            <DialogDescription>
+              Reset passwords for {selectedUsers.size} selected user{selectedUsers.size !== 1 ? "s" : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Choose a method to reset passwords for all selected users
+              </AlertDescription>
+            </Alert>
+
+            <div className="grid gap-3">
+              <Card className="cursor-pointer hover:border-blue-500 transition-colors">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <Mail className="h-5 w-5 mt-0.5 text-blue-600" />
+                    <div className="flex-1">
+                      <h4 className="font-medium mb-1">Send Reset Email Links</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Each user will receive a password reset email. They can set their own password.
+                      </p>
+                      <Button 
+                        className="mt-3 w-full"
+                        onClick={() => handleBulkResetPasswords("email")}
+                        disabled={resettingPassword}
+                      >
+                        {resettingPassword ? (
+                          <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Sending...</>
+                        ) : (
+                          <><Mail className="h-4 w-4 mr-2" /> Send Reset Emails</>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="cursor-pointer hover:border-orange-500 transition-colors">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <Lock className="h-5 w-5 mt-0.5 text-orange-600" />
+                    <div className="flex-1">
+                      <h4 className="font-medium mb-1">Generate Temporary Passwords</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Generate strong random passwords for each user. You'll need to distribute them manually.
+                      </p>
+                      <Button 
+                        className="mt-3 w-full"
+                        variant="secondary"
+                        onClick={() => handleBulkResetPasswords("temporary")}
+                        disabled={resettingPassword}
+                      >
+                        {resettingPassword ? (
+                          <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Generating...</>
+                        ) : (
+                          <><Lock className="h-4 w-4 mr-2" /> Generate Passwords</>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {bulkResults && (
+              <Card className="border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
+                <CardContent className="p-4">
+                  <h4 className="font-medium mb-2 flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    Operation Complete
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <p className="text-green-700 dark:text-green-300">
+                      ✓ Successfully processed: {bulkResults.success.length} user{bulkResults.success.length !== 1 ? "s" : ""}
+                    </p>
+                    {bulkResults.failed.length > 0 && (
+                      <p className="text-red-700 dark:text-red-300">
+                        ✗ Failed: {bulkResults.failed.length} user{bulkResults.failed.length !== 1 ? "s" : ""}
+                      </p>
+                    )}
+                    
+                    {Array.isArray(bulkResults.success) && bulkResults.success.length > 0 && 
+                     "tempPassword" in bulkResults.success[0] && (
+                      <div className="mt-4 p-3 bg-white dark:bg-gray-900 rounded border">
+                        <p className="font-medium mb-2">Temporary Passwords:</p>
+                        <div className="space-y-2 max-h-40 overflow-y-auto">
+                          {bulkResults.success.map((item: any, idx: number) => (
+                            <div key={idx} className="text-xs font-mono p-2 bg-gray-100 dark:bg-gray-800 rounded">
+                              <span className="font-medium">{item.email}:</span> {item.tempPassword}
+                            </div>
+                          ))}
+                        </div>
+                        <Alert className="mt-3">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription className="text-xs">
+                            Please save these passwords securely and distribute them to users privately. 
+                            They will not be shown again.
+                          </AlertDescription>
+                        </Alert>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            
+            {success && (
+              <Alert className="border-green-500">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-600">{success}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBulkPasswordDialogOpen(false);
+                setBulkResults(null);
+                setSelectedUsers(new Set());
+              }}
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
