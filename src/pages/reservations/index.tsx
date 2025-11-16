@@ -50,6 +50,7 @@ const ReservationsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedPlantingId, setSelectedPlantingId] = useState<string>("");
   const [selectedPlantTypeFilter, setSelectedPlantTypeFilter] = useState<string>("");
+  const [selectedVarietyFilter, setSelectedVarietyFilter] = useState<string>("");
 
   useEffect(() => {
     loadData();
@@ -190,6 +191,7 @@ const ReservationsPage: React.FC = () => {
     setEditingReservation(reservation);
     setSelectedPlantingId(reservation?.planting_id || (plantingIdFilter as string) || "");
     setSelectedPlantTypeFilter("all");
+    setSelectedVarietyFilter("all");
     setIsDialogOpen(true);
   };
   
@@ -198,6 +200,18 @@ const ReservationsPage: React.FC = () => {
     setEditingReservation(null);
     setSelectedPlantingId("");
     setSelectedPlantTypeFilter("all");
+    setSelectedVarietyFilter("all");
+  };
+
+  const handlePlantTypeChange = (value: string) => {
+    setSelectedPlantTypeFilter(value);
+    setSelectedVarietyFilter("all");
+    setSelectedPlantingId("");
+  };
+
+  const handleVarietyChange = (value: string) => {
+    setSelectedVarietyFilter(value);
+    setSelectedPlantingId("");
   };
 
   const activePlantings = plantings.filter(p => p.status === "active");
@@ -216,6 +230,33 @@ const ReservationsPage: React.FC = () => {
     });
     return Array.from(types.values());
   }, [activePlantings]);
+
+  const availableVarieties = useMemo(() => {
+    if (!selectedPlantTypeFilter || selectedPlantTypeFilter === "all") return [];
+    
+    const varieties = new Set<string>();
+    activePlantings
+      .filter(p => p.plant_type_id === selectedPlantTypeFilter && p.variety)
+      .forEach(p => {
+        if (p.variety) varieties.add(p.variety);
+      });
+    
+    return Array.from(varieties).sort();
+  }, [activePlantings, selectedPlantTypeFilter]);
+
+  const filteredActivePlantingsByFilters = useMemo(() => {
+    let filtered = activePlantings;
+    
+    if (selectedPlantTypeFilter && selectedPlantTypeFilter !== "all") {
+      filtered = filtered.filter(p => p.plant_type_id === selectedPlantTypeFilter);
+    }
+    
+    if (selectedVarietyFilter && selectedVarietyFilter !== "all") {
+      filtered = filtered.filter(p => p.variety === selectedVarietyFilter);
+    }
+    
+    return filtered;
+  }, [activePlantings, selectedPlantTypeFilter, selectedVarietyFilter]);
 
   const getPlantingName = (plantingId: string | null) => {
     if (!plantingId) return "Unknown Planting";
@@ -400,7 +441,7 @@ const ReservationsPage: React.FC = () => {
                 <Filter className="w-4 h-4" />
                 Filter by Plant Type
               </Label>
-              <Select value={selectedPlantTypeFilter} onValueChange={setSelectedPlantTypeFilter}>
+              <Select value={selectedPlantTypeFilter} onValueChange={handlePlantTypeChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="All plant types" />
                 </SelectTrigger>
@@ -415,6 +456,28 @@ const ReservationsPage: React.FC = () => {
               </Select>
             </div>
 
+            {selectedPlantTypeFilter && selectedPlantTypeFilter !== "all" && availableVarieties.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="variety_filter" className="flex items-center gap-2">
+                  <Filter className="w-4 h-4" />
+                  Filter by Variety
+                </Label>
+                <Select value={selectedVarietyFilter} onValueChange={handleVarietyChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All varieties" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All varieties</SelectItem>
+                    {availableVarieties.map(variety => (
+                      <SelectItem key={variety} value={variety}>
+                        {variety}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="planting_id">Planting Batch *</Label>
               <Select name="planting_id" required value={selectedPlantingId} onValueChange={setSelectedPlantingId}>
@@ -422,12 +485,16 @@ const ReservationsPage: React.FC = () => {
                   <SelectValue placeholder="Select a planting batch" />
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredActivePlantings.length === 0 ? (
+                  {filteredActivePlantingsByFilters.length === 0 ? (
                     <div className="px-2 py-1.5 text-sm text-gray-500">
-                      {selectedPlantTypeFilter ? "No batches available for selected plant type" : "No active planting batches available"}
+                      {selectedPlantTypeFilter && selectedPlantTypeFilter !== "all" 
+                        ? (selectedVarietyFilter && selectedVarietyFilter !== "all"
+                            ? "No batches available for selected variety"
+                            : "No batches available for selected plant type")
+                        : "No active planting batches available"}
                     </div>
                   ) : (
-                    filteredActivePlantings.map(p => (
+                    filteredActivePlantingsByFilters.map(p => (
                       <SelectItem key={p.id} value={p.id}>
                         Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - Available: {formatNumber(getAvailableQuantity(p.id))}
                       </SelectItem>
