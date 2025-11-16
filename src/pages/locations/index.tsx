@@ -61,6 +61,41 @@ export default function LocationsPage() {
     return locationCapacity > 0 ? (plantingQty / locationCapacity) * 100 : 0;
   };
 
+  const getDaysUntilHarvest = (expectedDate: string | null) => {
+    if (!expectedDate) return null;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const harvestDate = new Date(expectedDate);
+    harvestDate.setHours(0, 0, 0, 0);
+    
+    const diffTime = harvestDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    let text = "";
+    let colorClass = "";
+    
+    if (diffDays < 0) {
+      text = `${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'day' : 'days'} overdue`;
+      colorClass = "text-red-600 dark:text-red-400";
+    } else if (diffDays === 0) {
+      text = "Today";
+      colorClass = "text-orange-600 dark:text-orange-400";
+    } else if (diffDays <= 7) {
+      text = `${diffDays} ${diffDays === 1 ? 'day' : 'days'} away`;
+      colorClass = "text-orange-600 dark:text-orange-400";
+    } else if (diffDays <= 30) {
+      text = `${diffDays} days away`;
+      colorClass = "text-green-600 dark:text-green-400";
+    } else {
+      text = `${diffDays} days away`;
+      colorClass = "text-blue-600 dark:text-blue-400";
+    }
+    
+    return { days: diffDays, text, colorClass };
+  };
+
   const handleSaveLocation = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -297,11 +332,23 @@ export default function LocationsPage() {
                                     </div>
                                     <div>
                                       <span className="text-gray-600 dark:text-gray-400">Expected Harvest:</span>
-                                      <span className="ml-2 font-medium">
-                                        {planting.expected_harvest_date 
-                                          ? new Date(planting.expected_harvest_date).toLocaleDateString()
-                                          : 'N/A'}
-                                      </span>
+                                      {planting.expected_harvest_date ? (
+                                        <div className="ml-2">
+                                          <span className="font-medium">
+                                            {new Date(planting.expected_harvest_date).toLocaleDateString()}
+                                          </span>
+                                          {(() => {
+                                            const daysInfo = getDaysUntilHarvest(planting.expected_harvest_date);
+                                            return daysInfo ? (
+                                              <span className={`ml-1.5 font-semibold ${daysInfo.colorClass}`}>
+                                                ({daysInfo.text})
+                                              </span>
+                                            ) : null;
+                                          })()}
+                                        </div>
+                                      ) : (
+                                        <span className="ml-2 font-medium text-gray-500">N/A</span>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
