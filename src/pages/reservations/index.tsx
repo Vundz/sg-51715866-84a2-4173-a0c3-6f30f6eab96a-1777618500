@@ -135,6 +135,7 @@ const ReservationsPage: React.FC = () => {
       total_amount: parseFloat(formData.get("total_amount") as string) || 0,
       notes: (formData.get("notes") as string) || null,
       status: editingReservation?.status || "pending",
+      final_quantity: editingReservation?.final_quantity ?? null,
     };
 
     try {
