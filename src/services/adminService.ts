@@ -453,46 +453,4 @@ export const adminService = {
     }
     return true;
   },
-
-  async ensureDefaultAdmin(): Promise<void> {
-    try {
-      // Check if admin user already exists
-      const { data: existingAdmin, error: findError } = await supabase
-        .from("profiles")
-        .select("id, role")
-        .eq("email", "admin@khulisapp.com")
-        .single();
-
-      if (findError && findError.code !== 'PGRST116') {
-        console.error("Error checking for admin:", findError);
-        return; // Don't throw, just log and return
-      }
-      
-      if (existingAdmin) {
-        // Admin exists, ensure role is correct
-        if (existingAdmin.role !== 'admin') {
-          await this.updateUser(existingAdmin.id, { role: 'admin' });
-        }
-        return;
-      }
-      
-      // Admin doesn't exist, create one
-      // But don't fail if creation fails - just log it
-      try {
-        await this.createUser(
-          "admin@khulisapp.com", 
-          "Admin@123!", 
-          "System Administrator", 
-          "admin"
-        );
-      } catch (createError: any) {
-        console.error("Failed to create default admin:", createError.message);
-        // Don't throw - allow the app to continue
-      }
-
-    } catch (error: any) {
-      console.error("Error in ensureDefaultAdmin:", error.message);
-      // Don't throw - allow the app to continue
-    }
-  },
 };
