@@ -168,7 +168,7 @@ const ReservationsPage: React.FC = () => {
   const handleOpenDialog = (reservation: ReservationWithDetails | null = null) => {
     setEditingReservation(reservation);
     setSelectedPlantingId(reservation?.planting_id || (plantingIdFilter as string) || "");
-    setSelectedPlantTypeFilter("");
+    setSelectedPlantTypeFilter("all");
     setIsDialogOpen(true);
   };
   
@@ -176,13 +176,13 @@ const ReservationsPage: React.FC = () => {
     setIsDialogOpen(false);
     setEditingReservation(null);
     setSelectedPlantingId("");
-    setSelectedPlantTypeFilter("");
+    setSelectedPlantTypeFilter("all");
   };
 
   const activePlantings = plantings.filter(p => p.status === "active");
 
   const filteredActivePlantings = useMemo(() => {
-    if (!selectedPlantTypeFilter) return activePlantings;
+    if (!selectedPlantTypeFilter || selectedPlantTypeFilter === "all") return activePlantings;
     return activePlantings.filter(p => p.plant_type_id === selectedPlantTypeFilter);
   }, [activePlantings, selectedPlantTypeFilter]);
 
@@ -305,7 +305,7 @@ const ReservationsPage: React.FC = () => {
                   <SelectValue placeholder="All plant types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All plant types</SelectItem>
+                  <SelectItem value="all">All plant types</SelectItem>
                   {uniquePlantTypes.map(pt => (
                     <SelectItem key={pt.id} value={pt.id}>
                       {pt.name}
