@@ -1,3 +1,4 @@
+
 import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,13 +15,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { adminService, PasswordStrength } from "@/services/adminService";
-import { Plus, Pencil, Trash2, AlertCircle, CheckCircle2, Loader2, Users, Key, KeyRound, Mail, Lock, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertCircle, CheckCircle2, Loader2, Users, Key, KeyRound, Mail, Lock, RefreshCw, UserCircle } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type UserRole = Database["public"]["Enums"]["user_role"];
 
 interface FormData {
+  username: string;
   email: string;
   password: string;
   full_name: string;
@@ -49,8 +51,11 @@ export default function UserManagementPage() {
   const [passwordStrength, setPasswordStrength] = useState<{ strength: PasswordStrength; score: number; feedback: string[] } | null>(null);
   const [resetMethod, setResetMethod] = useState<"manual" | "email">("email");
   const [bulkResults, setBulkResults] = useState<{ success: any[]; failed: any[] } | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   
   const [formData, setFormData] = useState<FormData>({
+    username: "",
     email: "",
     password: "",
     full_name: "",
@@ -78,6 +83,28 @@ export default function UserManagementPage() {
     }
   }, [newPassword]);
 
+  // Check username availability as user types
+  useEffect(() => {
+    if (!editingUser && formData.username && formData.username.length >= 3) {
+      const checkUsername = async () => {
+        setCheckingUsername(true);
+        try {
+          const exists = await adminService.usernameExists(formData.username);
+          setUsernameAvailable(!exists);
+        } catch {
+          setUsernameAvailable(null);
+        } finally {
+          setCheckingUsername(false);
+        }
+      };
+      
+      const timer = setTimeout(checkUsername, 500);
+      return () => clearTimeout(timer);
+    } else {
+      setUsernameAvailable(null);
+    }
+  }, [formData.username, editingUser]);
+
   const loadUsers = async () => {
     try {
       setLoading(true);
@@ -95,6 +122,7 @@ export default function UserManagementPage() {
     if (user) {
       setEditingUser(user);
       setFormData({
+        username: user.username || "",
         email: user.email || "",
         password: "",
         full_name: user.full_name || "",
@@ -102,10 +130,11 @@ export default function UserManagementPage() {
       });
     } else {
       setEditingUser(null);
-      setFormData({ email: "", password: "", full_name: "", role: "viewer" });
+      setFormData({ username: "", email: "", password: "", full_name: "", role: "viewer" });
     }
     setError(null);
     setSuccess(null);
+    setUsernameAvailable(null);
     setDialogOpen(true);
   };
 
@@ -113,10 +142,24 @@ export default function UserManagementPage() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    // Validate username
+    if (!editingUser && !formData.username) {
+      setError("Username is required.");
+      return;
+    }
+
+    if (!editingUser && formData.username.length < 3) {
+      setError("Username must be at least 3 characters long.");
+      return;
+    }
+
     try {
       if (editingUser) {
         await adminService.updateUser(editingUser.id, {
+          username: formData.username,
           full_name: formData.full_name,
+          email: formData.email || undefined,
           role: formData.role,
         });
         setSuccess("User updated successfully!");
@@ -126,10 +169,11 @@ export default function UserManagementPage() {
           return;
         }
         await adminService.createUser(
-          formData.email,
+          formData.username,
           formData.password,
           formData.full_name,
-          formData.role
+          formData.role,
+          formData.email || undefined
         );
         setSuccess("User created successfully!");
       }
@@ -143,8 +187,8 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleDelete = async (userId: string, userEmail: string | null) => {
-    if (!confirm(`Are you sure you want to delete user ${userEmail || userId}?`)) return;
+  const handleDelete = async (userId: string, username: string | null) => {
+    if (!confirm(`Are you sure you want to delete user "${username || userId}"?`)) return;
     setError(null);
     try {
       await adminService.deleteUser(userId);
@@ -161,7 +205,7 @@ export default function UserManagementPage() {
     setNewPassword("");
     setConfirmPassword("");
     setPasswordStrength(null);
-    setResetMethod("email");
+    setResetMethod(user.email ? "email" : "manual");
     setError(null);
     setSuccess(null);
     setResetPasswordDialogOpen(true);
@@ -177,7 +221,7 @@ export default function UserManagementPage() {
     try {
       if (resetMethod === "email") {
         if (!selectedUserForReset.email) {
-          setError("User email not found.");
+          setError("This user doesn't have an email address. Please use manual password reset.");
           return;
         }
         await adminService.resetUserPassword(selectedUserForReset.email);
@@ -335,7 +379,7 @@ export default function UserManagementPage() {
             User Management
           </h1>
           <p className="text-muted-foreground mt-1">
-            Create, edit, suspend, and manage user accounts
+            Create and manage user accounts with username-based authentication
           </p>
         </div>
         <div className="flex gap-2">
@@ -415,8 +459,9 @@ export default function UserManagementPage() {
                     onCheckedChange={handleSelectAllUsers}
                   />
                 </TableHead>
-                <TableHead>Email</TableHead>
+                <TableHead>Username</TableHead>
                 <TableHead>Full Name</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -432,8 +477,14 @@ export default function UserManagementPage() {
                         onCheckedChange={() => handleToggleUserSelection(u.id)}
                       />
                     </TableCell>
-                    <TableCell className="font-medium">{u.email}</TableCell>
+                    <TableCell className="font-medium flex items-center gap-2">
+                      <UserCircle className="h-4 w-4 text-muted-foreground" />
+                      {u.username || "-"}
+                    </TableCell>
                     <TableCell>{u.full_name || "-"}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {u.email || <span className="text-xs italic">No email</span>}
+                    </TableCell>
                     <TableCell>
                       <Badge className={getRoleBadgeColor(u.role)}>
                         {u.role}
@@ -464,7 +515,7 @@ export default function UserManagementPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDelete(u.id, u.email)}
+                          onClick={() => handleDelete(u.id, u.username)}
                           className="text-red-600 hover:text-red-700"
                           title="Delete user"
                         >
@@ -477,7 +528,7 @@ export default function UserManagementPage() {
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="text-center text-muted-foreground py-8"
                   >
                     No users found.
@@ -491,7 +542,7 @@ export default function UserManagementPage() {
 
       {/* Create/Edit User Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
               {editingUser ? "Edit User" : "Create New User"}
@@ -499,12 +550,56 @@ export default function UserManagementPage() {
             <DialogDescription>
               {editingUser
                 ? "Update user details and role assignment"
-                : "Create a new user account with email and password"}
+                : "Create a new local user account with username and password"}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email Address *</Label>
+              <Label htmlFor="username" className="flex items-center gap-2">
+                <UserCircle className="h-4 w-4" />
+                Username *
+              </Label>
+              <Input
+                id="username"
+                type="text"
+                value={formData.username}
+                onChange={(e) =>
+                  setFormData({ ...formData, username: e.target.value.toLowerCase().trim() })
+                }
+                required
+                disabled={!!editingUser}
+                placeholder="johndoe"
+                pattern="[a-z0-9_]+"
+                title="Only lowercase letters, numbers, and underscores"
+                minLength={3}
+              />
+              {!editingUser && formData.username && (
+                <div className="flex items-center gap-2 text-sm">
+                  {checkingUsername ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span className="text-muted-foreground">Checking availability...</span>
+                    </>
+                  ) : usernameAvailable === true ? (
+                    <>
+                      <CheckCircle2 className="h-3 w-3 text-green-600" />
+                      <span className="text-green-600">Username available</span>
+                    </>
+                  ) : usernameAvailable === false ? (
+                    <>
+                      <AlertCircle className="h-3 w-3 text-red-600" />
+                      <span className="text-red-600">Username already taken</span>
+                    </>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email" className="flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                Email Address <span className="text-xs text-muted-foreground">(Optional)</span>
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -512,15 +607,19 @@ export default function UserManagementPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, email: e.target.value })
                 }
-                required
-                disabled={!!editingUser}
-                placeholder="user@example.com"
+                placeholder="user@example.com (optional)"
               />
+              <p className="text-xs text-muted-foreground">
+                Email is optional. Users can log in with their username.
+              </p>
             </div>
 
             {!editingUser && (
               <div className="space-y-2">
-                <Label htmlFor="password">Password *</Label>
+                <Label htmlFor="password" className="flex items-center gap-2">
+                  <Lock className="h-4 w-4" />
+                  Password *
+                </Label>
                 <Input
                   id="password"
                   type="password"
@@ -567,6 +666,15 @@ export default function UserManagementPage() {
               </Select>
             </div>
 
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-xs">
+                {editingUser 
+                  ? "Username cannot be changed after creation. Use password reset to update the password."
+                  : "Username must be unique and contain only lowercase letters, numbers, and underscores."}
+              </AlertDescription>
+            </Alert>
+
             <DialogFooter>
               <Button
                 type="button"
@@ -575,7 +683,10 @@ export default function UserManagementPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button 
+                type="submit"
+                disabled={!editingUser && (!usernameAvailable || checkingUsername)}
+              >
                 {editingUser ? "Update User" : "Create User"}
               </Button>
             </DialogFooter>
@@ -600,42 +711,107 @@ export default function UserManagementPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
                 <div>
-                  <Label className="text-xs text-muted-foreground">User Email</Label>
-                  <p className="text-sm font-medium">{selectedUserForReset.email}</p>
+                  <Label className="text-xs text-muted-foreground">Username</Label>
+                  <p className="text-sm font-medium">{selectedUserForReset.username || "N/A"}</p>
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Full Name</Label>
-                  <p className="text-sm">{selectedUserForReset.full_name || "N/A"}</p>
+                  <Label className="text-xs text-muted-foreground">Email</Label>
+                  <p className="text-sm">{selectedUserForReset.email || <span className="italic text-muted-foreground">No email</span>}</p>
                 </div>
               </div>
 
-              <Tabs value={resetMethod} onValueChange={(v) => setResetMethod(v as "manual" | "email")}>
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="email" className="gap-2">
-                    <Mail className="h-4 w-4" />
-                    Email Link
-                  </TabsTrigger>
-                  <TabsTrigger value="manual" className="gap-2">
-                    <Lock className="h-4 w-4" />
-                    Set Password
-                  </TabsTrigger>
-                </TabsList>
+              {selectedUserForReset.email ? (
+                <Tabs value={resetMethod} onValueChange={(v) => setResetMethod(v as "manual" | "email")}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="email" className="gap-2">
+                      <Mail className="h-4 w-4" />
+                      Email Link
+                    </TabsTrigger>
+                    <TabsTrigger value="manual" className="gap-2">
+                      <Lock className="h-4 w-4" />
+                      Set Password
+                    </TabsTrigger>
+                  </TabsList>
 
-                <TabsContent value="email" className="space-y-4 mt-4">
-                  <Alert>
-                    <Mail className="h-4 w-4" />
-                    <AlertDescription>
-                      A password reset link will be sent to <strong>{selectedUserForReset.email}</strong>. 
-                      The user will receive an email with instructions to set a new password.
-                    </AlertDescription>
-                  </Alert>
-                </TabsContent>
+                  <TabsContent value="email" className="space-y-4 mt-4">
+                    <Alert>
+                      <Mail className="h-4 w-4" />
+                      <AlertDescription>
+                        A password reset link will be sent to <strong>{selectedUserForReset.email}</strong>. 
+                        The user will receive an email with instructions to set a new password.
+                      </AlertDescription>
+                    </Alert>
+                  </TabsContent>
 
-                <TabsContent value="manual" className="space-y-4 mt-4">
+                  <TabsContent value="manual" className="space-y-4 mt-4">
+                    <Alert>
+                      <Lock className="h-4 w-4" />
+                      <AlertDescription>
+                        Set a new password directly for this user. The password will be updated immediately without sending an email.
+                      </AlertDescription>
+                    </Alert>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">New Password *</Label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Enter new password"
+                      />
+                    </div>
+
+                    {passwordStrength && (
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <Label className="text-sm">Password Strength</Label>
+                          <span className="text-xs font-medium capitalize">
+                            {passwordStrength.strength}
+                          </span>
+                        </div>
+                        <Progress 
+                          value={getPasswordStrengthValue(passwordStrength.strength)} 
+                          className="h-2"
+                        />
+                        <div className={`h-1 rounded-full ${getPasswordStrengthColor(passwordStrength.strength)}`} 
+                             style={{ width: `${getPasswordStrengthValue(passwordStrength.strength)}%` }} 
+                        />
+                        {passwordStrength.feedback.length > 0 && (
+                          <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                            {passwordStrength.feedback.map((fb, idx) => (
+                              <li key={idx}>{fb}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Confirm new password"
+                      />
+                    </div>
+
+                    {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>Passwords do not match</AlertDescription>
+                      </Alert>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              ) : (
+                <div className="space-y-4">
                   <Alert>
                     <Lock className="h-4 w-4" />
                     <AlertDescription>
-                      Set a new password directly for this user. The password will be updated immediately without sending an email.
+                      This user doesn't have an email address. Set a new password directly below.
                     </AlertDescription>
                   </Alert>
 
@@ -692,8 +868,8 @@ export default function UserManagementPage() {
                       <AlertDescription>Passwords do not match</AlertDescription>
                     </Alert>
                   )}
-                </TabsContent>
-              </Tabs>
+                </div>
+              )}
             </div>
           )}
 
@@ -731,7 +907,7 @@ export default function UserManagementPage() {
               className="gap-2"
             >
               {resettingPassword && <Loader2 className="h-4 w-4 animate-spin" />}
-              {resetMethod === "email" ? "Send Reset Email" : "Set Password"}
+              {selectedUserForReset?.email && resetMethod === "email" ? "Send Reset Email" : "Set Password"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -766,7 +942,7 @@ export default function UserManagementPage() {
                     <div className="flex-1">
                       <h4 className="font-medium mb-1">Send Reset Email Links</h4>
                       <p className="text-sm text-muted-foreground">
-                        Each user will receive a password reset email. They can set their own password.
+                        Send password reset emails to users who have email addresses registered.
                       </p>
                       <Button 
                         className="mt-3 w-full"
