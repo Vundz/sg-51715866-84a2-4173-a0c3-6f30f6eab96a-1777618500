@@ -170,11 +170,15 @@ export default function UserManagementPage() {
         );
         setSuccess("User created successfully!");
       }
+      
+      // Reload users list immediately
       await loadUsers();
+      
+      // Keep dialog open briefly to show success message, then close
       setTimeout(() => {
         setDialogOpen(false);
         setSuccess(null);
-      }, 1500);
+      }, 2000);
     } catch (err: any) {
       setError(err.message || "Failed to save user.");
     }

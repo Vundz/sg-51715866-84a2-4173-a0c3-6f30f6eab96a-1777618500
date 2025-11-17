@@ -230,23 +230,32 @@ export const adminService = {
 
       console.log("Auth user created successfully:", authData.user.id);
 
-      // Wait for the profile trigger to complete
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait longer for the profile trigger to complete (increased from 2000ms to 3000ms)
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
-      // Fetch the created profile
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", authData.user.id)
-        .single();
+      // Fetch the created profile with retry logic
+      let profileData = null;
+      let retries = 3;
+      
+      while (!profileData && retries > 0) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", authData.user.id)
+          .single();
 
-      if (profileError) {
-        console.error("Profile fetch error:", profileError);
-        throw new Error(`User created but failed to fetch profile: ${profileError.message}`);
+        if (!error && data) {
+          profileData = data;
+          break;
+        }
+        
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        retries--;
       }
 
       if (!profileData) {
-        throw new Error("User created but profile data not returned. Please refresh the page.");
+        throw new Error("User created but profile not found after retries. Please refresh the page to see the new user.");
       }
 
       // Update with real email if provided (system email stays in auth.users)
