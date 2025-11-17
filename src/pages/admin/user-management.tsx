@@ -154,6 +154,9 @@ export default function UserManagementPage() {
           role: formData.role,
         });
         setSuccess("User updated successfully!");
+        
+        // Reload users list immediately for updates
+        await loadUsers();
       } else {
         if (!formData.password) {
           setError("Password is required for new users.");
@@ -166,13 +169,16 @@ export default function UserManagementPage() {
           formData.password,
           formData.fullName,
           formData.role,
-          formData.email || undefined // Email is truly optional now
+          formData.email || undefined
         );
         setSuccess("User created successfully!");
+        
+        // Wait an additional 2 seconds for database propagation before reloading
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Now reload users list
+        await loadUsers();
       }
-      
-      // Reload users list immediately
-      await loadUsers();
       
       // Keep dialog open briefly to show success message, then close
       setTimeout(() => {
