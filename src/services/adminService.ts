@@ -165,7 +165,7 @@ export const adminService = {
 
   /**
    * Create a new user with username as primary identifier
-   * Email is required for Supabase Auth but username is used for login
+   * Email is optional - system will generate internal email if not provided
    */
   async createUser(
     username: string, 
@@ -180,7 +180,8 @@ export const adminService = {
         throw new Error("Username, password, and full name are required.");
       }
       
-      const authEmail = email || `${username}@khulisapp.local`;
+      // Generate a valid system email if no real email provided
+      const authEmail = email || `${username}@khulisapp.internal`;
 
       // Validate password strength first
       const strengthResult = this.validatePasswordStrength(password);
@@ -202,9 +203,9 @@ export const adminService = {
         }
       }
 
-      console.log("Creating user with auth email:", authEmail, "username:", username);
+      console.log("Creating user - Username:", username, "Auth Email:", authEmail);
 
-      // Create the auth user with email
+      // Create the auth user with proper metadata
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: authEmail,
         password: password,
@@ -212,6 +213,7 @@ export const adminService = {
           data: {
             full_name: fullName,
             username: username,
+            role: role,
           },
           emailRedirectTo: `${window.location.origin}/`,
         },
@@ -229,34 +231,34 @@ export const adminService = {
       console.log("Auth user created successfully:", authData.user.id);
 
       // Wait for the profile trigger to complete
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Update the profile with the final role and real email if provided
-      const updateData: { role: UserRole, email?: string } = {
-        role: role,
-      };
-      if (email) {
-        updateData.email = email;
-      }
-
-      console.log("Updating profile with data:", updateData);
-
+      // Fetch the created profile
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
-        .update(updateData)
+        .select("*")
         .eq("id", authData.user.id)
-        .select()
         .single();
 
       if (profileError) {
-        console.error("Profile update error:", profileError);
-        // Attempt to clean up the auth user if profile update fails
-        await supabase.auth.admin.deleteUser(authData.user.id);
-        throw new Error(`User auth created but failed to update profile: ${profileError.message}. Rolled back auth user.`);
+        console.error("Profile fetch error:", profileError);
+        throw new Error(`User created but failed to fetch profile: ${profileError.message}`);
       }
 
       if (!profileData) {
         throw new Error("User created but profile data not returned. Please refresh the page.");
+      }
+
+      // Update with real email if provided (system email stays in auth.users)
+      if (email && email !== authEmail) {
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ email: email })
+          .eq("id", authData.user.id);
+
+        if (updateError) {
+          console.warn("Could not update profile email:", updateError);
+        }
       }
 
       console.log("User created successfully:", profileData);

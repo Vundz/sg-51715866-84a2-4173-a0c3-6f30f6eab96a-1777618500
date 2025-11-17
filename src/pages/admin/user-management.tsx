@@ -159,12 +159,14 @@ export default function UserManagementPage() {
           setError("Password is required for new users.");
           return;
         }
+        
+        // Create user with optional email
         await adminService.createUser(
           formData.username,
           formData.password,
           formData.fullName,
           formData.role,
-          formData.email || undefined
+          formData.email || undefined // Email is truly optional now
         );
         setSuccess("User created successfully!");
       }
@@ -374,7 +376,7 @@ export default function UserManagementPage() {
             User Management
           </h1>
           <p className="text-muted-foreground mt-1">
-            Create and manage user accounts with username-based authentication
+            Simple username & password authentication - no email required
           </p>
         </div>
         <div className="flex gap-2">
@@ -545,7 +547,7 @@ export default function UserManagementPage() {
             <DialogDescription>
               {editingUser
                 ? "Update user details and role assignment"
-                : "Create a new local user account with username and password"}
+                : "Create a user with username and password - email is optional"}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -588,25 +590,22 @@ export default function UserManagementPage() {
                   ) : null}
                 </div>
               )}
+              <p className="text-xs text-muted-foreground">
+                Users will login with this username
+              </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="flex items-center gap-2">
-                <Mail className="h-4 w-4" />
-                Email Address <span className="text-xs text-muted-foreground">(Optional)</span>
-              </Label>
+              <Label htmlFor="fullName">Full Name *</Label>
               <Input
-                id="email"
-                type="email"
-                value={formData.email}
+                id="fullName"
+                value={formData.fullName}
                 onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
+                  setFormData({ ...formData, fullName: e.target.value })
                 }
-                placeholder="user@example.com (optional)"
+                required
+                placeholder="John Doe"
               />
-              <p className="text-xs text-muted-foreground">
-                Email is optional. Users can log in with their username.
-              </p>
             </div>
 
             {!editingUser && (
@@ -629,18 +628,6 @@ export default function UserManagementPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="fullName">Full Name</Label>
-              <Input
-                id="fullName"
-                value={formData.fullName}
-                onChange={(e) =>
-                  setFormData({ ...formData, fullName: e.target.value })
-                }
-                placeholder="John Doe"
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="role">Role *</Label>
               <Select
                 value={formData.role}
@@ -661,12 +648,36 @@ export default function UserManagementPage() {
               </Select>
             </div>
 
+            <details className="text-sm">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                Advanced: Add email address (optional)
+              </summary>
+              <div className="mt-3 space-y-2">
+                <Label htmlFor="email" className="flex items-center gap-2">
+                  <Mail className="h-4 w-4" />
+                  Email Address
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
+                  placeholder="user@example.com (optional)"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Only add email if the user needs password reset emails
+                </p>
+              </div>
+            </details>
+
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-xs">
                 {editingUser 
-                  ? "Username cannot be changed after creation. Use password reset to update the password."
-                  : "Username must be unique and contain only lowercase letters, numbers, and underscores."}
+                  ? "Username cannot be changed. Use password reset to update passwords."
+                  : "Username must be unique. No email required - users login with username only."}
               </AlertDescription>
             </Alert>
 

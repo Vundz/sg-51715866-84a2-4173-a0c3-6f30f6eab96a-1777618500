@@ -60,12 +60,12 @@ export const authService = {
       }
 
       // If user has a real email, use it
-      if (profile.email && !profile.email.includes("@system.khulisapp")) {
+      if (profile.email && !profile.email.includes("@khulisapp.internal")) {
         return profile.email;
       }
 
       // Otherwise, construct the system email
-      return `${username}@system.khulisapp`;
+      return `${username}@khulisapp.internal`;
     } catch (error) {
       console.error("Error finding user by username:", error);
       return null;
