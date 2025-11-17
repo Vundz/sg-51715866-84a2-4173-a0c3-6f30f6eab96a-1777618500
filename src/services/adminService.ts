@@ -385,14 +385,29 @@ export const adminService = {
         throw new Error("This password was recently used. Please choose a different password.");
       }
 
-      // Update password using Supabase Admin API
-      const { error } = await supabase.auth.admin.updateUserById(userId, {
-        password: newPassword,
+      // Get current user session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("You must be logged in to perform this action");
+      }
+
+      // Call secure server-side API endpoint
+      const response = await fetch("/api/admin/reset-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          userId,
+          newPassword,
+        }),
       });
 
-      if (error) {
-        console.error("Set password error:", error);
-        throw new Error(`Failed to update password: ${error.message}`);
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to update password");
       }
 
       // Store in password history
