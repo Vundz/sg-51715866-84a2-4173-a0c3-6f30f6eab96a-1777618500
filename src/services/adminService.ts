@@ -165,16 +165,27 @@ export const adminService = {
 
   /**
    * Create a new user with username as primary identifier
-   * Email is optional
+   * Email is required for Supabase Auth but username is used for login
    */
   async createUser(
     username: string, 
     password: string, 
     fullName: string, 
     role: UserRole,
-    email?: string
+    email: string
   ): Promise<Profile> {
     try {
+      // Validate inputs
+      if (!username || !password || !fullName || !email) {
+        throw new Error("All fields (username, password, full name, and email) are required.");
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new Error("Please provide a valid email address.");
+      }
+
       // Validate password strength first
       const strengthResult = this.validatePasswordStrength(password);
       if (strengthResult.strength === "weak") {
@@ -187,24 +198,18 @@ export const adminService = {
         throw new Error(`Username "${username}" is already taken. Please choose a different username.`);
       }
 
-      // If email provided, check if it's already in use
-      if (email) {
-        const emailInUse = await this.emailExists(email);
-        if (emailInUse) {
-          throw new Error(`A user with email "${email}" already exists.`);
-        }
+      // Check if email is already in use
+      const emailInUse = await this.emailExists(email);
+      if (emailInUse) {
+        throw new Error(`A user with email "${email}" already exists.`);
       }
 
-      // Generate a system email for auth if none provided
-      // Use a valid domain format: username@system.khulisapp
-      const authEmail = email || `${username}@system.khulisapp`;
+      console.log("Creating user with email:", email, "username:", username);
 
-      console.log("Creating user with auth email:", authEmail);
-
-      // Create the auth user
+      // Create the auth user with email
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: authEmail,
-        password,
+        email: email,
+        password: password,
         options: {
           data: {
             full_name: fullName,
@@ -215,17 +220,7 @@ export const adminService = {
       });
 
       if (authError) {
-        console.error("Supabase auth error details:", {
-          message: authError.message,
-          status: authError.status,
-          name: authError.name
-        });
-        
-        // Provide more specific error messages based on error type
-        if (authError.message.includes("Email") || authError.message.includes("email")) {
-          throw new Error(`Email format error: ${authError.message}. Try using a different username or providing a valid email address.`);
-        }
-        
+        console.error("Supabase auth error:", authError);
         throw new Error(`Failed to create user account: ${authError.message}`);
       }
       
@@ -236,19 +231,15 @@ export const adminService = {
       console.log("Auth user created successfully:", authData.user.id);
 
       // Wait for the profile trigger to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Update the profile with username, role, and email (if provided)
-      const updateData: any = {
+      // Update the profile with username and role
+      const updateData = {
         username: username,
         full_name: fullName,
+        email: email,
         role: role,
       };
-      
-      // Only set email if it was provided by admin (not the auto-generated one)
-      if (email) {
-        updateData.email = email;
-      }
 
       console.log("Updating profile with data:", updateData);
 
@@ -260,8 +251,8 @@ export const adminService = {
         .single();
 
       if (profileError) {
-        console.error("Profile update error details:", profileError);
-        throw new Error(`User created but failed to update profile: ${profileError.message}. Please try editing the user manually.`);
+        console.error("Profile update error:", profileError);
+        throw new Error(`User created but failed to update profile: ${profileError.message}`);
       }
 
       if (!profileData) {

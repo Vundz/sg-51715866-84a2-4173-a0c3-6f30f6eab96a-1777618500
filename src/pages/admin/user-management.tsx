@@ -1,4 +1,3 @@
-
 import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/contexts/AuthContext";
@@ -54,12 +53,12 @@ export default function UserManagementPage() {
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   
-  const [formData, setFormData] = useState<FormData>({
+  const [formData, setFormData] = useState({
     username: "",
     email: "",
     password: "",
-    full_name: "",
-    role: "viewer"
+    fullName: "",
+    role: "user" as UserRole,
   });
 
   useEffect(() => {
