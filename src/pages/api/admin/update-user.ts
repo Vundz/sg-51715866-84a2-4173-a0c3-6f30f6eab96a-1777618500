@@ -1,4 +1,3 @@
-
 import { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
 
@@ -13,7 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Get the user's session to verify they're authenticated
+    // Get the user's session token to verify they're authenticated
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: "Unauthorized - No valid session" });
@@ -21,7 +20,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const token = authHeader.split(" ")[1];
 
-    // Create a Supabase client with SERVICE ROLE key for admin operations
+    // Create a Supabase client with ANON key to verify the user's session
+    const supabaseClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
+
+    // Verify the user's token with the ANON key client
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+    
+    if (authError || !user) {
+      return res.status(401).json({ error: "Unauthorized - Invalid session" });
+    }
+
+    // Create a separate admin client with SERVICE ROLE key for privileged operations
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -33,14 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     );
 
-    // Verify the user's token and get their role
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    
-    if (authError || !user) {
-      return res.status(401).json({ error: "Unauthorized - Invalid session" });
-    }
-
-    // Check if the user is an admin
+    // Check if the authenticated user is an admin using the admin client
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("role")
