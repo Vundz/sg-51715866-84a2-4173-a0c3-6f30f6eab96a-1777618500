@@ -172,19 +172,15 @@ export const adminService = {
     password: string, 
     fullName: string, 
     role: UserRole,
-    email: string
+    email?: string
   ): Promise<Profile> {
     try {
       // Validate inputs
-      if (!username || !password || !fullName || !email) {
-        throw new Error("All fields (username, password, full name, and email) are required.");
+      if (!username || !password || !fullName) {
+        throw new Error("Username, password, and full name are required.");
       }
-
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        throw new Error("Please provide a valid email address.");
-      }
+      
+      const authEmail = email || `${username}@khulisapp.local`;
 
       // Validate password strength first
       const strengthResult = this.validatePasswordStrength(password);
@@ -198,17 +194,19 @@ export const adminService = {
         throw new Error(`Username "${username}" is already taken. Please choose a different username.`);
       }
 
-      // Check if email is already in use
-      const emailInUse = await this.emailExists(email);
-      if (emailInUse) {
-        throw new Error(`A user with email "${email}" already exists.`);
+      // If email provided, check if it's already in use
+      if (email) {
+        const emailInUse = await this.emailExists(email);
+        if (emailInUse) {
+          throw new Error(`A user with email "${email}" already exists.`);
+        }
       }
 
-      console.log("Creating user with email:", email, "username:", username);
+      console.log("Creating user with auth email:", authEmail, "username:", username);
 
       // Create the auth user with email
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: email,
+        email: authEmail,
         password: password,
         options: {
           data: {
@@ -233,13 +231,13 @@ export const adminService = {
       // Wait for the profile trigger to complete
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Update the profile with username and role
-      const updateData = {
-        username: username,
-        full_name: fullName,
-        email: email,
+      // Update the profile with the final role and real email if provided
+      const updateData: { role: UserRole, email?: string } = {
         role: role,
       };
+      if (email) {
+        updateData.email = email;
+      }
 
       console.log("Updating profile with data:", updateData);
 
@@ -252,7 +250,9 @@ export const adminService = {
 
       if (profileError) {
         console.error("Profile update error:", profileError);
-        throw new Error(`User created but failed to update profile: ${profileError.message}`);
+        // Attempt to clean up the auth user if profile update fails
+        await supabase.auth.admin.deleteUser(authData.user.id);
+        throw new Error(`User auth created but failed to update profile: ${profileError.message}. Rolled back auth user.`);
       }
 
       if (!profileData) {

@@ -151,3 +151,25 @@ ON CONFLICT (role, permission_id) DO UPDATE SET
   can_read = EXCLUDED.can_read,
   can_update = EXCLUDED.can_update,
   can_delete = EXCLUDED.can_delete;
+
+-- 4) Fix/re-create the user profile trigger
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, full_name, username, role)
+  VALUES (
+    new.id,
+    new.email,
+    new.raw_app_meta_data ->> 'full_name',
+    new.raw_app_meta_data ->> 'username',
+    'viewer'
+  );
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Drop existing trigger if it exists and re-create it to be sure
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();

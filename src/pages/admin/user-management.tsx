@@ -20,14 +20,6 @@ import type { Database } from "@/integrations/supabase/types";
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type UserRole = Database["public"]["Enums"]["user_role"];
 
-interface FormData {
-  username: string;
-  email: string;
-  password: string;
-  full_name: string;
-  role: UserRole;
-}
-
 const ROLES: UserRole[] = ["admin", "manager", "staff", "viewer"];
 
 export default function UserManagementPage() {
@@ -58,7 +50,7 @@ export default function UserManagementPage() {
     email: "",
     password: "",
     fullName: "",
-    role: "user" as UserRole,
+    role: "viewer" as UserRole,
   });
 
   useEffect(() => {
@@ -124,12 +116,12 @@ export default function UserManagementPage() {
         username: user.username || "",
         email: user.email || "",
         password: "",
-        full_name: user.full_name || "",
+        fullName: user.full_name || "",
         role: user.role || "viewer",
       });
     } else {
       setEditingUser(null);
-      setFormData({ username: "", email: "", password: "", full_name: "", role: "viewer" });
+      setFormData({ username: "", email: "", password: "", fullName: "", role: "viewer" });
     }
     setError(null);
     setSuccess(null);
@@ -157,7 +149,7 @@ export default function UserManagementPage() {
       if (editingUser) {
         await adminService.updateUser(editingUser.id, {
           username: formData.username,
-          full_name: formData.full_name,
+          full_name: formData.fullName,
           email: formData.email || undefined,
           role: formData.role,
         });
@@ -170,7 +162,7 @@ export default function UserManagementPage() {
         await adminService.createUser(
           formData.username,
           formData.password,
-          formData.full_name,
+          formData.fullName,
           formData.role,
           formData.email || undefined
         );
@@ -221,6 +213,7 @@ export default function UserManagementPage() {
       if (resetMethod === "email") {
         if (!selectedUserForReset.email) {
           setError("This user doesn't have an email address. Please use manual password reset.");
+          setResettingPassword(false);
           return;
         }
         await adminService.resetUserPassword(selectedUserForReset.email);
@@ -229,14 +222,17 @@ export default function UserManagementPage() {
         // Manual password set
         if (!newPassword || !confirmPassword) {
           setError("Please enter and confirm the new password.");
+          setResettingPassword(false);
           return;
         }
         if (newPassword !== confirmPassword) {
           setError("Passwords do not match.");
+          setResettingPassword(false);
           return;
         }
         if (passwordStrength && passwordStrength.strength === "weak") {
           setError("Password is too weak. Please use a stronger password.");
+          setResettingPassword(false);
           return;
         }
         await adminService.setUserPassword(selectedUserForReset.id, newPassword);
@@ -633,12 +629,12 @@ export default function UserManagementPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="full_name">Full Name</Label>
+              <Label htmlFor="fullName">Full Name</Label>
               <Input
-                id="full_name"
-                value={formData.full_name}
+                id="fullName"
+                value={formData.fullName}
                 onChange={(e) =>
-                  setFormData({ ...formData, full_name: e.target.value })
+                  setFormData({ ...formData, fullName: e.target.value })
                 }
                 placeholder="John Doe"
               />
