@@ -44,15 +44,63 @@ export const authService = {
   },
   
   /**
-   * Sign in with email and password
+   * Find user by username and get their auth email
    */
-  async login(email: string, password: string): Promise<Profile> {
+  async getUserAuthEmail(username: string): Promise<string | null> {
+    try {
+      // First, try to find by username in profiles
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("email, id")
+        .eq("username", username)
+        .maybeSingle();
+
+      if (error || !profile) {
+        return null;
+      }
+
+      // If user has a real email, use it
+      if (profile.email && !profile.email.includes("@system.khulisapp")) {
+        return profile.email;
+      }
+
+      // Otherwise, construct the system email
+      return `${username}@system.khulisapp`;
+    } catch (error) {
+      console.error("Error finding user by username:", error);
+      return null;
+    }
+  },
+  
+  /**
+   * Sign in with username or email and password
+   * Supports both username-based and email-based login
+   */
+  async login(identifier: string, password: string): Promise<Profile> {
+    let authEmail = identifier;
+
+    // Check if identifier is a username (no @ symbol)
+    if (!identifier.includes("@")) {
+      const foundEmail = await this.getUserAuthEmail(identifier);
+      if (!foundEmail) {
+        throw new Error("Invalid username or password");
+      }
+      authEmail = foundEmail;
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: authEmail,
       password,
     });
 
-    if (error) throw error;
+    if (error) {
+      // Provide user-friendly error messages
+      if (error.message.includes("Invalid login credentials")) {
+        throw new Error("Invalid username or password");
+      }
+      throw error;
+    }
+    
     if (!data.user) throw new Error("No user data returned");
 
     // Fetch profile data
