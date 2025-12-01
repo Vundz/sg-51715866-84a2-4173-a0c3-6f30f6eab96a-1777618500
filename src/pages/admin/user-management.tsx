@@ -174,8 +174,11 @@ export default function UserManagementPage() {
           return;
         }
         
+        // Show creating message
+        setSuccess("Creating user...");
+        
         // Create user with optional email
-        await adminService.createUser(
+        const newUser = await adminService.createUser(
           formData.username,
           formData.password,
           formData.fullName,
@@ -183,21 +186,28 @@ export default function UserManagementPage() {
           formData.email || undefined
         );
         
-        // Show success message in the dialog
-        setSuccess("User created successfully! Refreshing list...");
+        // Update success message
+        setSuccess("User created! Loading user list...");
         
-        // Close dialog first to show the loading state
+        // Force reload the users list - wait a bit longer to ensure database propagation
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await loadUsers();
+        
+        // Verify the new user appears in the list
+        const userExists = users.some(u => u.id === newUser.id);
+        if (!userExists) {
+          // Force one more refresh if user not found
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          await loadUsers();
+        }
+        
+        // Show final success and close
+        setSuccess("User created successfully!");
         setTimeout(() => {
           setDialogOpen(false);
+          setSuccess(null);
+          setCreatingUser(false);
         }, 1000);
-        
-        // Then reload users after dialog closes
-        setTimeout(async () => {
-          await loadUsers();
-          // Show success notification in the main page
-          setSuccess("User created successfully and added to the list!");
-          setTimeout(() => setSuccess(null), 3000);
-        }, 1500);
       }
     } catch (err: any) {
       console.error("User creation/update error:", err);
@@ -219,7 +229,6 @@ export default function UserManagementPage() {
       }
       
       // Don't close dialog on error so user can correct the issue
-    } finally {
       setCreatingUser(false);
     }
   };

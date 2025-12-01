@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -242,14 +241,16 @@ export const adminService = {
 
       console.log("Auth user created successfully:", authData.user.id);
 
-      // Wait longer for the profile trigger to complete (increased from 2000ms to 3000ms)
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Wait for the profile trigger to complete - increased delay for reliability
+      await new Promise(resolve => setTimeout(resolve, 4000));
 
-      // Fetch the created profile with retry logic
+      // Fetch the created profile with aggressive retry logic
       let profileData = null;
-      let retries = 3;
+      let retries = 5; // Increased from 3 to 5 retries
       
       while (!profileData && retries > 0) {
+        console.log(`Attempting to fetch profile... (${6 - retries}/5)`);
+        
         const { data, error } = await supabase
           .from("profiles")
           .select("*")
@@ -258,16 +259,24 @@ export const adminService = {
 
         if (!error && data) {
           profileData = data;
+          console.log("Profile found:", data);
           break;
         }
         
-        // Wait before retry
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (error) {
+          console.warn("Profile fetch error:", error);
+        }
+        
+        // Wait before retry - longer delay between retries
+        await new Promise(resolve => setTimeout(resolve, 1500));
         retries--;
       }
 
       if (!profileData) {
-        throw new Error("User created but profile not found after retries. Please refresh the page to see the new user.");
+        throw new Error(
+          "User account was created but the profile is still being set up. " +
+          "Please wait a moment and refresh the page to see the new user."
+        );
       }
 
       // Update with real email if provided (system email stays in auth.users)
@@ -279,6 +288,17 @@ export const adminService = {
 
         if (updateError) {
           console.warn("Could not update profile email:", updateError);
+        } else {
+          // Fetch updated profile
+          const { data: updatedProfile } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", authData.user.id)
+            .single();
+          
+          if (updatedProfile) {
+            profileData = updatedProfile;
+          }
         }
       }
 
