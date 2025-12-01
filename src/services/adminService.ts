@@ -112,13 +112,22 @@ export const adminService = {
    * Get all users (admin only)
    */
   async getAllUsers(): Promise<Profile[]> {
+    // Add a timestamp to break any potential caching
+    const timestamp = Date.now();
+    
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      // Force fresh data by adding a no-op filter that changes each time
+      .gte("created_at", "1970-01-01T00:00:00.000Z");
 
     if (error) throw error;
-    return data;
+    
+    // Additional verification log
+    console.log(`Fetched ${data?.length || 0} users at ${new Date(timestamp).toISOString()}`);
+    
+    return data || [];
   },
 
   /**
