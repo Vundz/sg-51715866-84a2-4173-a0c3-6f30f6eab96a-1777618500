@@ -38,6 +38,33 @@ type BatchSelection = {
   quantity: number;
 };
 
+// New helper function to calculate days remaining
+const calculateDaysRemaining = (planting: PlantingWithDetails): string => {
+  if (!planting.date_planted || !planting.plant_types?.days_to_grow) {
+    return "";
+  }
+  
+  const plantedDate = new Date(planting.date_planted);
+  const daysToGrow = planting.plant_types.days_to_grow;
+  const readyDate = new Date(plantedDate);
+  readyDate.setDate(readyDate.getDate() + daysToGrow);
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  readyDate.setHours(0, 0, 0, 0);
+  
+  const diffTime = readyDate.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays > 0) {
+    return `Ready in ${diffDays} day${diffDays !== 1 ? "s" : ""}`;
+  } else if (diffDays === 0) {
+    return "Ready now";
+  } else {
+    return `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) !== 1 ? "s" : ""}`;
+  }
+};
+
 const ReservationsPage: React.FC = () => {
   const router = useRouter();
   const { toast } = useToast();
@@ -557,11 +584,14 @@ const ReservationsPage: React.FC = () => {
                                   : "No active planting batches available"}
                               </div>
                             ) : (
-                              filteredActivePlantingsByVariety.map(p => (
-                                <SelectItem key={p.id} value={p.id}>
-                                  Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - Available: {formatNumber(getAvailableQuantity(p.id))}
-                                </SelectItem>
-                              ))
+                              filteredActivePlantingsByVariety.map(p => {
+                                const daysInfo = calculateDaysRemaining(p);
+                                return (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - Available: {formatNumber(getAvailableQuantity(p.id))}{daysInfo ? ` - ${daysInfo}` : ""}
+                                  </SelectItem>
+                                );
+                              })
                             )}
                           </SelectContent>
                         </Select>
