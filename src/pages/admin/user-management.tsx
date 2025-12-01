@@ -45,6 +45,7 @@ export default function UserManagementPage() {
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [creatingUser, setCreatingUser] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // Add refresh key to force re-renders
   
   const [formData, setFormData] = useState({
     username: "",
@@ -101,9 +102,13 @@ export default function UserManagementPage() {
     try {
       setLoading(true);
       setError(null);
+      console.log("Loading users from database...");
       const usersData = await adminService.getAllUsers();
+      console.log("Users loaded:", usersData.length, "users");
       setUsers(usersData);
+      setRefreshKey(prev => prev + 1); // Force component refresh
     } catch (err: any) {
+      console.error("Error loading users:", err);
       setError(err.message || "Failed to load users.");
     } finally {
       setLoading(false);
@@ -151,6 +156,7 @@ export default function UserManagementPage() {
 
     try {
       if (editingUser) {
+        console.log("Updating user:", editingUser.id);
         await adminService.updateUser(editingUser.id, {
           username: formData.username,
           full_name: formData.fullName,
@@ -174,7 +180,7 @@ export default function UserManagementPage() {
           return;
         }
         
-        // Show creating message
+        console.log("Creating new user:", formData.username);
         setSuccess("Creating user...");
         
         // Create user with optional email
@@ -186,19 +192,24 @@ export default function UserManagementPage() {
           formData.email || undefined
         );
         
-        // Update success message
-        setSuccess("User created! Loading user list...");
+        console.log("User created successfully:", newUser);
+        setSuccess("User created! Refreshing list...");
         
-        // Force reload the users list - wait a bit longer to ensure database propagation
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        await loadUsers();
-        
-        // Verify the new user appears in the list
-        const userExists = users.some(u => u.id === newUser.id);
-        if (!userExists) {
-          // Force one more refresh if user not found
+        // Multiple refresh attempts to ensure the user appears
+        for (let i = 0; i < 3; i++) {
+          console.log(`Refresh attempt ${i + 1}/3`);
           await new Promise(resolve => setTimeout(resolve, 1000));
           await loadUsers();
+          
+          // Check if user appears in list
+          const currentUsers = await adminService.getAllUsers();
+          const userFound = currentUsers.some(u => u.id === newUser.id);
+          console.log(`User found in list: ${userFound}`);
+          
+          if (userFound) {
+            console.log("✓ User confirmed in list");
+            break;
+          }
         }
         
         // Show final success and close
@@ -216,7 +227,6 @@ export default function UserManagementPage() {
       const errorMessage = err.message || "Failed to save user.";
       
       if (errorMessage.includes("User already registered") || errorMessage.includes("already registered")) {
-        // Keep dialog open so user can change the username
         setError(
           `⚠️ Username or email already exists!\n\n` +
           `The username "${formData.username}" or associated email is already registered. ` +
@@ -228,7 +238,6 @@ export default function UserManagementPage() {
         setError(`Failed to ${editingUser ? "update" : "create"} user: ${errorMessage}`);
       }
       
-      // Don't close dialog on error so user can correct the issue
       setCreatingUser(false);
     }
   };
@@ -494,7 +503,7 @@ export default function UserManagementPage() {
       )}
 
       {/* Users Table */}
-      <Card>
+      <Card key={refreshKey}> {/* Add key to force re-render */}
         <CardHeader>
           <CardTitle>All Users</CardTitle>
           <CardDescription>Total users: {users.length}</CardDescription>
