@@ -13,14 +13,14 @@ export function Header() {
   const handleSignOut = async () => {
     try {
       await logout();
-      router.push("/login");
+      router.push("/");
     } catch (error) {
       console.error("Error signing out:", error);
     }
   };
 
   const navItems = [
-    { href: "/", label: "Dashboard", icon: Home },
+    { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/locations", label: "Locations", icon: MapPin },
     { href: "/plant-types", label: "Plant Types", icon: Sprout },
     { href: "/plantings", label: "Plantings", icon: PackageOpen },

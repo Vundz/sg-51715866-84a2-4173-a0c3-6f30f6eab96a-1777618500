@@ -1,163 +1,177 @@
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { useAuth } from "@/contexts/AuthContext";
-import { BarChart, LineChart, PieChart, Users, DollarSign, Package, TrendingUp, Sprout, ShoppingCart, Calendar, MapPin, ArrowRight } from "lucide-react";
-import { useEffect, useState } from "react";
-import { harvestService } from "@/services/harvestService";
-import { plantingService } from "@/services/plantingService";
-import { reservationService } from "@/services/reservationService";
-import { locationService } from "@/services/locationService";
-import { treatmentService } from "@/services/treatmentService";
-import { plantTypeService } from "@/services/plantTypeService";
+
+import { useState, FormEvent, useEffect } from "react";
+import { useRouter } from "next/router";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { formatNumber } from "@/lib/format";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from "@/contexts/AuthContext";
+import { Leaf, AlertCircle, Loader2 } from "lucide-react";
 
-// Helper to format numbers
-const formatNumberHelper = (num: number) => {
-  if (num >= 1000000) {
-    return `${(num / 1000000).toFixed(1)}M`;
-  } else if (num >= 1000) {
-    return `${(num / 1000).toFixed(1)}K`;
-  } else {
-    return num.toString();
-  }
-};
-
-export default function DashboardPage() {
-  const [stats, setStats] = useState({
-    activePlantings: 0,
-    totalHarvests: 0,
-    locations: 0,
-    treatments: 0,
-    upcomingHarvests: 0,
-    plantTypes: 0,
-    activeReservations: 0,
-    trayUtilization: 0
-  });
-  const [loading, setLoading] = useState(true);
-
+export default function LoginPage() {
+  const router = useRouter();
+  const { user, loading: authLoading, login } = useAuth();
+  const [email, setEmail] = useState("admin@khulisapp.com");
+  const [password, setPassword] = useState("Admin123!");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [initializingAdmin, setInitializingAdmin] = useState(false);
+  const [initMessage, setInitMessage] = useState<string | null>(null);
+  
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [
-        plantingsData,
-        harvestsData,
-        locationsData,
-        treatmentsData,
-        plantTypesData,
-        reservationsData] =
-        await Promise.all([
-        plantingService.getPlantings(),
-        harvestService.getHarvests(),
-        locationService.getLocations(),
-        treatmentService.getTreatments(),
-        plantTypeService.getPlantTypes(),
-        reservationService.getReservations()]
-        );
+    if (!authLoading && user) {
+      router.push("/dashboard");
+    }
+  }, [user, authLoading, router]);
 
-        const upcoming = plantingsData.filter((p) => {
-          if (p.status !== "active" || !p.expected_harvest_date) return false;
-          const expected = new Date(p.expected_harvest_date);
-          const daysUntil = Math.ceil((expected.getTime() - new Date().getTime()) / (1000 * 3600 * 24));
-          return daysUntil >= 0 && daysUntil <= 7;
-        }).length;
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-        const totalTrays = plantingsData.
-        filter((p) => p.status === 'active').
-        reduce((sum, p) => sum + (p.remaining_quantity ?? p.quantity) / 220, 0);
+    try {
+      await login(email, password);
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to sign in. Please check your credentials.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        setStats({
-          activePlantings: plantingsData.filter((p) => p.status === 'active').length,
-          totalHarvests: harvestsData.length,
-          locations: locationsData.length,
-          treatments: treatmentsData.length,
-          upcomingHarvests: upcoming,
-          plantTypes: plantTypesData.length,
-          activeReservations: reservationsData.filter((r) => r.status === 'active').length,
-          trayUtilization: Math.round(totalTrays)
-        });
+  const handleInitAdmin = async () => {
+    setInitializingAdmin(true);
+    setInitMessage(null);
+    setError("");
 
-      } catch (error) {
-        console.error("Failed to fetch dashboard stats:", error);
-      } finally {
-        setLoading(false);
+    try {
+      const response = await fetch("/api/init-admin", {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        let message = data.message;
+        if (data.user?.credentials) {
+          message += `\n\nCredentials:\nEmail: ${data.user.credentials.email}\nPassword: ${data.user.credentials.password}`;
+        }
+        setInitMessage(message);
+        if (data.user?.credentials?.email) setEmail(data.user.credentials.email);
+        if (data.user?.credentials?.password) setPassword(data.user.credentials.password);
+
+      } else {
+        setError(data.error || "Failed to initialize admin user");
       }
-    };
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to initialize admin user";
+      setError(errorMessage);
+    } finally {
+      setInitializingAdmin(false);
+    }
+  };
 
-    fetchData();
-  }, []);
-
-  const statCards = [
-  { title: "Active Plantings", value: stats.activePlantings, icon: Sprout, href: "/plantings" },
-  { title: "Tray Utilization", value: `${stats.trayUtilization}`, icon: Package, href: "/plantings", subtitle: "trays in use" },
-  { title: "Active Reservations", value: stats.activeReservations, icon: ShoppingCart, href: "/reservations" },
-  { title: "Upcoming Harvests", value: stats.upcomingHarvests, icon: Calendar, href: "/reports/upcoming-harvests" },
-  { title: "Total Harvests", value: stats.totalHarvests, icon: Package, href: "/harvests" },
-  { title: "Locations", value: stats.locations, icon: MapPin, href: "/locations" }];
-
+  if (authLoading || (!authLoading && user)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-green-600" />
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-4xl font-bold">Welcome to Khulisapp</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">Your central dashboard for nursery management.</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {statCards.map((card) =>
-        <Card key={card.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2" style={{ backgroundColor: "#22c55e" }}>
-              <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-              <card.icon className="w-4 h-4 text-gray-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{card.value}</div>
-              {card.subtitle &&
-            <p className="text-xs text-muted-foreground mt-1">{card.subtitle}</p>
-            }
-              <Link href={card.href} className="text-xs text-muted-foreground flex items-center gap-1 hover:text-primary mt-1">
-                View All <ArrowRight className="w-3 h-3" />
-              </Link>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Get started with common tasks.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <Link href="/plantings"><Button className="w-full">New Planting</Button></Link>
-            <Link href="/reservations"><Button className="w-full">New Reservation</Button></Link>
-            <Link href="/treatments"><Button className="w-full">Log Treatment</Button></Link>
-            <Link href="/reports"><Button className="w-full" variant="outline">View Reports</Button></Link>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Nursery Overview</CardTitle>
-            <CardDescription>At-a-glance summary of your operations.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm">Utilization</span>
-              <Badge>Coming Soon</Badge>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4">
+      <Card className="w-full max-w-md shadow-xl">
+        <CardHeader className="space-y-1 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="h-16 w-16 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
+              <Leaf className="h-8 w-8 text-green-600 dark:text-green-400" />
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm">Harvest Success Rate</span>
-              <Badge>Coming Soon</Badge>
-            </div>
-             <div className="flex justify-between items-center">
-              <span className="text-sm">Most Active Location</span>
-              <Badge>Coming Soon</Badge>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>);
+          </div>
+          <CardTitle className="text-2xl font-bold">Welcome to Khulisapp</CardTitle>
+          <CardDescription>
+            Sign in to access your nursery management system
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {(error || initMessage) && (
+              <Alert variant={error ? "destructive" : "default"} className={initMessage ? "whitespace-pre-wrap" : ""}>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error || initMessage}</AlertDescription>
+              </Alert>
+            )}
 
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="admin@khulisapp.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                disabled={loading}
+                autoComplete="email"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={loading}
+                autoComplete="current-password"
+              />
+            </div>
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Signing in..." : "Sign In"}
+            </Button>
+          </form>
+
+          <div className="mt-6 space-y-3">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  First time setup
+                </span>
+              </div>
+            </div>
+
+            <Button 
+              type="button" 
+              variant="outline" 
+              className="w-full" 
+              onClick={handleInitAdmin}
+              disabled={initializingAdmin}
+            >
+              {initializingAdmin ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Initializing...
+                </>
+              ) : (
+                "Initialize Admin Account"
+              )}
+            </Button>
+
+            <div className="text-center text-xs text-muted-foreground">
+              <p className="mb-1">Click above to create a default admin account if one doesn't exist.</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
