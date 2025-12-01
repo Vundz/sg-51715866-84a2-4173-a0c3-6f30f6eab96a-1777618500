@@ -601,9 +601,10 @@ const ReservationsPage: React.FC = () => {
                               ) : (
                                 batchFilteredPlantings.map(p => {
                                   const daysInfo = calculateDaysRemaining(p);
+                                  const availableQty = getAvailableQuantity(p.id);
                                   return (
                                     <SelectItem key={p.id} value={p.id}>
-                                      Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - Available: {formatNumber(getAvailableQuantity(p.id))}{daysInfo ? ` - ${daysInfo}` : ""}
+                                      Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - Available: {formatNumber(availableQty)}{daysInfo ? ` - ${daysInfo}` : ""}
                                     </SelectItem>
                                   );
                                 })
