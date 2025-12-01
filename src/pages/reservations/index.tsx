@@ -76,15 +76,14 @@ const ReservationsPage: React.FC = () => {
   const [editingReservation, setEditingReservation] = useState<ReservationWithDetails | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
+  const [isConfirmationDialogOpen, setIsConfirmationDialogOpen] = useState(false);
+  const [pendingReservationData, setPendingReservationData] = useState<any>(null);
   const [selectedReservation, setSelectedReservation] = useState<ReservationWithDetails | null>(null);
   const [newStatus, setNewStatus] = useState<"pending" | "completed" | "cancelled">("pending");
   const [finalQuantity, setFinalQuantity] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
-  
-  // REMOVED: Global variety filter (now per-batch)
-  // const [selectedVarietyFilter, setSelectedVarietyFilter] = useState<string>("");
 
   // Updated: Batch selections now include varietyFilter
   const [batchSelections, setBatchSelections] = useState<BatchSelection[]>([
@@ -160,7 +159,6 @@ const ReservationsPage: React.FC = () => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    // Validate all batch selections
     const validBatchSelections = batchSelections.filter(bs => bs.planting_id && bs.quantity > 0);
     
     if (validBatchSelections.length === 0) {
@@ -172,7 +170,6 @@ const ReservationsPage: React.FC = () => {
       return;
     }
     
-    // Validate each batch doesn't exceed available quantity
     for (const selection of validBatchSelections) {
       const available = getAvailableQuantity(selection.planting_id);
       if (selection.quantity > available) {
@@ -187,7 +184,6 @@ const ReservationsPage: React.FC = () => {
       }
     }
     
-    // Prepare reservation data for confirmation
     const reservationData = {
       customer_name: formData.get("customer_name") as string,
       customer_phone: formData.get("customer_phone") as string,
@@ -201,7 +197,6 @@ const ReservationsPage: React.FC = () => {
       batches: validBatchSelections,
     };
 
-    // Show confirmation dialog instead of saving immediately
     setPendingReservationData(reservationData);
     setIsConfirmationDialogOpen(true);
   };
@@ -288,15 +283,13 @@ const ReservationsPage: React.FC = () => {
     setEditingReservation(reservation);
     
     if (reservation) {
-      // When editing, populate with existing batch
       setBatchSelections([{
         id: crypto.randomUUID(),
         planting_id: reservation.planting_id,
         quantity: reservation.quantity_reserved,
-        varietyFilter: "" // Start with no filter when editing
+        varietyFilter: ""
       }]);
     } else {
-      // When creating new, start with one empty batch
       setBatchSelections([{ id: crypto.randomUUID(), planting_id: "", quantity: 0, varietyFilter: "" }]);
     }
     
@@ -336,7 +329,6 @@ const ReservationsPage: React.FC = () => {
 
   const activePlantings = plantings.filter(p => p.status === "active");
 
-  // Get all unique varieties from active plantings
   const availableVarieties = useMemo(() => {
     const varieties = new Set<string>();
     activePlantings.forEach(p => {
@@ -345,7 +337,6 @@ const ReservationsPage: React.FC = () => {
     return Array.from(varieties).sort();
   }, [activePlantings]);
 
-  // NEW: Function to get filtered plantings for a specific batch
   const getFilteredPlantingsForBatch = (batchVarietyFilter: string) => {
     if (!batchVarietyFilter) return activePlantings;
     return activePlantings.filter(p => p.variety === batchVarietyFilter);
@@ -466,8 +457,7 @@ const ReservationsPage: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-
-      {/* Confirmation Summary Dialog */}
+      
       <Dialog open={isConfirmationDialogOpen} onOpenChange={setIsConfirmationDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -479,7 +469,6 @@ const ReservationsPage: React.FC = () => {
           
           {pendingReservationData && (
             <div className="space-y-6 pt-4">
-              {/* Customer Information */}
               <div className="border-2 border-blue-200 dark:border-blue-800 rounded-lg p-4 bg-blue-50 dark:bg-blue-950/30">
                 <h3 className="font-semibold text-lg mb-3 flex items-center gap-2 text-blue-900 dark:text-blue-100">
                   <span className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm">1</span>
@@ -503,14 +492,13 @@ const ReservationsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Batch Selections */}
               <div className="border-2 border-green-200 dark:border-green-800 rounded-lg p-4 bg-green-50 dark:bg-green-950/30">
                 <h3 className="font-semibold text-lg mb-3 flex items-center gap-2 text-green-900 dark:text-green-100">
                   <span className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm">2</span>
                   Batch Selections ({pendingReservationData.batches.length})
                 </h3>
                 <div className="space-y-3">
-                  {pendingReservationData.batches.map((batch: BatchSelection, index: number) => {
+                  {pendingReservationData.batches.map((batch: BatchSelection) => {
                     const planting = plantings.find(p => p.id === batch.planting_id);
                     if (!planting) return null;
                     
@@ -550,7 +538,6 @@ const ReservationsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Dates */}
               <div className="border-2 border-purple-200 dark:border-purple-800 rounded-lg p-4 bg-purple-50 dark:bg-purple-950/30">
                 <h3 className="font-semibold text-lg mb-3 flex items-center gap-2 text-purple-900 dark:text-purple-100">
                   <span className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm">3</span>
@@ -584,7 +571,6 @@ const ReservationsPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Payment Information */}
               <div className="border-2 border-orange-200 dark:border-orange-800 rounded-lg p-4 bg-orange-50 dark:bg-orange-950/30">
                 <h3 className="font-semibold text-lg mb-3 flex items-center gap-2 text-orange-900 dark:text-orange-100">
                   <span className="w-8 h-8 bg-orange-600 text-white rounded-full flex items-center justify-center text-sm">4</span>
@@ -627,7 +613,6 @@ const ReservationsPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Notes */}
               {pendingReservationData.notes && (
                 <div className="border-2 border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900/30">
                   <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
@@ -640,7 +625,6 @@ const ReservationsPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Warning */}
               <Alert className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/30">
                 <AlertCircle className="h-4 w-4 text-yellow-600" />
                 <AlertDescription className="text-yellow-800 dark:text-yellow-200">
@@ -726,7 +710,7 @@ const ReservationsPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingReservation ? "Edit Reservation" : "Add New Reservation"}</DialogTitle>
@@ -735,7 +719,6 @@ const ReservationsPage: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveReservation} className="space-y-4 pt-4">
-            {/* Batch Selections - NOW WITH PER-BATCH FILTERS */}
             <div className="space-y-4 border-t pt-4">
               <div className="flex items-center justify-between">
                 <Label className="text-base font-semibold">Batch Selections *</Label>
@@ -754,7 +737,6 @@ const ReservationsPage: React.FC = () => {
               </div>
 
               {batchSelections.map((selection, index) => {
-                // Get filtered plantings for this specific batch
                 const batchFilteredPlantings = getFilteredPlantingsForBatch(selection.varietyFilter);
                 
                 return (
@@ -777,7 +759,6 @@ const ReservationsPage: React.FC = () => {
                         )}
                       </div>
 
-                      {/* PER-BATCH VARIETY FILTER */}
                       <div className="space-y-2 bg-white dark:bg-gray-800 p-3 rounded-lg border">
                         <Label htmlFor={`variety_filter_${selection.id}`} className="flex items-center gap-2">
                           <Filter className="w-4 h-4 text-blue-600" />
