@@ -221,6 +221,18 @@ export const adminService = {
 
       if (authError) {
         console.error("Supabase auth error:", authError);
+        
+        // Handle specific "User already registered" error
+        if (authError.message.includes("User already registered") || authError.status === 422) {
+          throw new Error(
+            `Cannot create user: The username "${username}" or email "${authEmail}" is already registered in the system. ` +
+            `This could mean:\n` +
+            `1. A user with this username already exists\n` +
+            `2. A previous account creation may have partially completed\n\n` +
+            `Please try a different username or contact support if you believe this is an error.`
+          );
+        }
+        
         throw new Error(`Failed to create user account: ${authError.message}`);
       }
       

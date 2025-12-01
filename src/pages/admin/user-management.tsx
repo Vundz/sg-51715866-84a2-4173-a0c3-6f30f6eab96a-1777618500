@@ -200,7 +200,25 @@ export default function UserManagementPage() {
         }, 1500);
       }
     } catch (err: any) {
-      setError(err.message || "Failed to save user.");
+      console.error("User creation/update error:", err);
+      
+      // Format error message nicely for "User already registered" errors
+      const errorMessage = err.message || "Failed to save user.";
+      
+      if (errorMessage.includes("User already registered") || errorMessage.includes("already registered")) {
+        // Keep dialog open so user can change the username
+        setError(
+          `⚠️ Username or email already exists!\n\n` +
+          `The username "${formData.username}" or associated email is already registered. ` +
+          `Please try a different username.`
+        );
+      } else if (errorMessage.includes("already taken")) {
+        setError(errorMessage);
+      } else {
+        setError(`Failed to ${editingUser ? "update" : "create"} user: ${errorMessage}`);
+      }
+      
+      // Don't close dialog on error so user can correct the issue
     } finally {
       setCreatingUser(false);
     }
