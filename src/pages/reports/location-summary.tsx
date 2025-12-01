@@ -16,7 +16,7 @@ import { formatNumber } from "@/lib/format";
 type LocationData = Database["public"]["Tables"]["locations"]["Row"];
 type PlantingData = Database["public"]["Tables"]["plantings"]["Row"];
 
-const LocationSummaryReport: React.FC = () => {
+function LocationSummaryReport() {
   const [locations, setLocations] = useState<LocationData[]>([]);
   const [plantings, setPlantings] = useState<PlantingData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,3 +169,5 @@ const LocationSummaryReport: React.FC = () => {
     </div>
   );
 }
+
+export default LocationSummaryReport;
