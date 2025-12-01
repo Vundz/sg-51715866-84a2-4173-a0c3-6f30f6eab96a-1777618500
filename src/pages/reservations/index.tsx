@@ -615,15 +615,23 @@ const ReservationsPage: React.FC = () => {
 
                         <div className="space-y-2">
                           <Label>Quantity *</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            max={selection.planting_id ? getAvailableQuantity(selection.planting_id) : undefined}
-                            value={selection.quantity || ""}
-                            onChange={(e) => handleBatchSelectionChange(selection.id, "quantity", parseInt(e.target.value) || 0)}
-                            placeholder="Enter quantity"
-                            required
-                          />
+                          <div className="space-y-2">
+                            <Input
+                              type="number"
+                              min="1"
+                              max={selection.planting_id ? getAvailableQuantity(selection.planting_id) : undefined}
+                              value={selection.quantity || ""}
+                              onChange={(e) => handleBatchSelectionChange(selection.id, "quantity", parseInt(e.target.value) || 0)}
+                              placeholder="Enter quantity"
+                              required
+                            />
+                            {selection.quantity > 0 && (
+                              <div className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
+                                <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Formatted:</span>
+                                <span className="text-sm font-bold text-blue-900 dark:text-blue-100">{formatNumber(selection.quantity)} seedlings</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
