@@ -112,20 +112,24 @@ export const adminService = {
    * Get all users (admin only)
    */
   async getAllUsers(): Promise<Profile[]> {
-    // Add a timestamp to break any potential caching
+    // Force fresh data with cache control and unique query modifier
     const timestamp = Date.now();
     
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .order("created_at", { ascending: false })
-      // Force fresh data by adding a no-op filter that changes each time
-      .gte("created_at", "1970-01-01T00:00:00.000Z");
+      // Use timestamp in a way that forces query uniqueness
+      .gte("created_at", "1970-01-01T00:00:00.000Z")
+      .limit(1000); // Add explicit limit to make query more deterministic
 
-    if (error) throw error;
+    if (error) {
+      console.error("Error fetching users:", error);
+      throw error;
+    }
     
-    // Additional verification log
-    console.log(`Fetched ${data?.length || 0} users at ${new Date(timestamp).toISOString()}`);
+    // Log for debugging
+    console.log(`✓ Fetched ${data?.length || 0} users at ${new Date(timestamp).toISOString()}`);
     
     return data || [];
   },

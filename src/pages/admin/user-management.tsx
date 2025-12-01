@@ -102,13 +102,18 @@ export default function UserManagementPage() {
     try {
       setLoading(true);
       setError(null);
-      console.log("Loading users from database...");
+      console.log("🔄 Loading users from database...");
+      
+      // Clear any existing users first to force re-render
+      setUsers([]);
+      
       const usersData = await adminService.getAllUsers();
-      console.log("Users loaded:", usersData.length, "users");
+      console.log(`✓ Users loaded: ${usersData.length} users`);
+      
       setUsers(usersData);
       setRefreshKey(prev => prev + 1); // Force component refresh
     } catch (err: any) {
-      console.error("Error loading users:", err);
+      console.error("❌ Error loading users:", err);
       setError(err.message || "Failed to load users.");
     } finally {
       setLoading(false);
@@ -156,7 +161,7 @@ export default function UserManagementPage() {
 
     try {
       if (editingUser) {
-        console.log("Updating user:", editingUser.id);
+        console.log("📝 Updating user:", editingUser.id);
         await adminService.updateUser(editingUser.id, {
           username: formData.username,
           full_name: formData.fullName,
@@ -180,7 +185,7 @@ export default function UserManagementPage() {
           return;
         }
         
-        console.log("Creating new user:", formData.username);
+        console.log("👤 Creating new user:", formData.username);
         setSuccess("Creating user...");
         
         // Create user with optional email
@@ -192,28 +197,32 @@ export default function UserManagementPage() {
           formData.email || undefined
         );
         
-        console.log("User created successfully:", newUser);
+        console.log("✅ User created successfully:", newUser.id);
         
-        // IMMEDIATE STATE UPDATE: Add user to list right away
+        // TRIPLE STRATEGY FOR GUARANTEED REFRESH:
+        // 1. Immediately add to local state
         setUsers(prevUsers => [newUser, ...prevUsers]);
+        
+        // 2. Force component re-render
         setRefreshKey(prev => prev + 1);
         
-        setSuccess("User created successfully!");
+        // 3. Refresh from database after short delay
+        setTimeout(async () => {
+          console.log("🔄 Refreshing user list from database...");
+          await loadUsers();
+        }, 500);
         
-        // Background refresh to sync with database (non-blocking)
-        setTimeout(() => {
-          loadUsers().catch(err => console.error("Background refresh error:", err));
-        }, 1000);
+        setSuccess("✅ User created successfully!");
         
         // Close dialog
         setTimeout(() => {
           setDialogOpen(false);
           setSuccess(null);
           setCreatingUser(false);
-        }, 1000);
+        }, 1500);
       }
     } catch (err: any) {
-      console.error("User creation/update error:", err);
+      console.error("❌ User creation/update error:", err);
       
       // Format error message nicely for "User already registered" errors
       const errorMessage = err.message || "Failed to save user.";
