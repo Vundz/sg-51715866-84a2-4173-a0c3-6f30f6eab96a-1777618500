@@ -187,18 +187,34 @@ const ReservationsPage: React.FC = () => {
       }
     }
     
+    // Prepare reservation data for confirmation
     const reservationData = {
-      planting_id: validBatchSelections[0].planting_id,
       customer_name: formData.get("customer_name") as string,
       customer_phone: formData.get("customer_phone") as string,
       customer_email: (formData.get("customer_email") as string) || null,
-      quantity_reserved: validBatchSelections[0].quantity,
       reserved_date: formData.get("reserved_date") as string,
       collection_date: (formData.get("collection_date") as string) || null,
       payment_status: formData.get("payment_status") as string,
       amount_paid: parseFloat(formData.get("amount_paid") as string) || 0,
       total_amount: parseFloat(formData.get("total_amount") as string) || 0,
       notes: (formData.get("notes") as string) || null,
+      batches: validBatchSelections,
+    };
+
+    // Show confirmation dialog instead of saving immediately
+    setPendingReservationData(reservationData);
+    setIsConfirmationDialogOpen(true);
+  };
+
+  const handleConfirmAndSave = async () => {
+    if (!pendingReservationData) return;
+
+    const { batches, ...baseData } = pendingReservationData;
+    
+    const reservationData = {
+      planting_id: batches[0].planting_id,
+      quantity_reserved: batches[0].quantity,
+      ...baseData,
       status: editingReservation?.status || "pending",
       final_quantity: editingReservation?.final_quantity ?? null,
     };
@@ -212,23 +228,25 @@ const ReservationsPage: React.FC = () => {
         await reservationService.createReservation(reservationData);
         
         // Create additional reservations for other batches
-        for (let i = 1; i < validBatchSelections.length; i++) {
+        for (let i = 1; i < batches.length; i++) {
           const additionalReservation = {
             ...reservationData,
-            planting_id: validBatchSelections[i].planting_id,
-            quantity_reserved: validBatchSelections[i].quantity,
+            planting_id: batches[i].planting_id,
+            quantity_reserved: batches[i].quantity,
           };
           await reservationService.createReservation(additionalReservation);
         }
         
         toast({ 
           title: "Success", 
-          description: `${validBatchSelections.length} reservation${validBatchSelections.length > 1 ? "s" : ""} created.` 
+          description: `${batches.length} reservation${batches.length > 1 ? "s" : ""} created.` 
         });
       }
       
       await loadData();
+      setIsConfirmationDialogOpen(false);
       setIsDialogOpen(false);
+      setPendingReservationData(null);
     } catch (error) {
       console.error("Error saving reservation:", error);
       toast({ title: "Error", description: "Failed to save reservation.", variant: "destructive" });
@@ -448,6 +466,212 @@ const ReservationsPage: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Confirmation Summary Dialog */}
+      <Dialog open={isConfirmationDialogOpen} onOpenChange={setIsConfirmationDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold">Confirm Reservation Details</DialogTitle>
+            <DialogDescription>
+              Please review all details carefully before finalizing the reservation
+            </DialogDescription>
+          </DialogHeader>
+          
+          {pendingReservationData && (
+            <div className="space-y-6 pt-4">
+              {/* Customer Information */}
+              <div className="border-2 border-blue-200 dark:border-blue-800 rounded-lg p-4 bg-blue-50 dark:bg-blue-950/30">
+                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2 text-blue-900 dark:text-blue-100">
+                  <span className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm">1</span>
+                  Customer Information
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <Label className="text-gray-600 dark:text-gray-400">Name</Label>
+                    <p className="font-semibold text-base">{pendingReservationData.customer_name}</p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600 dark:text-gray-400">Phone</Label>
+                    <p className="font-semibold text-base">{pendingReservationData.customer_phone}</p>
+                  </div>
+                  {pendingReservationData.customer_email && (
+                    <div className="col-span-2">
+                      <Label className="text-gray-600 dark:text-gray-400">Email</Label>
+                      <p className="font-semibold text-base">{pendingReservationData.customer_email}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Batch Selections */}
+              <div className="border-2 border-green-200 dark:border-green-800 rounded-lg p-4 bg-green-50 dark:bg-green-950/30">
+                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2 text-green-900 dark:text-green-100">
+                  <span className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm">2</span>
+                  Batch Selections ({pendingReservationData.batches.length})
+                </h3>
+                <div className="space-y-3">
+                  {pendingReservationData.batches.map((batch: BatchSelection, index: number) => {
+                    const planting = plantings.find(p => p.id === batch.planting_id);
+                    if (!planting) return null;
+                    
+                    return (
+                      <div key={batch.id} className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-green-200 dark:border-green-700">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <p className="font-semibold text-base">
+                              Batch #{planting.batch_number}
+                            </p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {planting.plant_types?.name}{planting.variety ? ` (${planting.variety})` : ""}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Location: {planting.locations?.name}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-2xl font-bold text-green-600">
+                              {formatNumber(batch.quantity)}
+                            </p>
+                            <p className="text-xs text-gray-500">seedlings</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  <div className="bg-green-600 text-white rounded-lg p-3 mt-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Total Quantity:</span>
+                      <span className="text-2xl font-bold">
+                        {formatNumber(pendingReservationData.batches.reduce((sum: number, b: BatchSelection) => sum + b.quantity, 0))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dates */}
+              <div className="border-2 border-purple-200 dark:border-purple-800 rounded-lg p-4 bg-purple-50 dark:bg-purple-950/30">
+                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2 text-purple-900 dark:text-purple-100">
+                  <span className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm">3</span>
+                  Important Dates
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <Label className="text-gray-600 dark:text-gray-400">Reservation Date</Label>
+                    <p className="font-semibold text-base">
+                      {new Date(pendingReservationData.reserved_date).toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600 dark:text-gray-400">Collection Date</Label>
+                    <p className="font-semibold text-base">
+                      {pendingReservationData.collection_date 
+                        ? new Date(pendingReservationData.collection_date).toLocaleDateString('en-US', { 
+                            weekday: 'long', 
+                            year: 'numeric', 
+                            month: 'long', 
+                            day: 'numeric' 
+                          })
+                        : "Not specified"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Information */}
+              <div className="border-2 border-orange-200 dark:border-orange-800 rounded-lg p-4 bg-orange-50 dark:bg-orange-950/30">
+                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2 text-orange-900 dark:text-orange-100">
+                  <span className="w-8 h-8 bg-orange-600 text-white rounded-full flex items-center justify-center text-sm">4</span>
+                  Payment Details
+                </h3>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <Label className="text-gray-600 dark:text-gray-400">Payment Status</Label>
+                    <Badge className="mt-1 capitalize">
+                      {pendingReservationData.payment_status}
+                    </Badge>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600 dark:text-gray-400">Total Amount</Label>
+                    <p className="font-semibold text-base">
+                      {pendingReservationData.total_amount > 0 
+                        ? `$${pendingReservationData.total_amount.toFixed(2)}` 
+                        : "Not specified"}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-gray-600 dark:text-gray-400">Amount Paid</Label>
+                    <p className="font-semibold text-base">
+                      {pendingReservationData.amount_paid > 0 
+                        ? `$${pendingReservationData.amount_paid.toFixed(2)}` 
+                        : "$0.00"}
+                    </p>
+                  </div>
+                </div>
+                
+                {pendingReservationData.total_amount > 0 && (
+                  <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-700">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-gray-700 dark:text-gray-300">Balance Due:</span>
+                      <span className="text-xl font-bold text-orange-600">
+                        ${(pendingReservationData.total_amount - pendingReservationData.amount_paid).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Notes */}
+              {pendingReservationData.notes && (
+                <div className="border-2 border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900/30">
+                  <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                    <span className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center text-sm">5</span>
+                    Additional Notes
+                  </h3>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                    {pendingReservationData.notes}
+                  </p>
+                </div>
+              )}
+
+              {/* Warning */}
+              <Alert className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/30">
+                <AlertCircle className="h-4 w-4 text-yellow-600" />
+                <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+                  <strong>Important:</strong> Once confirmed, this reservation will deduct the selected quantities from available stock. 
+                  Please ensure all details are correct before proceeding.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => {
+                setIsConfirmationDialogOpen(false);
+                setPendingReservationData(null);
+              }}
+            >
+              Go Back & Edit
+            </Button>
+            <Button 
+              onClick={handleConfirmAndSave}
+              className="bg-blue-600 hover:bg-blue-700 gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Confirm & Save Reservation
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
         <DialogContent>
