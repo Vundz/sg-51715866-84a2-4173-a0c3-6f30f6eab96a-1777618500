@@ -44,6 +44,7 @@ export default function UserManagementPage() {
   const [bulkResults, setBulkResults] = useState<{ success: any[]; failed: any[] } | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [creatingUser, setCreatingUser] = useState(false);
   
   const [formData, setFormData] = useState({
     username: "",
@@ -133,15 +134,18 @@ export default function UserManagementPage() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    setCreatingUser(true);
 
     // Validate username
     if (!editingUser && !formData.username) {
       setError("Username is required.");
+      setCreatingUser(false);
       return;
     }
 
     if (!editingUser && formData.username.length < 3) {
       setError("Username must be at least 3 characters long.");
+      setCreatingUser(false);
       return;
     }
 
@@ -157,9 +161,16 @@ export default function UserManagementPage() {
         
         // Reload users list immediately for updates
         await loadUsers();
+        
+        // Close dialog after showing success message
+        setTimeout(() => {
+          setDialogOpen(false);
+          setSuccess(null);
+        }, 1500);
       } else {
         if (!formData.password) {
           setError("Password is required for new users.");
+          setCreatingUser(false);
           return;
         }
         
@@ -171,22 +182,27 @@ export default function UserManagementPage() {
           formData.role,
           formData.email || undefined
         );
-        setSuccess("User created successfully!");
         
-        // Wait an additional 2 seconds for database propagation before reloading
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Show success message in the dialog
+        setSuccess("User created successfully! Refreshing list...");
         
-        // Now reload users list
-        await loadUsers();
+        // Close dialog first to show the loading state
+        setTimeout(() => {
+          setDialogOpen(false);
+        }, 1000);
+        
+        // Then reload users after dialog closes
+        setTimeout(async () => {
+          await loadUsers();
+          // Show success notification in the main page
+          setSuccess("User created successfully and added to the list!");
+          setTimeout(() => setSuccess(null), 3000);
+        }, 1500);
       }
-      
-      // Keep dialog open briefly to show success message, then close
-      setTimeout(() => {
-        setDialogOpen(false);
-        setSuccess(null);
-      }, 2000);
     } catch (err: any) {
       setError(err.message || "Failed to save user.");
+    } finally {
+      setCreatingUser(false);
     }
   };
 
@@ -696,14 +712,22 @@ export default function UserManagementPage() {
                 type="button"
                 variant="outline"
                 onClick={() => setDialogOpen(false)}
+                disabled={creatingUser}
               >
                 Cancel
               </Button>
               <Button 
                 type="submit"
-                disabled={!editingUser && (!usernameAvailable || checkingUsername)}
+                disabled={(!editingUser && (!usernameAvailable || checkingUsername)) || creatingUser}
               >
-                {editingUser ? "Update User" : "Create User"}
+                {creatingUser ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    {editingUser ? "Updating..." : "Creating..."}
+                  </>
+                ) : (
+                  editingUser ? "Update User" : "Create User"
+                )}
               </Button>
             </DialogFooter>
           </form>
