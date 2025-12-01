@@ -40,12 +40,12 @@ type BatchSelection = {
 
 // New helper function to calculate days remaining
 const calculateDaysRemaining = (planting: PlantingWithDetails): string => {
-  if (!planting.date_planted || !planting.plant_types?.days_to_grow) {
+  if (!planting.date_planted || !planting.plant_types?.growth_duration) {
     return "";
   }
   
   const plantedDate = new Date(planting.date_planted);
-  const daysToGrow = planting.plant_types.days_to_grow;
+  const daysToGrow = planting.plant_types.growth_duration;
   const readyDate = new Date(plantedDate);
   readyDate.setDate(readyDate.getDate() + daysToGrow);
   
