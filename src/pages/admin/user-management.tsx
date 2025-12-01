@@ -193,27 +193,19 @@ export default function UserManagementPage() {
         );
         
         console.log("User created successfully:", newUser);
-        setSuccess("User created! Refreshing list...");
         
-        // Multiple refresh attempts to ensure the user appears
-        for (let i = 0; i < 3; i++) {
-          console.log(`Refresh attempt ${i + 1}/3`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          await loadUsers();
-          
-          // Check if user appears in list
-          const currentUsers = await adminService.getAllUsers();
-          const userFound = currentUsers.some(u => u.id === newUser.id);
-          console.log(`User found in list: ${userFound}`);
-          
-          if (userFound) {
-            console.log("✓ User confirmed in list");
-            break;
-          }
-        }
+        // IMMEDIATE STATE UPDATE: Add user to list right away
+        setUsers(prevUsers => [newUser, ...prevUsers]);
+        setRefreshKey(prev => prev + 1);
         
-        // Show final success and close
         setSuccess("User created successfully!");
+        
+        // Background refresh to sync with database (non-blocking)
+        setTimeout(() => {
+          loadUsers().catch(err => console.error("Background refresh error:", err));
+        }, 1000);
+        
+        // Close dialog
         setTimeout(() => {
           setDialogOpen(false);
           setSuccess(null);
