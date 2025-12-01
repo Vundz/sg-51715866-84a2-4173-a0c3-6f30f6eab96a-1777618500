@@ -333,12 +333,6 @@ const ReservationsPage: React.FC = () => {
     return activePlantings.filter(p => p.variety === batchVarietyFilter);
   };
 
-  // Filter plantings by selected variety
-  const filteredActivePlantingsByVariety = useMemo(() => {
-    if (!selectedVarietyFilter) return activePlantings;
-    return activePlantings.filter(p => p.variety === selectedVarietyFilter);
-  }, [activePlantings, selectedVarietyFilter]);
-
   const getPlantingName = (plantingId: string | null) => {
     if (!plantingId) return "Unknown Planting";
     const planting = plantings.find(p => p.id === plantingId);
