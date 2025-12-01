@@ -487,12 +487,12 @@ const ReservationsPage: React.FC = () => {
                 <Filter className="w-4 h-4" />
                 Filter by Variety
               </Label>
-              <Select value={selectedVarietyFilter} onValueChange={setSelectedVarietyFilter}>
+              <Select value={selectedVarietyFilter || "all"} onValueChange={(value) => setSelectedVarietyFilter(value === "all" ? "" : value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="All varieties" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All varieties</SelectItem>
+                  <SelectItem value="all">All varieties</SelectItem>
                   {availableVarieties.map(variety => (
                     <SelectItem key={variety} value={variety}>
                       {variety}
