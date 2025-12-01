@@ -587,7 +587,7 @@ const ReservationsPage: React.FC = () => {
                     <Label className="text-gray-600 dark:text-gray-400">Total Amount</Label>
                     <p className="font-semibold text-base">
                       {pendingReservationData.total_amount > 0 
-                        ? `$${pendingReservationData.total_amount.toFixed(2)}` 
+                        ? `K${formatNumber(pendingReservationData.total_amount)}` 
                         : "Not specified"}
                     </p>
                   </div>
@@ -595,8 +595,8 @@ const ReservationsPage: React.FC = () => {
                     <Label className="text-gray-600 dark:text-gray-400">Amount Paid</Label>
                     <p className="font-semibold text-base">
                       {pendingReservationData.amount_paid > 0 
-                        ? `$${pendingReservationData.amount_paid.toFixed(2)}` 
-                        : "$0.00"}
+                        ? `K${formatNumber(pendingReservationData.amount_paid)}` 
+                        : "K0"}
                     </p>
                   </div>
                 </div>
@@ -606,7 +606,7 @@ const ReservationsPage: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-gray-700 dark:text-gray-300">Balance Due:</span>
                       <span className="text-xl font-bold text-orange-600">
-                        ${(pendingReservationData.total_amount - pendingReservationData.amount_paid).toFixed(2)}
+                        K{formatNumber(pendingReservationData.total_amount - pendingReservationData.amount_paid)}
                       </span>
                     </div>
                   </div>
