@@ -31,11 +31,12 @@ type ReservationWithDetails = Reservation & {
   plantings: PlantingWithDetails | null;
 };
 
-// New type for batch selection
+// Updated type for batch selection with per-batch variety filter
 type BatchSelection = {
   id: string;
   planting_id: string;
   quantity: number;
+  varietyFilter: string; // NEW: per-batch variety filter
 };
 
 // New helper function to calculate days remaining
@@ -81,11 +82,13 @@ const ReservationsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
-  const [selectedVarietyFilter, setSelectedVarietyFilter] = useState<string>("");
   
-  // New state for multiple batch selections
+  // REMOVED: Global variety filter (now per-batch)
+  // const [selectedVarietyFilter, setSelectedVarietyFilter] = useState<string>("");
+
+  // Updated: Batch selections now include varietyFilter
   const [batchSelections, setBatchSelections] = useState<BatchSelection[]>([
-    { id: crypto.randomUUID(), planting_id: "", quantity: 0 }
+    { id: crypto.randomUUID(), planting_id: "", quantity: 0, varietyFilter: "" }
   ]);
 
   useEffect(() => {
@@ -271,28 +274,27 @@ const ReservationsPage: React.FC = () => {
       setBatchSelections([{
         id: crypto.randomUUID(),
         planting_id: reservation.planting_id,
-        quantity: reservation.quantity_reserved
+        quantity: reservation.quantity_reserved,
+        varietyFilter: "" // Start with no filter when editing
       }]);
     } else {
       // When creating new, start with one empty batch
-      setBatchSelections([{ id: crypto.randomUUID(), planting_id: "", quantity: 0 }]);
+      setBatchSelections([{ id: crypto.randomUUID(), planting_id: "", quantity: 0, varietyFilter: "" }]);
     }
     
-    setSelectedVarietyFilter("");
     setIsDialogOpen(true);
   };
   
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setEditingReservation(null);
-    setBatchSelections([{ id: crypto.randomUUID(), planting_id: "", quantity: 0 }]);
-    setSelectedVarietyFilter("");
+    setBatchSelections([{ id: crypto.randomUUID(), planting_id: "", quantity: 0, varietyFilter: "" }]);
   };
 
   const handleAddBatchSelection = () => {
     setBatchSelections([
       ...batchSelections,
-      { id: crypto.randomUUID(), planting_id: "", quantity: 0 }
+      { id: crypto.randomUUID(), planting_id: "", quantity: 0, varietyFilter: "" }
     ]);
   };
 
@@ -308,7 +310,7 @@ const ReservationsPage: React.FC = () => {
     setBatchSelections(batchSelections.filter(bs => bs.id !== id));
   };
 
-  const handleBatchSelectionChange = (id: string, field: "planting_id" | "quantity", value: string | number) => {
+  const handleBatchSelectionChange = (id: string, field: "planting_id" | "quantity" | "varietyFilter", value: string | number) => {
     setBatchSelections(batchSelections.map(bs => 
       bs.id === id ? { ...bs, [field]: value } : bs
     ));
@@ -324,6 +326,12 @@ const ReservationsPage: React.FC = () => {
     });
     return Array.from(varieties).sort();
   }, [activePlantings]);
+
+  // NEW: Function to get filtered plantings for a specific batch
+  const getFilteredPlantingsForBatch = (batchVarietyFilter: string) => {
+    if (!batchVarietyFilter) return activePlantings;
+    return activePlantings.filter(p => p.variety === batchVarietyFilter);
+  };
 
   // Filter plantings by selected variety
   const filteredActivePlantingsByVariety = useMemo(() => {
@@ -505,32 +513,11 @@ const ReservationsPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{editingReservation ? "Edit Reservation" : "Add New Reservation"}</DialogTitle>
             <DialogDescription>
-              {editingReservation ? "Update the reservation details." : "Create a new customer reservation. You can add multiple batches."}
+              {editingReservation ? "Update the reservation details." : "Create a new customer reservation. Each batch can filter by variety independently."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveReservation} className="space-y-4 pt-4">
-            {/* Variety Filter */}
-            <div className="space-y-2">
-              <Label htmlFor="variety_filter" className="flex items-center gap-2">
-                <Filter className="w-4 h-4" />
-                Filter by Variety
-              </Label>
-              <Select value={selectedVarietyFilter || "all"} onValueChange={(value) => setSelectedVarietyFilter(value === "all" ? "" : value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All varieties" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All varieties</SelectItem>
-                  {availableVarieties.map(variety => (
-                    <SelectItem key={variety} value={variety}>
-                      {variety}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Batch Selections */}
+            {/* Batch Selections - NOW WITH PER-BATCH FILTERS */}
             <div className="space-y-4 border-t pt-4">
               <div className="flex items-center justify-between">
                 <Label className="text-base font-semibold">Batch Selections *</Label>
@@ -548,91 +535,125 @@ const ReservationsPage: React.FC = () => {
                 )}
               </div>
 
-              {batchSelections.map((selection, index) => (
-                <Card key={selection.id} className="p-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium">Batch #{index + 1}</Label>
-                      {!editingReservation && batchSelections.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveBatchSelection(selection.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
+              {batchSelections.map((selection, index) => {
+                // Get filtered plantings for this specific batch
+                const batchFilteredPlantings = getFilteredPlantingsForBatch(selection.varietyFilter);
+                
+                return (
+                  <Card key={selection.id} className="p-4 bg-gradient-to-br from-blue-50 to-white dark:from-gray-900 dark:to-gray-800 border-2">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-base font-semibold text-blue-900 dark:text-blue-100">
+                          Batch #{index + 1}
+                        </Label>
+                        {!editingReservation && batchSelections.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveBatchSelection(selection.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label>Select Planting Batch *</Label>
+                      {/* PER-BATCH VARIETY FILTER */}
+                      <div className="space-y-2 bg-white dark:bg-gray-800 p-3 rounded-lg border">
+                        <Label htmlFor={`variety_filter_${selection.id}`} className="flex items-center gap-2">
+                          <Filter className="w-4 h-4 text-blue-600" />
+                          Filter by Variety (Optional)
+                        </Label>
                         <Select 
-                          value={selection.planting_id} 
-                          onValueChange={(value) => handleBatchSelectionChange(selection.id, "planting_id", value)}
-                          disabled={!!editingReservation}
+                          value={selection.varietyFilter || "all"} 
+                          onValueChange={(value) => handleBatchSelectionChange(selection.id, "varietyFilter", value === "all" ? "" : value)}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select a batch" />
+                            <SelectValue placeholder="All varieties" />
                           </SelectTrigger>
                           <SelectContent>
-                            {filteredActivePlantingsByVariety.length === 0 ? (
-                              <div className="px-2 py-1.5 text-sm text-gray-500">
-                                {selectedVarietyFilter 
-                                  ? "No batches available for selected variety"
-                                  : "No active planting batches available"}
-                              </div>
-                            ) : (
-                              filteredActivePlantingsByVariety.map(p => {
-                                const daysInfo = calculateDaysRemaining(p);
-                                return (
-                                  <SelectItem key={p.id} value={p.id}>
-                                    Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - Available: {formatNumber(getAvailableQuantity(p.id))}{daysInfo ? ` - ${daysInfo}` : ""}
-                                  </SelectItem>
-                                );
-                              })
-                            )}
+                            <SelectItem value="all">All varieties</SelectItem>
+                            {availableVarieties.map(variety => (
+                              <SelectItem key={variety} value={variety}>
+                                {variety}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
+                        <p className="text-xs text-gray-500">
+                          Filter planting options for this batch only
+                        </p>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label>Quantity *</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          max={selection.planting_id ? getAvailableQuantity(selection.planting_id) : undefined}
-                          value={selection.quantity || ""}
-                          onChange={(e) => handleBatchSelectionChange(selection.id, "quantity", parseInt(e.target.value) || 0)}
-                          placeholder="Enter quantity"
-                          required
-                        />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label>Select Planting Batch *</Label>
+                          <Select 
+                            value={selection.planting_id} 
+                            onValueChange={(value) => handleBatchSelectionChange(selection.id, "planting_id", value)}
+                            disabled={!!editingReservation}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a batch" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {batchFilteredPlantings.length === 0 ? (
+                                <div className="px-2 py-1.5 text-sm text-gray-500">
+                                  {selection.varietyFilter 
+                                    ? `No batches available for ${selection.varietyFilter}`
+                                    : "No active planting batches available"}
+                                </div>
+                              ) : (
+                                batchFilteredPlantings.map(p => {
+                                  const daysInfo = calculateDaysRemaining(p);
+                                  return (
+                                    <SelectItem key={p.id} value={p.id}>
+                                      Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - Available: {formatNumber(getAvailableQuantity(p.id))}{daysInfo ? ` - ${daysInfo}` : ""}
+                                    </SelectItem>
+                                  );
+                                })
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Quantity *</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            max={selection.planting_id ? getAvailableQuantity(selection.planting_id) : undefined}
+                            value={selection.quantity || ""}
+                            onChange={(e) => handleBatchSelectionChange(selection.id, "quantity", parseInt(e.target.value) || 0)}
+                            placeholder="Enter quantity"
+                            required
+                          />
+                        </div>
                       </div>
+
+                      {selection.planting_id && (
+                        <Alert className={selection.quantity > getAvailableQuantity(selection.planting_id) ? "border-red-500" : ""}>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>
+                            Available: <strong>{formatNumber(getAvailableQuantity(selection.planting_id))}</strong> seedlings
+                            {selection.quantity > getAvailableQuantity(selection.planting_id) && (
+                              <span className="text-red-600 block mt-1">
+                                ⚠️ Quantity exceeds available stock!
+                              </span>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      )}
                     </div>
+                  </Card>
+                );
+              })}
 
-                    {selection.planting_id && (
-                      <Alert className={selection.quantity > getAvailableQuantity(selection.planting_id) ? "border-red-500" : ""}>
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          Available: <strong>{formatNumber(getAvailableQuantity(selection.planting_id))}</strong> seedlings
-                          {selection.quantity > getAvailableQuantity(selection.planting_id) && (
-                            <span className="text-red-600 block mt-1">
-                              ⚠️ Quantity exceeds available stock!
-                            </span>
-                          )}
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
-                </Card>
-              ))}
-
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Total quantity: <strong>{formatNumber(batchSelections.reduce((sum, bs) => sum + (bs.quantity || 0), 0))}</strong> seedlings across {batchSelections.length} batch{batchSelections.length !== 1 ? "es" : ""}
+              <Alert className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+                <AlertCircle className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-900 dark:text-blue-100">
+                  <strong>Total across all batches:</strong> {formatNumber(batchSelections.reduce((sum, bs) => sum + (bs.quantity || 0), 0))} seedlings from {batchSelections.length} batch{batchSelections.length !== 1 ? "es" : ""}
                 </AlertDescription>
               </Alert>
             </div>
