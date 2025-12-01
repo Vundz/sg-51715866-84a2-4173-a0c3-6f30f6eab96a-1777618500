@@ -191,6 +191,7 @@ const ReservationsPage: React.FC = () => {
       customer_email: (formData.get("customer_email") as string) || null,
       quantity_reserved: validBatchSelections[0].quantity,
       reserved_date: formData.get("reserved_date") as string,
+      collection_date: (formData.get("collection_date") as string) || null,
       payment_status: formData.get("payment_status") as string,
       amount_paid: parseFloat(formData.get("amount_paid") as string) || 0,
       total_amount: parseFloat(formData.get("total_amount") as string) || 0,
@@ -672,15 +673,27 @@ const ReservationsPage: React.FC = () => {
 
             <div className="border-t pt-4">
               <h3 className="text-sm font-semibold mb-3">Reservation Details</h3>
-              <div className="space-y-2">
-                <Label htmlFor="reserved_date">Reservation Date *</Label>
-                <Input 
-                  id="reserved_date" 
-                  name="reserved_date" 
-                  type="date" 
-                  defaultValue={editingReservation?.reserved_date ? new Date(editingReservation.reserved_date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]} 
-                  required 
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="reserved_date">Reservation Date *</Label>
+                  <Input 
+                    id="reserved_date" 
+                    name="reserved_date" 
+                    type="date" 
+                    defaultValue={editingReservation?.reserved_date ? new Date(editingReservation.reserved_date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]} 
+                    required 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="collection_date">Collection Date (Optional)</Label>
+                  <Input 
+                    id="collection_date" 
+                    name="collection_date" 
+                    type="date" 
+                    defaultValue={editingReservation?.collection_date ? new Date(editingReservation.collection_date).toISOString().split("T")[0] : ""} 
+                  />
+                  <p className="text-xs text-gray-500">When customer wants to collect</p>
+                </div>
               </div>
             </div>
 
@@ -778,7 +791,8 @@ const ReservationsPage: React.FC = () => {
                   <TableHead>Customer</TableHead>
                   <TableHead>Planting</TableHead>
                   <TableHead>Quantity</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Reservation Date</TableHead>
+                  <TableHead>Collection Date</TableHead>
                   <TableHead>Payment</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -787,7 +801,7 @@ const ReservationsPage: React.FC = () => {
               <TableBody>
                 {filteredReservations.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center h-24">
+                    <TableCell colSpan={8} className="text-center h-24">
                       No reservations found.
                     </TableCell>
                   </TableRow>
@@ -820,6 +834,15 @@ const ReservationsPage: React.FC = () => {
                         </div>
                       </TableCell>
                       <TableCell>{new Date(r.reserved_date).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        {r.collection_date ? (
+                          <div className="text-sm">
+                            {new Date(r.collection_date).toLocaleDateString()}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">Not set</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={r.payment_status === "paid" ? "default" : "outline"}>
                           {r.payment_status}

@@ -305,6 +305,7 @@ export type Database = {
       reservations: {
         Row: {
           amount_paid: number | null
+          collection_date: string | null
           created_at: string | null
           customer_email: string | null
           customer_name: string
@@ -322,6 +323,7 @@ export type Database = {
         }
         Insert: {
           amount_paid?: number | null
+          collection_date?: string | null
           created_at?: string | null
           customer_email?: string | null
           customer_name: string
@@ -339,6 +341,7 @@ export type Database = {
         }
         Update: {
           amount_paid?: number | null
+          collection_date?: string | null
           created_at?: string | null
           customer_email?: string | null
           customer_name?: string
