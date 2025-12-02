@@ -79,7 +79,7 @@ export function Header() {
                 </Button>
               </div>
             ) : (
-              <Button variant="default" size="sm" onClick={() => router.push("/login")} className="hidden md:flex">
+              <Button variant="default" size="sm" onClick={() => router.push("/")} className="hidden md:flex">
                 <LogIn className="h-4 w-4 mr-2" />
                 Sign In
               </Button>
@@ -124,7 +124,7 @@ export function Header() {
                         </Button>
                       </div>
                     ) : (
-                      <Button variant="default" size="sm" onClick={() => router.push("/login")} className="w-full">
+                      <Button variant="default" size="sm" onClick={() => router.push("/")} className="w-full">
                         <LogIn className="h-4 w-4 mr-2" />
                         Sign In
                       </Button>
