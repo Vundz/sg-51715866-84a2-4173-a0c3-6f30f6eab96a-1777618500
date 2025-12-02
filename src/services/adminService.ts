@@ -296,18 +296,16 @@ export const adminService = {
 
       console.log("✅ Pre-flight checks passed - creating user:", username);
 
-      // Step 1: Create the auth user
-      console.log("👤 Creating auth user with email:", authEmail);
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      // Step 1: Create the auth user using ADMIN API (does NOT auto-login)
+      console.log("👤 Creating auth user with Admin API - email:", authEmail);
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: authEmail,
         password: password,
-        options: {
-          data: {
-            full_name: fullName,
-            username: username,
-            role: role,
-          },
-          emailRedirectTo: `${window.location.origin}/`,
+        email_confirm: true, // Auto-confirm the email
+        user_metadata: {
+          full_name: fullName,
+          username: username,
+          role: role,
         },
       });
 
@@ -315,7 +313,7 @@ export const adminService = {
         console.error("❌ Supabase auth error:", authError);
         
         // Handle specific "User already registered" error
-        if (authError.message.includes("User already registered")) {
+        if (authError.message.includes("User already registered") || authError.message.includes("already exists")) {
           // Try to find the user in profiles
           const existingProfile = await this.getUserByUsername(username);
           if (existingProfile) {
@@ -332,7 +330,7 @@ export const adminService = {
         throw new Error("Failed to create user - no user data returned from Supabase");
       }
 
-      console.log("✅ Auth user created successfully:", authData.user.id);
+      console.log("✅ Auth user created successfully with Admin API:", authData.user.id);
 
       // Step 2: MANUALLY create the profile record (bypass trigger)
       const profileData = {
