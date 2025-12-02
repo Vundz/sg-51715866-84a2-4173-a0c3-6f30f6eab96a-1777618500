@@ -257,7 +257,7 @@ export const adminService = {
       // Validate password strength first
       const strengthResult = this.validatePasswordStrength(password);
       if (strengthResult.strength === "weak") {
-        throw new Error("Password is too weak. Please use a stronger password with at least 8 characters, including uppercase, lowercase, numbers, and special characters.");
+        throw new Error("Your password needs to be stronger! Please create a password with:\n• At least 8 characters\n• One uppercase letter (A-Z)\n• One lowercase letter (a-z)\n• One number (0-9)\n• One special character (!@#$%^&*)\n\nExample: MySecure123!");
       }
 
       // COMPREHENSIVE PRE-FLIGHT CHECKS
@@ -483,7 +483,7 @@ export const adminService = {
       // Validate password strength
       const strengthResult = this.validatePasswordStrength(newPassword);
       if (strengthResult.strength === "weak") {
-        throw new Error("Password is too weak. Please use a stronger password.");
+        throw new Error("Your password needs to be stronger! Please create a password with:\n• At least 8 characters\n• One uppercase letter (A-Z)\n• One lowercase letter (a-z)\n• One number (0-9)\n• One special character (!@#$%^&*)\n\nExample: MySecure123!");
       }
 
       // Check password history (prevent reuse)
