@@ -14,6 +14,7 @@ import { treatmentService, TreatmentWithPlantings } from "@/services/treatmentSe
 import { plantingService, PlantingWithDetails } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
 import { group } from "console";
+import { useAuth } from "@/contexts/AuthContext";
 
 // We need to group the results from the service by treatment
 interface GroupedTreatment {
@@ -32,6 +33,7 @@ interface GroupedTreatment {
 }
 
 export default function TreatmentsPage() {
+  const { user, profile } = useAuth();
   const [treatments, setTreatments] = useState<GroupedTreatment[]>([]);
   const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -41,6 +43,8 @@ export default function TreatmentsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
+
+  const isViewer = profile?.role === "viewer";
 
   useEffect(() => {
     loadData();
@@ -205,10 +209,12 @@ export default function TreatmentsPage() {
           <p className="text-gray-600 dark:text-gray-400 mt-2">Log and manage all chemical and fertilizer applications.</p>
         </div>
         
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => handleOpenDialog(null, true)} disabled={activePlantings.length === 0}><ChevronsRight className="w-4 h-4 mr-2" />Bulk Apply</Button>
-          <Button onClick={() => handleOpenDialog()} className="bg-cyan-600 hover:bg-cyan-700"><Plus className="w-4 h-4 mr-2" />Add Treatment</Button>
-        </div>
+        {!isViewer && (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => handleOpenDialog(null, true)} disabled={activePlantings.length === 0}><ChevronsRight className="w-4 h-4 mr-2" />Bulk Apply</Button>
+            <Button onClick={() => handleOpenDialog()} className="bg-cyan-600 hover:bg-cyan-700"><Plus className="w-4 h-4 mr-2" />Add Treatment</Button>
+          </div>
+        )}
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -287,10 +293,14 @@ export default function TreatmentsPage() {
                   <TableCell>{t.type}</TableCell>
                   <TableCell>{t.plantings.map(p => p.batch_number).join(', ')}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex gap-1 justify-end">
-                      <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(t)}><Edit className="w-4 h-4" /></Button>
-                      <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteTreatment(t.id)}><Trash2 className="w-4 h-4" /></Button>
-                    </div>
+                    {!isViewer ? (
+                      <div className="flex gap-1 justify-end">
+                        <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(t)}><Edit className="w-4 h-4" /></Button>
+                        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteTreatment(t.id)}><Trash2 className="w-4 h-4" /></Button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">View only</span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

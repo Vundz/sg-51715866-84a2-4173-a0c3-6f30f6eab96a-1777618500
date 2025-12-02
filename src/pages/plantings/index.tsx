@@ -39,7 +39,7 @@ const generateBatchNumber = (plantTypeName: string, variety: string, datePlanted
 };
 
 export default function PlantingsPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
@@ -48,6 +48,8 @@ export default function PlantingsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPlanting, setEditingPlanting] = useState<Planting | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  const isViewer = profile?.role === "viewer";
   
   // Form state for plant type and variety selection
   const [selectedPlantTypeName, setSelectedPlantTypeName] = useState<string>("");
@@ -531,16 +533,18 @@ export default function PlantingsPage() {
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">Track all your seedling batches from planting to harvest.</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setIsImportDialogOpen(true)} variant="outline" className="border-lime-600 text-lime-600 hover:bg-lime-50">
-            <Upload className="w-4 h-4 mr-2" />
-            Bulk Import
-          </Button>
-          <Button onClick={() => handleOpenDialog()} className="bg-lime-600 hover:bg-lime-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Planting
-          </Button>
-        </div>
+        {!isViewer && (
+          <div className="flex gap-2">
+            <Button onClick={() => setIsImportDialogOpen(true)} variant="outline" className="border-lime-600 text-lime-600 hover:bg-lime-50">
+              <Upload className="w-4 h-4 mr-2" />
+              Bulk Import
+            </Button>
+            <Button onClick={() => handleOpenDialog()} className="bg-lime-600 hover:bg-lime-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Planting
+            </Button>
+          </div>
+        )}
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -1021,10 +1025,14 @@ export default function PlantingsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex gap-1 justify-end">
-                          <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(p)}><Edit className="w-4 h-4" /></Button>
-                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(p.id)}><Trash2 className="w-4 h-4" /></Button>
-                        </div>
+                        {!isViewer ? (
+                          <div className="flex gap-1 justify-end">
+                            <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(p)}><Edit className="w-4 h-4" /></Button>
+                            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(p.id)}><Trash2 className="w-4 h-4" /></Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">View only</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

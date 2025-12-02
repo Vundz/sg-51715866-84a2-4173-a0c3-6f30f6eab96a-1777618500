@@ -10,15 +10,19 @@ import { plantTypeService } from "@/services/plantTypeService";
 import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
 
 type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
 
 export default function PlantTypesPage() {
+  const { user, profile } = useAuth();
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPlantType, setEditingPlantType] = useState<PlantType | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+
+  const isViewer = profile?.role === "viewer";
 
   useEffect(() => {
     loadPlantTypes();
@@ -118,10 +122,12 @@ export default function PlantTypesPage() {
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">Manage the types and varieties of plants you grow.</p>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="bg-green-600 hover:bg-green-700">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Plant Type
-        </Button>
+        {!isViewer && (
+          <Button onClick={() => handleOpenDialog()} className="bg-green-600 hover:bg-green-700">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Plant Type
+          </Button>
+        )}
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -195,10 +201,14 @@ export default function PlantTypesPage() {
                       <TableCell>{pt.growth_duration} days</TableCell>
                       <TableCell>{pt.germination_rate ? `${pt.germination_rate}%` : 'N/A'}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex gap-1 justify-end">
-                          <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(pt)}><Edit className="w-4 h-4" /></Button>
-                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlantType(pt.id)}><Trash2 className="w-4 h-4" /></Button>
-                        </div>
+                        {!isViewer ? (
+                          <div className="flex gap-1 justify-end">
+                            <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(pt)}><Edit className="w-4 h-4" /></Button>
+                            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlantType(pt.id)}><Trash2 className="w-4 h-4" /></Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">View only</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

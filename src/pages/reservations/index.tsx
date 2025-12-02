@@ -16,6 +16,7 @@ import { plantingService } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 import { formatNumber } from "@/lib/format";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Reservation = Database["public"]["Tables"]["reservations"]["Row"];
 type Planting = Database["public"]["Tables"]["plantings"]["Row"];
@@ -69,7 +70,10 @@ const calculateDaysRemaining = (planting: PlantingWithDetails): string => {
 const ReservationsPage: React.FC = () => {
   const router = useRouter();
   const { toast } = useToast();
+  const { user, profile } = useAuth();
   const { planting: plantingIdFilter } = router.query;
+  
+  const isViewer = profile?.role === "viewer";
   
   const [reservations, setReservations] = useState<ReservationWithDetails[]>([]);
   const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
@@ -390,17 +394,19 @@ const ReservationsPage: React.FC = () => {
             )}
           </p>
         </div>
-        <div className="flex gap-2">
-          {plantingIdFilter && (
-            <Button variant="outline" onClick={() => router.push("/reservations")}>
-              Show All
+        {!isViewer && (
+          <div className="flex gap-2">
+            {plantingIdFilter && (
+              <Button variant="outline" onClick={() => router.push("/reservations")}>
+                Show All
+              </Button>
+            )}
+            <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 mr-2" />
+              New Reservation
             </Button>
-          )}
-          <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="w-4 h-4 mr-2" />
-            New Reservation
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -1083,38 +1089,42 @@ const ReservationsPage: React.FC = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex gap-1 justify-end">
-                          {r.status === "pending" && (
-                            <>
-                              <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                onClick={() => handleOpenDialog(r)} 
-                                title="Edit"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="text-green-600 hover:text-green-700" 
-                                onClick={() => handleOpenStatusDialog(r, "completed")} 
-                                title="Complete"
-                              >
-                                <CheckCircle2 className="w-4 h-4" />
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="text-red-600 hover:text-red-700" 
-                                onClick={() => handleOpenStatusDialog(r, "cancelled")} 
-                                title="Cancel"
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
+                        {!isViewer ? (
+                          <div className="flex gap-1 justify-end">
+                            {r.status === "pending" && (
+                              <>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  onClick={() => handleOpenDialog(r)} 
+                                  title="Edit"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="text-green-600 hover:text-green-700" 
+                                  onClick={() => handleOpenStatusDialog(r, "completed")} 
+                                  title="Complete"
+                                >
+                                  <CheckCircle2 className="w-4 h-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="text-red-600 hover:text-red-700" 
+                                  onClick={() => handleOpenStatusDialog(r, "cancelled")} 
+                                  title="Cancel"
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">View only</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

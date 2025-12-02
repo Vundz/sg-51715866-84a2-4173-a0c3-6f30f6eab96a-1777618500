@@ -12,6 +12,7 @@ import { locationService } from "@/services/locationService";
 import { plantingService } from "@/services/plantingService";
 import { formatNumber } from "@/lib/format";
 import type { Database } from "@/integrations/supabase/types";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Location = Database["public"]["Tables"]["locations"]["Row"];
 type Planting = Database["public"]["Tables"]["plantings"]["Row"] & {
@@ -19,11 +20,14 @@ type Planting = Database["public"]["Tables"]["plantings"]["Row"] & {
 };
 
 export default function LocationsPage() {
+  const { user, profile } = useAuth();
   const [locations, setLocations] = useState<Location[]>([]);
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const isViewer = profile?.role === "viewer";
 
   useEffect(() => {
     loadData();
@@ -161,10 +165,12 @@ export default function LocationsPage() {
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">Manage your greenhouses and nursery locations.</p>
         </div>
-        <Button onClick={() => handleOpenDialog()} className="bg-green-600 hover:bg-green-700">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Location
-        </Button>
+        {!isViewer && (
+          <Button onClick={() => handleOpenDialog()} className="bg-green-600 hover:bg-green-700">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Location
+          </Button>
+        )}
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -253,17 +259,21 @@ export default function LocationsPage() {
                         </div>
                         
                         <div className="flex gap-1 ml-4" onClick={(e) => e.stopPropagation()}>
-                          <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(location)}>
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            className="text-red-600" 
-                            onClick={() => handleDeleteLocation(location.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          {!isViewer && (
+                            <>
+                              <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(location)}>
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="text-red-600" 
+                                onClick={() => handleDeleteLocation(location.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </AccordionTrigger>

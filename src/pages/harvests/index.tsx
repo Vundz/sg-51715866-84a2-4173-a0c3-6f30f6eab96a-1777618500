@@ -16,8 +16,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { formatNumber } from "@/lib/format";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function HarvestsPage() {
+  const { user, profile } = useAuth();
   const [harvests, setHarvests] = useState<HarvestWithDetails[]>([]);
   const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -36,6 +38,8 @@ export default function HarvestsPage() {
   const [harvestQuantity, setHarvestQuantity] = useState<number>(0);
   const [quantityError, setQuantityError] = useState<string>("");
   const { toast } = useToast();
+
+  const isViewer = profile?.role === "viewer";
 
   useEffect(() => {
     loadInitialData();
@@ -306,15 +310,17 @@ export default function HarvestsPage() {
           <h1 className="text-4xl font-bold flex items-center gap-3"><Package className="w-10 h-10 text-blue-600" />Harvests</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">Record and manage harvests from your plantings.</p>
         </div>
-        <div className="flex items-center gap-2">
+        {!isViewer && (
+          <div className="flex items-center gap-2">
             <Link href="/harvests/bulk">
-                <Button variant="outline">Bulk Harvest</Button>
+              <Button variant="outline">Bulk Harvest</Button>
             </Link>
             <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
               <Plus className="w-4 h-4 mr-2" />
               Add Harvest
             </Button>
-        </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -459,11 +465,18 @@ export default function HarvestsPage() {
                         <Badge variant={h.status === 'sold' ? 'default' : 'secondary'}>{h.status}</Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex gap-1 justify-end">
-                          <Button size="sm" variant="ghost" onClick={() => handlePrintDispatchSlip(h)} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Print Dispatch Slip"><Printer className="w-4 h-4" /></Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(h)}><Edit className="w-4 h-4" /></Button>
-                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteHarvest(h.id)}><Trash2 className="w-4 h-4" /></Button>
-                        </div>
+                        {!isViewer ? (
+                          <div className="flex gap-1 justify-end">
+                            <Button size="sm" variant="ghost" onClick={() => handlePrintDispatchSlip(h)} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Print Dispatch Slip"><Printer className="w-4 h-4" /></Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(h)}><Edit className="w-4 h-4" /></Button>
+                            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteHarvest(h.id)}><Trash2 className="w-4 h-4" /></Button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-1 justify-end">
+                            <Button size="sm" variant="ghost" onClick={() => handlePrintDispatchSlip(h)} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Print Dispatch Slip"><Printer className="w-4 h-4" /></Button>
+                            <span className="text-xs text-gray-400 italic ml-2">View only</span>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
