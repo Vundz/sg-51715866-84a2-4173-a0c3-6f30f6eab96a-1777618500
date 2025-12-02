@@ -202,41 +202,33 @@ export default function UserManagementPage() {
         );
         
         console.log("✅ User created successfully:", newUser.id);
-        setSuccess(`✅ User "${formData.username}" created! Refreshing list...`);
+        setSuccess(`✅ User "${formData.username}" created successfully! Refreshing...`);
         
-        // SOLUTION: Force a complete page reload to bypass ALL caching
-        // This is the most reliable way to ensure fresh data
+        // Reload the user list
+        await loadUsers();
+        
+        // Close the dialog after showing success message
         setTimeout(() => {
-          window.location.reload();
-        }, 1500);
+          setDialogOpen(false);
+          setSuccess(null);
+          setCreatingUser(false);
+        }, 2000);
       }
     } catch (err: any) {
       console.error("❌ User creation/update error:", err);
       
       const errorMessage = err.message || "Failed to save user.";
       
-      if (errorMessage.includes("already registered in the authentication system")) {
+      // Handle "User already registered" error
+      if (errorMessage.includes("already registered") || errorMessage.includes("already taken") || errorMessage.includes("already exists")) {
         setError(
-          `⚠️ User Creation Issue\n\n` +
-          errorMessage +
-          `\n\nThe user may have been created. Please click "Refresh" to verify.`
+          `⚠️ ${errorMessage}\n\n` +
+          `This username or email is already in use. Please:\n` +
+          `1. Choose a different username\n` +
+          `2. Use a different email address (if provided)\n` +
+          `3. Click "Refresh" to see if the user already exists in the list`
         );
-        
-        setTimeout(async () => {
-          console.log("🔄 Attempting to reload users after error...");
-          await loadUsers();
-        }, 2000);
-      } else if (errorMessage.includes("User already registered") || errorMessage.includes("already registered")) {
-        setError(
-          `⚠️ Username or email already exists!\n\n` +
-          `The username "${formData.username}" or associated email is already registered. ` +
-          `Please try a different username, or refresh the page to see if the user exists.`
-        );
-        
-        setTimeout(async () => {
-          await loadUsers();
-        }, 2000);
-      } else if (errorMessage.includes("already taken")) {
+      } else if (errorMessage.includes("Password is too weak")) {
         setError(errorMessage);
       } else {
         setError(`Failed to ${editingUser ? "update" : "create"} user: ${errorMessage}`);

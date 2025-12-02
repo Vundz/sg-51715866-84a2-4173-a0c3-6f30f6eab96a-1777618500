@@ -259,7 +259,10 @@ export const adminService = {
         throw new Error("Password is too weak. Please use a stronger password with at least 8 characters, including uppercase, lowercase, numbers, and special characters.");
       }
 
-      // Check if username already exists
+      // COMPREHENSIVE PRE-FLIGHT CHECKS
+      console.log("🔍 Running pre-flight checks for username:", username);
+      
+      // Check if username already exists in profiles table
       const usernameInUse = await this.usernameExists(username);
       if (usernameInUse) {
         throw new Error(`Username "${username}" is already taken. Please choose a different username.`);
@@ -269,13 +272,31 @@ export const adminService = {
       if (email) {
         const emailInUse = await this.emailExists(email);
         if (emailInUse) {
-          throw new Error(`A user with email "${email}" already exists.`);
+          throw new Error(`Email "${email}" is already registered. Please use a different email.`);
         }
       }
 
-      console.log("👤 Creating user - Username:", username, "Auth Email:", authEmail);
+      // Check auth.users table for the email to avoid "User already registered" error
+      console.log("🔍 Checking if auth user exists with email:", authEmail);
+      const { data: existingAuthUsers, error: authCheckError } = await supabase.auth.admin.listUsers();
+      
+      if (!authCheckError && existingAuthUsers) {
+        const authUserExists = existingAuthUsers.users.some(u => u.email === authEmail);
+        if (authUserExists) {
+          // Check if profile exists for this auth user
+          const existingUser = await this.getUserByUsername(username);
+          if (existingUser) {
+            throw new Error(`User "${username}" already exists in the system.`);
+          } else {
+            throw new Error(`An auth user with this email already exists but has no profile. Please contact support to resolve this issue.`);
+          }
+        }
+      }
+
+      console.log("✅ Pre-flight checks passed - creating user:", username);
 
       // Step 1: Create the auth user
+      console.log("👤 Creating auth user with email:", authEmail);
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: authEmail,
         password: password,
@@ -291,6 +312,18 @@ export const adminService = {
 
       if (authError) {
         console.error("❌ Supabase auth error:", authError);
+        
+        // Handle specific "User already registered" error
+        if (authError.message.includes("User already registered")) {
+          // Try to find the user in profiles
+          const existingProfile = await this.getUserByUsername(username);
+          if (existingProfile) {
+            throw new Error(`User "${username}" already exists. Please try logging in or use a different username.`);
+          } else {
+            throw new Error(`The email "${email || 'system email'}" is already registered in the authentication system. Please try a different ${email ? 'email' : 'username'}.`);
+          }
+        }
+        
         throw new Error(`Failed to create user account: ${authError.message}`);
       }
       
@@ -301,19 +334,18 @@ export const adminService = {
       console.log("✅ Auth user created successfully:", authData.user.id);
 
       // Step 2: MANUALLY create the profile record (bypass trigger)
-      // This is the key change - we don't rely on database triggers
       const profileData = {
         id: authData.user.id,
         username: username,
         full_name: fullName,
-        email: email || null, // Use real email or null (not internal email)
+        email: email || null,
         role: role,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         avatar_url: null,
       };
 
-      console.log("📝 Manually creating profile record:", profileData);
+      console.log("📝 Creating profile record:", profileData);
 
       const { data: createdProfile, error: profileError } = await supabase
         .from("profiles")
@@ -324,11 +356,17 @@ export const adminService = {
       if (profileError) {
         console.error("❌ Profile creation error:", profileError);
         
-        // If profile creation fails, try to clean up the auth user
-        // (Note: This might not always work, but we try)
-        console.warn("⚠️ Attempting to clean up auth user after profile creation failure");
+        // If profile already exists, that's actually okay - just fetch it
+        if (profileError.message?.includes("duplicate key") || profileError.code === "23505") {
+          console.log("⚠️ Profile already exists, fetching existing profile...");
+          const existingProfile = await this.getUser(authData.user.id);
+          if (existingProfile) {
+            console.log("✅ Found existing profile, returning it");
+            return existingProfile;
+          }
+        }
         
-        throw new Error(`Profile creation failed: ${profileError.message}. The auth user was created but profile setup failed. Please contact support.`);
+        throw new Error(`Profile creation failed: ${profileError.message}. Please try refreshing the page.`);
       }
 
       if (!createdProfile) {
@@ -336,6 +374,9 @@ export const adminService = {
       }
 
       console.log("✅ Profile created successfully:", createdProfile);
+      
+      // Force a small delay to ensure database consistency
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       return createdProfile as Profile;
 
