@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -16,7 +17,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { formatNumber } from "@/lib/format";
 import { useAuth } from "@/contexts/AuthContext";
 
-type HarvestPayload = Omit<Database["public"]["Tables"]["harvests"]["Row"], "id" | "created_at" | "updated_at">;
+type HarvestPayload = Omit&lt;Database["public"]["Tables"]["harvests"]["Row"], "id" | "created_at" | "updated_at"&gt;;
 
 interface SelectedHarvest {
   planting: PlantingWithDetails;
@@ -26,19 +27,30 @@ interface SelectedHarvest {
 
 export default function BulkHarvestPage() {
   const { user, profile } = useAuth();
-  const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
+  const [plantings, setPlantings] = useState&lt;PlantingWithDetails[]&gt;([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedHarvests, setSelectedHarvests] = useState<Record<string, SelectedHarvest>>({});
+  const [selectedHarvests, setSelectedHarvests] = useState&lt;Record&lt;string, SelectedHarvest&gt;&gt;({});
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  const [harvestedQuantities, setHarvestedQuantities] = useState<Record<string, number>>({});
+  const [validationErrors, setValidationErrors] = useState&lt;Record&lt;string, string&gt;&gt;({});
+  const [harvestedQuantities, setHarvestedQuantities] = useState&lt;Record&lt;string, number&gt;&gt;({});
   const { toast } = useToast();
   const router = useRouter();
 
   const isViewer = profile?.role === "viewer";
 
-  useEffect(() => {
+  const filteredPlantings = useMemo(() =&gt; {
+    if (!searchQuery) return plantings;
+    const query = searchQuery.toLowerCase();
+    return plantings.filter(p =&gt;
+      p.batch_number?.toLowerCase().includes(query) ||
+      p.plant_types?.name.toLowerCase().includes(query) ||
+      p.plant_types?.variety.toLowerCase().includes(query) ||
+      p.locations?.name.toLowerCase().includes(query)
+    );
+  }, [plantings, searchQuery]);
+  
+  useEffect(() =&gt; {
     if (isViewer) {
       toast({ 
         title: "Access Denied", 
@@ -49,16 +61,8 @@ export default function BulkHarvestPage() {
     }
   }, [isViewer, router, toast]);
 
-  if (isViewer) {
-    return (
-      <div className="max-w-7xl mx-auto p-8 text-center">
-        <p className="text-gray-600">Redirecting...</p>
-      </div>
-    );
-  }
-
-  useEffect(() => {
-    const loadPlantings = async () => {
+  useEffect(() =&gt; {
+    const loadPlantings = async () =&gt; {
       try {
         setLoading(true);
         const [plantingsData, harvestsData] = await Promise.all([
@@ -66,22 +70,20 @@ export default function BulkHarvestPage() {
           harvestService.getHarvests()
         ]);
         
-        // Calculate harvested quantities for each planting
-        const quantities: Record<string, number> = {};
-        plantingsData.forEach(p => {
+        const quantities: Record&lt;string, number&gt; = {};
+        plantingsData.forEach(p =&gt; {
           const totalHarvested = harvestsData
-            .filter(h => h.planting_id === p.id)
-            .reduce((sum, h) => sum + h.quantity_harvested, 0);
+            .filter(h =&gt; h.planting_id === p.id)
+            .reduce((sum, h) =&gt; sum + h.quantity_harvested, 0);
           quantities[p.id] = totalHarvested;
         });
         setHarvestedQuantities(quantities);
         
-        // Only show active plantings that have quantity remaining
-        const activePlantings = plantingsData.filter(p => {
+        const activePlantings = plantingsData.filter(p =&gt; {
           if (p.status !== 'active') return false;
           const totalHarvested = quantities[p.id] || 0;
           const available = p.quantity - totalHarvested;
-          return available > 0;
+          return available &gt; 0;
         });
         
         setPlantings(activePlantings);
@@ -95,39 +97,35 @@ export default function BulkHarvestPage() {
     loadPlantings();
   }, [toast]);
 
-  const filteredPlantings = useMemo(() => {
-    if (!searchQuery) return plantings;
-    const query = searchQuery.toLowerCase();
-    return plantings.filter(p =>
-      p.batch_number?.toLowerCase().includes(query) ||
-      p.plant_types?.name.toLowerCase().includes(query) ||
-      p.plant_types?.variety.toLowerCase().includes(query) ||
-      p.locations?.name.toLowerCase().includes(query)
+  if (isViewer) {
+    return (
+      &lt;div className="max-w-7xl mx-auto p-8 text-center"&gt;
+        &lt;p className="text-gray-600"&gt;Redirecting...&lt;/p&gt;
+      &lt;/div&gt;
     );
-  }, [plantings, searchQuery]);
+  }
 
-  const getAvailableQuantity = (planting: PlantingWithDetails): number => {
+  const getAvailableQuantity = (planting: PlantingWithDetails): number =&gt; {
     const totalHarvested = harvestedQuantities[planting.id] || 0;
     return planting.quantity - totalHarvested;
   };
 
-  const validateQuantity = (plantingId: string, quantity: number, available: number): string => {
-    if (quantity <= 0) {
+  const validateQuantity = (plantingId: string, quantity: number, available: number): string =&gt; {
+    if (quantity &lt;= 0) {
       return "Quantity must be greater than 0";
     }
-    if (quantity > available) {
+    if (quantity &gt; available) {
       return `Exceeds available: ${available}`;
     }
     return "";
   };
 
-  const handleSelect = (planting: PlantingWithDetails) => {
-    setSelectedHarvests(prev => {
+  const handleSelect = (planting: PlantingWithDetails) =&gt; {
+    setSelectedHarvests(prev =&gt; {
       const newSelected = { ...prev };
       if (newSelected[planting.id]) {
         delete newSelected[planting.id];
-        // Clear validation error for this planting
-        setValidationErrors(prevErrors => {
+        setValidationErrors(prevErrors =&gt; {
           const newErrors = { ...prevErrors };
           delete newErrors[planting.id];
           return newErrors;
@@ -139,15 +137,15 @@ export default function BulkHarvestPage() {
     });
   };
 
-  const handleQuantityChange = (plantingId: string, quantity: string) => {
+  const handleQuantityChange = (plantingId: string, quantity: string) =&gt; {
     const qty = parseInt(quantity, 10) || 0;
-    const planting = plantings.find(p => p.id === plantingId);
+    const planting = plantings.find(p =&gt; p.id === plantingId);
     if (!planting) return;
 
     const available = getAvailableQuantity(planting);
     const error = validateQuantity(plantingId, qty, available);
 
-    setSelectedHarvests(prev => ({
+    setSelectedHarvests(prev =&gt; ({
       ...prev,
       [plantingId]: { 
         ...prev[plantingId], 
@@ -156,7 +154,7 @@ export default function BulkHarvestPage() {
       },
     }));
 
-    setValidationErrors(prev => {
+    setValidationErrors(prev =&gt; {
       const newErrors = { ...prev };
       if (error) {
         newErrors[plantingId] = error;
@@ -167,12 +165,11 @@ export default function BulkHarvestPage() {
     });
   };
   
-  const handleSubmit = async () => {
-    // Filter harvests with valid quantities
-    const validHarvests = Object.values(selectedHarvests).filter(h => h.quantity > 0 && !h.error);
-    const invalidHarvests = Object.values(selectedHarvests).filter(h => h.quantity > 0 && h.error);
+  const handleSubmit = async () =&gt; {
+    const validHarvests = Object.values(selectedHarvests).filter(h =&gt; h.quantity &gt; 0 &amp;&amp; !h.error);
+    const invalidHarvests = Object.values(selectedHarvests).filter(h =&gt; h.quantity &gt; 0 &amp;&amp; h.error);
 
-    if (invalidHarvests.length > 0) {
+    if (invalidHarvests.length &gt; 0) {
       toast({ 
         title: "Validation Error", 
         description: `${invalidHarvests.length} planting(s) have invalid quantities. Please correct the highlighted rows.`,
@@ -186,7 +183,7 @@ export default function BulkHarvestPage() {
       return;
     }
     
-    const harvestsToCreate: HarvestPayload[] = validHarvests.map(h => ({
+    const harvestsToCreate: HarvestPayload[] = validHarvests.map(h =&gt; ({
       planting_id: h.planting.id,
       quantity_harvested: h.quantity,
       harvest_date: new Date().toISOString().split('T')[0],
@@ -210,136 +207,136 @@ export default function BulkHarvestPage() {
   };
 
   const selectionCount = Object.keys(selectedHarvests).length;
-  const validCount = Object.values(selectedHarvests).filter(h => h.quantity > 0 && !h.error).length;
+  const validCount = Object.values(selectedHarvests).filter(h =&gt; h.quantity &gt; 0 &amp;&amp; !h.error).length;
   const errorCount = Object.keys(validationErrors).length;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      <Link href="/harvests">
-        <Button variant="ghost" size="sm" className="gap-2 -ml-2">
-          <ArrowLeft className="w-4 h-4" />
+    &lt;div className="max-w-7xl mx-auto space-y-6"&gt;
+      &lt;Link href="/harvests"&gt;
+        &lt;Button variant="ghost" size="sm" className="gap-2 -ml-2"&gt;
+          &lt;ArrowLeft className="w-4 h-4" /&gt;
           Back to Harvests
-        </Button>
-      </Link>
-      <h1 className="text-4xl font-bold">Bulk Harvest</h1>
+        &lt;/Button&gt;
+      &lt;/Link&gt;
+      &lt;h1 className="text-4xl font-bold"&gt;Bulk Harvest&lt;/h1&gt;
       
-      {errorCount > 0 && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
+      {errorCount &gt; 0 &amp;&amp; (
+        &lt;Alert variant="destructive"&gt;
+          &lt;AlertCircle className="h-4 w-4" /&gt;
+          &lt;AlertDescription&gt;
             {errorCount} planting(s) have invalid quantities. Please review the highlighted rows below.
-          </AlertDescription>
-        </Alert>
+          &lt;/AlertDescription&gt;
+        &lt;/Alert&gt;
       )}
       
-      <Card>
-        <CardHeader>
-          <CardTitle>Select Plantings to Harvest</CardTitle>
-          <CardDescription>Search and select active plantings. Enter the quantity you wish to harvest from each.</CardDescription>
-          <div className="relative pt-2">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
+      &lt;Card&gt;
+        &lt;CardHeader&gt;
+          &lt;CardTitle&gt;Select Plantings to Harvest&lt;/CardTitle&gt;
+          &lt;CardDescription&gt;Search and select active plantings. Enter the quantity you wish to harvest from each.&lt;/CardDescription&gt;
+          &lt;div className="relative pt-2"&gt;
+            &lt;Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" /&gt;
+            &lt;Input
               placeholder="Search by Batch, Variety, Plant Type, or Location..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) =&gt; setSearchQuery(e.target.value)}
               className="pl-10"
-            />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[50px]"></TableHead>
-                  <TableHead>Plant Name</TableHead>
-                  <TableHead>Variety</TableHead>
-                  <TableHead>Batch</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Available Qty</TableHead>
-                  <TableHead className="w-[200px]">Harvest Qty</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            /&gt;
+          &lt;/div&gt;
+        &lt;/CardHeader&gt;
+        &lt;CardContent&gt;
+          &lt;div className="border rounded-md"&gt;
+            &lt;Table&gt;
+              &lt;TableHeader&gt;
+                &lt;TableRow&gt;
+                  &lt;TableHead className="w-[50px]"&gt;&lt;/TableHead&gt;
+                  &lt;TableHead&gt;Plant Name&lt;/TableHead&gt;
+                  &lt;TableHead&gt;Variety&lt;/TableHead&gt;
+                  &lt;TableHead&gt;Batch&lt;/TableHead&gt;
+                  &lt;TableHead&gt;Location&lt;/TableHead&gt;
+                  &lt;TableHead&gt;Available Qty&lt;/TableHead&gt;
+                  &lt;TableHead className="w-[200px]"&gt;Harvest Qty&lt;/TableHead&gt;
+                &lt;/TableRow&gt;
+              &lt;/TableHeader&gt;
+              &lt;TableBody&gt;
                 {loading ? (
-                  <TableRow><TableCell colSpan={7} className="text-center h-24">Loading plantings...</TableCell></TableRow>
-                ) : filteredPlantings.length > 0 ? (
-                  filteredPlantings.map(p => {
+                  &lt;TableRow&gt;&lt;TableCell colSpan={7} className="text-center h-24"&gt;Loading plantings...&lt;/TableCell&gt;&lt;/TableRow&gt;
+                ) : filteredPlantings.length &gt; 0 ? (
+                  filteredPlantings.map(p =&gt; {
                     const available = getAvailableQuantity(p);
                     const hasError = validationErrors[p.id];
                     const isSelected = !!selectedHarvests[p.id];
                     
                     return (
-                      <TableRow 
+                      &lt;TableRow 
                         key={p.id} 
                         data-state={isSelected ? 'selected' : ''}
                         className={hasError ? 'bg-red-50 dark:bg-red-950/20' : ''}
-                      >
-                        <TableCell>
-                          <Checkbox
+                      &gt;
+                        &lt;TableCell&gt;
+                          &lt;Checkbox
                             checked={isSelected}
-                            onCheckedChange={() => handleSelect(p)}
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">{p.plant_types?.name}</TableCell>
-                        <TableCell>{p.plant_types?.variety}</TableCell>
-                        <TableCell className="font-mono text-xs">{p.batch_number}</TableCell>
-                        <TableCell>{p.locations?.name}</TableCell>
-                        <TableCell className="font-semibold">{formatNumber(available)}</TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <Input
+                            onCheckedChange={() =&gt; handleSelect(p)}
+                          /&gt;
+                        &lt;/TableCell&gt;
+                        &lt;TableCell className="font-medium"&gt;{p.plant_types?.name}&lt;/TableCell&gt;
+                        &lt;TableCell&gt;{p.plant_types?.variety}&lt;/TableCell&gt;
+                        &lt;TableCell className="font-mono text-xs"&gt;{p.batch_number}&lt;/TableCell&gt;
+                        &lt;TableCell&gt;{p.locations?.name}&lt;/TableCell&gt;
+                        &lt;TableCell className="font-semibold"&gt;{formatNumber(available)}&lt;/TableCell&gt;
+                        &lt;TableCell&gt;
+                          &lt;div className="space-y-1"&gt;
+                            &lt;Input
                               type="number"
                               value={selectedHarvests[p.id]?.quantity || ""}
-                              onChange={(e) => handleQuantityChange(p.id, e.target.value)}
+                              onChange={(e) =&gt; handleQuantityChange(p.id, e.target.value)}
                               disabled={!isSelected}
                               placeholder="0"
                               max={available}
                               className={hasError ? "border-red-500 focus-visible:ring-red-500" : ""}
-                            />
-                            {hasError && (
-                              <p className="text-xs text-red-600 flex items-center gap-1">
-                                <AlertCircle className="w-3 h-3" />
+                            /&gt;
+                            {hasError &amp;&amp; (
+                              &lt;p className="text-xs text-red-600 flex items-center gap-1"&gt;
+                                &lt;AlertCircle className="w-3 h-3" /&gt;
                                 {hasError}
-                              </p>
+                              &lt;/p&gt;
                             )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                          &lt;/div&gt;
+                        &lt;/TableCell&gt;
+                      &lt;/TableRow&gt;
                     );
                   })
                 ) : (
-                  <TableRow><TableCell colSpan={7} className="text-center h-24">No active plantings found.</TableCell></TableRow>
+                  &lt;TableRow&gt;&lt;TableCell colSpan={7} className="text-center h-24"&gt;No active plantings found.&lt;/TableCell&gt;&lt;/TableRow&gt;
                 )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+              &lt;/TableBody&gt;
+            &lt;/Table&gt;
+          &lt;/div&gt;
+        &lt;/CardContent&gt;
+      &lt;/Card&gt;
       
-      <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
-        <div className="space-y-1">
-          <span className="font-medium block">{selectionCount} item(s) selected</span>
-          {errorCount > 0 && (
-            <span className="text-sm text-red-600">
+      &lt;div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border"&gt;
+        &lt;div className="space-y-1"&gt;
+          &lt;span className="font-medium block"&gt;{selectionCount} item(s) selected&lt;/span&gt;
+          {errorCount &gt; 0 &amp;&amp; (
+            &lt;span className="text-sm text-red-600"&gt;
               {errorCount} error(s) - {validCount} valid harvest(s) ready
-            </span>
+            &lt;/span&gt;
           )}
-          {errorCount === 0 && validCount > 0 && (
-            <span className="text-sm text-green-600">
+          {errorCount === 0 &amp;&amp; validCount &gt; 0 &amp;&amp; (
+            &lt;span className="text-sm text-green-600"&gt;
               All {validCount} harvest(s) are valid
-            </span>
+            &lt;/span&gt;
           )}
-        </div>
-        <Button 
+        &lt;/div&gt;
+        &lt;Button 
           onClick={handleSubmit} 
-          disabled={isSaving || validCount === 0 || errorCount > 0} 
+          disabled={isSaving || validCount === 0 || errorCount &gt; 0} 
           className="gap-2"
-        >
-          <Save className="w-4 h-4" />
+        &gt;
+          &lt;Save className="w-4 h-4" /&gt;
           {isSaving ? "Saving..." : `Save ${validCount} Harvest(s)`}
-        </Button>
-      </div>
-    </div>
+        &lt;/Button&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
   );
 }
