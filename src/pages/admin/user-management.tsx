@@ -102,16 +102,22 @@ export default function UserManagementPage() {
     try {
       setLoading(true);
       setError(null);
-      console.log("🔄 Loading users from database...");
       
-      // Clear any existing users first to force re-render
+      // AGGRESSIVE CACHE BUSTING: Add timestamp to force fresh query
+      const timestamp = Date.now();
+      console.log(`🔄 [${timestamp}] Loading users from database...`);
+      
+      // Clear any existing users to force re-render
       setUsers([]);
       
+      // Force a small delay to ensure state is cleared
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const usersData = await adminService.getAllUsers();
-      console.log(`✓ Users loaded: ${usersData.length} users`);
+      console.log(`✅ [${timestamp}] Loaded ${usersData.length} users:`, usersData.map(u => u.username));
       
       setUsers(usersData);
-      setRefreshKey(prev => prev + 1); // Force component refresh
+      setRefreshKey(prev => prev + 1);
     } catch (err: any) {
       console.error("❌ Error loading users:", err);
       setError(err.message || "Failed to load users.");
@@ -170,10 +176,8 @@ export default function UserManagementPage() {
         });
         setSuccess("User updated successfully!");
         
-        // Reload users list immediately for updates
         await loadUsers();
         
-        // Close dialog after showing success message
         setTimeout(() => {
           setDialogOpen(false);
           setSuccess(null);
@@ -189,7 +193,6 @@ export default function UserManagementPage() {
         console.log("👤 Creating new user:", formData.username);
         setSuccess("Creating user...");
         
-        // Create user with optional email
         const newUser = await adminService.createUser(
           formData.username,
           formData.password,
@@ -199,54 +202,28 @@ export default function UserManagementPage() {
         );
         
         console.log("✅ User created successfully:", newUser.id);
+        setSuccess(`✅ User "${formData.username}" created! Refreshing list...`);
         
-        // COMPREHENSIVE REFRESH STRATEGY:
-        
-        // 1. Immediately add to local state
-        setUsers(prevUsers => [newUser, ...prevUsers]);
-        console.log("✅ User added to local state");
-        
-        // 2. Force component re-render with key increment
-        setRefreshKey(prev => prev + 1);
-        console.log("✅ Refresh key updated");
-        
-        // 3. Verify the user is now in the list
-        const verifyUser = await adminService.getUserByUsername(formData.username);
-        if (verifyUser) {
-          console.log("✅ Verified user exists in database:", verifyUser.id);
-        } else {
-          console.warn("⚠️ User not found in verification check");
-        }
-        
-        // 4. Reload the full user list from database
-        console.log("🔄 Refreshing user list from database...");
-        await loadUsers();
-        
-        setSuccess(`✅ User "${formData.username}" created successfully!`);
-        
-        // Close dialog after success
+        // SOLUTION: Force a complete page reload to bypass ALL caching
+        // This is the most reliable way to ensure fresh data
         setTimeout(() => {
-          setDialogOpen(false);
-          setSuccess(null);
-          setCreatingUser(false);
-        }, 2000);
+          window.location.reload();
+        }, 1500);
       }
     } catch (err: any) {
       console.error("❌ User creation/update error:", err);
       
       const errorMessage = err.message || "Failed to save user.";
       
-      // Check if the error indicates the user exists but isn't visible
       if (errorMessage.includes("already registered in the authentication system")) {
         setError(
           `⚠️ User Creation Issue\n\n` +
           errorMessage +
-          `\n\nPlease click the "Refresh" button or reload the page to check if the user appears.`
+          `\n\nThe user may have been created. Please click "Refresh" to verify.`
         );
         
-        // Try to reload users anyway
         setTimeout(async () => {
-          console.log("🔄 Attempting to reload users after 'already registered' error...");
+          console.log("🔄 Attempting to reload users after error...");
           await loadUsers();
         }, 2000);
       } else if (errorMessage.includes("User already registered") || errorMessage.includes("already registered")) {
@@ -256,7 +233,6 @@ export default function UserManagementPage() {
           `Please try a different username, or refresh the page to see if the user exists.`
         );
         
-        // Try to reload users
         setTimeout(async () => {
           await loadUsers();
         }, 2000);

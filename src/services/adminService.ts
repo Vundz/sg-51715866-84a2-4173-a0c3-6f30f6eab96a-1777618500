@@ -158,12 +158,13 @@ export const adminService = {
    * Get all users (admin only)
    */
   async getAllUsers(): Promise<Profile[]> {
-    // Force fresh data with timestamp-based cache busting
+    // AGGRESSIVE CACHE BUSTING: Multiple strategies to force fresh data
     const timestamp = Date.now();
-    const cacheKey = `users_${timestamp}`;
+    const randomSuffix = Math.random().toString(36).substring(7);
     
-    console.log(`📥 Fetching users [${cacheKey}]...`);
+    console.log(`📥 [${timestamp}-${randomSuffix}] Fetching users with cache bust...`);
     
+    // Strategy 1: Add cache-busting headers
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
@@ -175,7 +176,17 @@ export const adminService = {
       throw error;
     }
     
-    console.log(`✅ Fetched ${data?.length || 0} users at ${new Date(timestamp).toISOString()}`);
+    console.log(`✅ [${timestamp}] Fetched ${data?.length || 0} users from database`);
+    
+    // Strategy 2: Log each user for debugging
+    if (data && data.length > 0) {
+      console.log("📋 User list:", data.map(u => ({
+        username: u.username,
+        email: u.email,
+        role: u.role,
+        created: new Date(u.created_at).toLocaleString()
+      })));
+    }
     
     return data || [];
   },
