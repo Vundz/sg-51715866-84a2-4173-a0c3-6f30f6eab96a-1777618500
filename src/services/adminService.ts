@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import type { User } from "@supabase/supabase-js";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type Permission = Database["public"]["Tables"]["permissions"]["Row"];
@@ -281,7 +282,7 @@ export const adminService = {
       const { data: existingAuthUsers, error: authCheckError } = await supabase.auth.admin.listUsers();
       
       if (!authCheckError && existingAuthUsers) {
-        const authUserExists = existingAuthUsers.users.some(u => u.email === authEmail);
+        const authUserExists = existingAuthUsers.users.some((u: User) => u.email === authEmail);
         if (authUserExists) {
           // Check if profile exists for this auth user
           const existingUser = await this.getUserByUsername(username);
