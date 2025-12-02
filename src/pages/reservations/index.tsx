@@ -721,7 +721,7 @@ const ReservationsPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{editingReservation ? "Edit Reservation" : "Add New Reservation"}</DialogTitle>
             <DialogDescription>
-              {editingReservation ? "Update the reservation details." : "Create a new customer reservation. Each batch can filter by variety independently."}
+              {isViewer ? "Viewing reservation details. No changes can be made." : (editingReservation ? "Update the reservation details." : "Create a new customer reservation. Each batch can filter by variety independently.")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveReservation} className="space-y-4 pt-4">
@@ -773,6 +773,7 @@ const ReservationsPage: React.FC = () => {
                         <Select 
                           value={selection.varietyFilter || "all"} 
                           onValueChange={(value) => handleBatchSelectionChange(selection.id, "varietyFilter", value === "all" ? "" : value)}
+                          disabled={isViewer}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="All varieties" />
@@ -797,7 +798,7 @@ const ReservationsPage: React.FC = () => {
                           <Select 
                             value={selection.planting_id} 
                             onValueChange={(value) => handleBatchSelectionChange(selection.id, "planting_id", value)}
-                            disabled={!!editingReservation}
+                            disabled={!!editingReservation || isViewer}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select a batch" />
@@ -835,6 +836,7 @@ const ReservationsPage: React.FC = () => {
                               onChange={(e) => handleBatchSelectionChange(selection.id, "quantity", parseInt(e.target.value) || 0)}
                               placeholder="Enter quantity"
                               required
+                              disabled={isViewer}
                             />
                             {selection.quantity > 0 && (
                               <div className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
@@ -882,6 +884,7 @@ const ReservationsPage: React.FC = () => {
                     name="customer_name" 
                     defaultValue={editingReservation?.customer_name || ""} 
                     required 
+                    disabled={isViewer}
                   />
                 </div>
                 <div className="space-y-2">
@@ -892,6 +895,7 @@ const ReservationsPage: React.FC = () => {
                     type="tel" 
                     defaultValue={editingReservation?.customer_phone || ""} 
                     required 
+                    disabled={isViewer}
                   />
                 </div>
               </div>
@@ -902,6 +906,7 @@ const ReservationsPage: React.FC = () => {
                   name="customer_email" 
                   type="email" 
                   defaultValue={editingReservation?.customer_email || ""} 
+                  disabled={isViewer}
                 />
               </div>
             </div>
@@ -917,6 +922,7 @@ const ReservationsPage: React.FC = () => {
                     type="date" 
                     defaultValue={editingReservation?.reserved_date ? new Date(editingReservation.reserved_date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]} 
                     required 
+                    disabled={isViewer}
                   />
                 </div>
                 <div className="space-y-2">
@@ -926,6 +932,7 @@ const ReservationsPage: React.FC = () => {
                     name="collection_date" 
                     type="date" 
                     defaultValue={editingReservation?.collection_date ? new Date(editingReservation.collection_date).toISOString().split("T")[0] : ""} 
+                    disabled={isViewer}
                   />
                   <p className="text-xs text-gray-500">When customer wants to collect</p>
                 </div>
@@ -937,7 +944,7 @@ const ReservationsPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="payment_status">Payment Status</Label>
-                  <Select name="payment_status" defaultValue={editingReservation?.payment_status || "pending"}>
+                  <Select name="payment_status" defaultValue={editingReservation?.payment_status || "pending"} disabled={isViewer}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -956,6 +963,7 @@ const ReservationsPage: React.FC = () => {
                     type="number" 
                     step="0.01" 
                     defaultValue={editingReservation?.total_amount || ""} 
+                    disabled={isViewer}
                   />
                 </div>
                 <div className="space-y-2">
@@ -966,6 +974,7 @@ const ReservationsPage: React.FC = () => {
                     type="number" 
                     step="0.01" 
                     defaultValue={editingReservation?.amount_paid || ""} 
+                    disabled={isViewer}
                   />
                 </div>
               </div>
@@ -979,17 +988,26 @@ const ReservationsPage: React.FC = () => {
                 rows={3} 
                 defaultValue={editingReservation?.notes || ""} 
                 placeholder="Additional information..." 
+                disabled={isViewer}
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={handleCloseDialog}>
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                Save Reservation
-              </Button>
-            </div>
+            {!isViewer ? (
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button type="button" variant="outline" onClick={handleCloseDialog}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                  Save Reservation
+                </Button>
+              </div>
+            ) : (
+               <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button type="button" variant="outline" onClick={handleCloseDialog}>
+                  Close
+                </Button>
+              </div>
+            )}
           </form>
         </DialogContent>
       </Dialog>

@@ -135,36 +135,42 @@ export default function PlantTypesPage() {
           <DialogHeader>
             <DialogTitle>{editingPlantType ? "Edit Plant Type" : "Add Plant Type"}</DialogTitle>
             <DialogDescription>
-              {editingPlantType ? "Update the details for this plant type." : "Create a new plant type and variety."}
+             {isViewer ? "Viewing plant type details. No changes can be made." : (editingPlantType ? "Update the details for this plant type." : "Create a new plant type and variety.")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSavePlantType} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Plant Name <span className="text-red-500">*</span></Label>
-              <Input id="name" name="name" defaultValue={editingPlantType?.name} required />
+              <Input id="name" name="name" defaultValue={editingPlantType?.name} required disabled={isViewer}/>
             </div>
             <div className="space-y-2">
               <Label htmlFor="variety">Variety <span className="text-red-500">*</span></Label>
-              <Input id="variety" name="variety" defaultValue={editingPlantType?.variety} required />
+              <Input id="variety" name="variety" defaultValue={editingPlantType?.variety} required disabled={isViewer}/>
             </div>
              <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" name="description" defaultValue={editingPlantType?.description ?? ''} />
+              <Textarea id="description" name="description" defaultValue={editingPlantType?.description ?? ''} disabled={isViewer}/>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="growth_duration">Growth Duration (days) <span className="text-red-500">*</span></Label>
-                <Input id="growth_duration" name="growth_duration" type="number" defaultValue={editingPlantType?.growth_duration} required />
+                <Input id="growth_duration" name="growth_duration" type="number" defaultValue={editingPlantType?.growth_duration} required disabled={isViewer}/>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="germination_rate">Germination Rate (%)</Label>
-                <Input id="germination_rate" name="germination_rate" type="number" min="0" max="100" defaultValue={editingPlantType?.germination_rate ?? ''} />
+                <Input id="germination_rate" name="germination_rate" type="number" min="0" max="100" defaultValue={editingPlantType?.germination_rate ?? ''} disabled={isViewer}/>
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" className="bg-green-600 hover:bg-green-700">Save</Button>
-            </div>
+            {!isViewer ? (
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" className="bg-green-600 hover:bg-green-700">Save</Button>
+              </div>
+            ) : (
+               <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Close</Button>
+              </div>
+            )}
           </form>
         </DialogContent>
       </Dialog>

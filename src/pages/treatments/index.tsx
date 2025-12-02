@@ -221,7 +221,7 @@ export default function TreatmentsPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingTreatment ? "Edit Treatment" : "Add New Treatment"}</DialogTitle>
-            <DialogDescription>{isBulkMode ? "Apply the same treatment to multiple plantings at once." : "Log a single treatment application."}</DialogDescription>
+            <DialogDescription>{isViewer ? "Viewing treatment details. No changes can be made." : (isBulkMode ? "Apply the same treatment to multiple plantings at once." : "Log a single treatment application.")}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveTreatment} className="space-y-4 pt-4">
             {isBulkMode ? (
@@ -232,7 +232,7 @@ export default function TreatmentsPage() {
                     const details = getPlantingDetails(p.id);
                     return (
                     <div key={p.id} className="flex items-center gap-2 mb-2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
-                      <Checkbox id={`bulk-${p.id}`} checked={selectedPlantingIds.includes(p.id)} onCheckedChange={() => togglePlantingSelection(p.id)} />
+                      <Checkbox id={`bulk-${p.id}`} checked={selectedPlantingIds.includes(p.id)} onCheckedChange={() => togglePlantingSelection(p.id)} disabled={isViewer}/>
                       <Label htmlFor={`bulk-${p.id}`} className="font-normal w-full">{details.name} ({details.variety}) - Planted: {details.datePlanted}</Label>
                     </div>
                   )})}
@@ -241,7 +241,7 @@ export default function TreatmentsPage() {
             ) : (
               <div className="space-y-2">
                 <Label htmlFor="planting_id">Select Planting *</Label>
-                <Select name="planting_id" required defaultValue={editingTreatment?.plantings?.[0]?.id} onValueChange={(val) => setSelectedPlantingIds([val])}>
+                <Select name="planting_id" required defaultValue={editingTreatment?.plantings?.[0]?.id} onValueChange={(val) => setSelectedPlantingIds([val])} disabled={isViewer || !!editingTreatment}>
                   <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
                   <SelectContent>
                     {activePlantings.map(p => (
@@ -252,19 +252,25 @@ export default function TreatmentsPage() {
               </div>
             )}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label htmlFor="name">Chemical/Fertilizer Name *</Label><Input id="name" name="name" defaultValue={editingTreatment?.name || ""} required /></div>
-              <div className="space-y-2"><Label htmlFor="type">Treatment Type *</Label><Select name="type" required defaultValue={editingTreatment?.type || undefined}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="fungicide">Fungicide</SelectItem><SelectItem value="pesticide">Pesticide</SelectItem><SelectItem value="fertilizer">Fertilizer</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="name">Chemical/Fertilizer Name *</Label><Input id="name" name="name" defaultValue={editingTreatment?.name || ""} required disabled={isViewer}/></div>
+              <div className="space-y-2"><Label htmlFor="type">Treatment Type *</Label><Select name="type" required defaultValue={editingTreatment?.type || undefined} disabled={isViewer}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="fungicide">Fungicide</SelectItem><SelectItem value="pesticide">Pesticide</SelectItem><SelectItem value="fertilizer">Fertilizer</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label htmlFor="dosage">Dosage</Label><Input id="dosage" name="dosage" defaultValue={editingTreatment?.dosage || ""} /></div>
-              <div className="space-y-2"><Label htmlFor="application_method">Application Method</Label><Select name="application_method" defaultValue={editingTreatment?.application_method || undefined}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="drench">Drench</SelectItem><SelectItem value="spray">Spray</SelectItem><SelectItem value="granular">Granular</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="dosage">Dosage</Label><Input id="dosage" name="dosage" defaultValue={editingTreatment?.dosage || ""} disabled={isViewer}/></div>
+              <div className="space-y-2"><Label htmlFor="application_method">Application Method</Label><Select name="application_method" defaultValue={editingTreatment?.application_method || undefined} disabled={isViewer}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="drench">Drench</SelectItem><SelectItem value="spray">Spray</SelectItem><SelectItem value="granular">Granular</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label htmlFor="application_date">Application Date *</Label><Input id="application_date" name="application_date" type="date" defaultValue={editingTreatment?.application_date ? new Date(editingTreatment.application_date).toISOString().split('T')[0] : new Date().toISOString().split("T")[0]} required /></div>
-              <div className="space-y-2"><Label htmlFor="applied_by">Applied By</Label><Input id="applied_by" name="applied_by" defaultValue={editingTreatment?.applied_by || ""} /></div>
+              <div className="space-y-2"><Label htmlFor="application_date">Application Date *</Label><Input id="application_date" name="application_date" type="date" defaultValue={editingTreatment?.application_date ? new Date(editingTreatment.application_date).toISOString().split('T')[0] : new Date().toISOString().split("T")[0]} required disabled={isViewer}/></div>
+              <div className="space-y-2"><Label htmlFor="applied_by">Applied By</Label><Input id="applied_by" name="applied_by" defaultValue={editingTreatment?.applied_by || ""} disabled={isViewer}/></div>
             </div>
-            <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" name="notes" defaultValue={editingTreatment?.notes || ""} /></div>
-            <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="outline" onClick={handleCloseDialog}>Cancel</Button><Button type="submit" className="bg-cyan-600 hover:bg-cyan-700">Save Treatment</Button></div>
+            <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" name="notes" defaultValue={editingTreatment?.notes || ""} disabled={isViewer}/></div>
+            {!isViewer ? (
+              <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="outline" onClick={handleCloseDialog}>Cancel</Button><Button type="submit" className="bg-cyan-600 hover:bg-cyan-700">Save Treatment</Button></div>
+            ) : (
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={handleCloseDialog}>Close</Button>
+              </div>
+            )}
           </form>
         </DialogContent>
       </Dialog>

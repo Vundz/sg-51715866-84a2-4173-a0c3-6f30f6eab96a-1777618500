@@ -327,6 +327,9 @@ export default function HarvestsPage() {
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>{editingHarvest ? "Edit Harvest" : "Add New Harvest"}</DialogTitle>
+            <DialogDescription>
+              {isViewer ? "Viewing harvest details. No changes can be made." : (editingHarvest ? "Update harvest details." : "Log a new harvest record.")}
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveHarvest} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -337,6 +340,7 @@ export default function HarvestsPage() {
                   defaultValue={editingHarvest?.planting_id}
                   onValueChange={handlePlantingChange}
                   required
+                  disabled={isViewer || !!editingHarvest}
                 >
                   <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
                   <SelectContent>
@@ -361,7 +365,7 @@ export default function HarvestsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="harvest_date">Harvest Date</Label>
-                <Input id="harvest_date" name="harvest_date" type="date" defaultValue={editingHarvest?.harvest_date.split('T')[0]} required />
+                <Input id="harvest_date" name="harvest_date" type="date" defaultValue={editingHarvest?.harvest_date.split('T')[0]} required disabled={isViewer}/>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -376,6 +380,7 @@ export default function HarvestsPage() {
                   onChange={(e) => handleQuantityChange(e.target.value)}
                   className={quantityError ? "border-red-500 focus-visible:ring-red-500" : ""}
                   required 
+                  disabled={isViewer}
                 />
                 {quantityError && (
                   <p className="text-sm text-red-600 flex items-center gap-1">
@@ -386,7 +391,7 @@ export default function HarvestsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="quality">Quality</Label>
-                <Select name="quality" defaultValue={editingHarvest?.quality ?? 'good'}>
+                <Select name="quality" defaultValue={editingHarvest?.quality ?? 'good'} disabled={isViewer}>
                   <SelectTrigger><SelectValue placeholder="Select quality" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="excellent">Excellent</SelectItem>
@@ -399,7 +404,7 @@ export default function HarvestsPage() {
             </div>
              <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
-                <Select name="status" defaultValue={editingHarvest?.status ?? 'harvested'}>
+                <Select name="status" defaultValue={editingHarvest?.status ?? 'harvested'} disabled={isViewer}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
@@ -413,23 +418,29 @@ export default function HarvestsPage() {
               </div>
             <div className="space-y-2">
               <Label htmlFor="notes">Notes</Label>
-              <Textarea id="notes" name="notes" defaultValue={editingHarvest?.notes ?? ""} />
+              <Textarea id="notes" name="notes" defaultValue={editingHarvest?.notes ?? ""} disabled={isViewer}/>
             </div>
-            <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => {
-                setIsDialogOpen(false);
-                setSelectedPlantingId("");
-                setHarvestQuantity(0);
-                setQuantityError("");
-              }}>Cancel</Button>
-              <Button 
-                type="submit" 
-                className="bg-blue-600 hover:bg-blue-700"
-                disabled={!!quantityError || harvestQuantity === 0}
-              >
-                Save Harvest
-              </Button>
-            </div>
+            {!isViewer ? (
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => {
+                  setIsDialogOpen(false);
+                  setSelectedPlantingId("");
+                  setHarvestQuantity(0);
+                  setQuantityError("");
+                }}>Cancel</Button>
+                <Button 
+                  type="submit" 
+                  className="bg-blue-600 hover:bg-blue-700"
+                  disabled={!!quantityError || harvestQuantity === 0}
+                >
+                  Save Harvest
+                </Button>
+              </div>
+            ) : (
+              <div className="flex justify-end pt-4">
+                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Close</Button>
+              </div>
+            )}
           </form>
         </DialogContent>
       </Dialog>

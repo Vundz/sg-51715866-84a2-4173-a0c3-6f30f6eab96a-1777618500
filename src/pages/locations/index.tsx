@@ -178,28 +178,34 @@ export default function LocationsPage() {
           <DialogHeader>
             <DialogTitle>{editingLocation ? "Edit" : "Add"} Location</DialogTitle>
             <DialogDescription>
-              {editingLocation ? "Update the details of this location." : "Create a new location for your plantings."}
+              {isViewer ? "Viewing location details. No changes can be made." : (editingLocation ? "Update the details of this location." : "Create a new location for your plantings.")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveLocation} className="space-y-4 pt-4">
             <div className="space-y-2">
               <Label htmlFor="name">Location Name</Label>
-              <Input id="name" name="name" defaultValue={editingLocation?.name} required />
+              <Input id="name" name="name" defaultValue={editingLocation?.name} required disabled={isViewer}/>
             </div>
             <div className="space-y-2">
               <Label htmlFor="type">Location Type</Label>
-              <Input id="type" name="type" defaultValue={editingLocation?.type || "Greenhouse"} required />
+              <Input id="type" name="type" defaultValue={editingLocation?.type || "Greenhouse"} required disabled={isViewer}/>
             </div>
             <div className="space-y-2">
               <Label htmlFor="capacity">Capacity</Label>
-              <Input id="capacity" name="capacity" type="number" defaultValue={editingLocation?.capacity || ""} required />
+              <Input id="capacity" name="capacity" type="number" defaultValue={editingLocation?.capacity || ""} required disabled={isViewer}/>
             </div>
-            <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" className="bg-green-600 hover:bg-green-700" disabled={loading}>
-                {loading ? "Saving..." : "Save"}
-              </Button>
-            </div>
+            {!isViewer ? (
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" className="bg-green-600 hover:bg-green-700" disabled={loading}>
+                  {loading ? "Saving..." : "Save"}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex justify-end gap-2 pt-4">
+                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Close</Button>
+              </div>
+            )}
           </form>
         </DialogContent>
       </Dialog>

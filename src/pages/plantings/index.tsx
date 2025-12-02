@@ -552,7 +552,7 @@ export default function PlantingsPage() {
           <DialogHeader>
             <DialogTitle>{editingPlanting ? "Edit" : "Add"} Planting</DialogTitle>
             <DialogDescription>
-              {editingPlanting ? "Update the details for this planting." : "Log a new batch of seedlings."}
+              {isViewer ? "Viewing planting details. No changes can be made." : (editingPlanting ? "Update the details for this planting." : "Log a new batch of seedlings.")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSavePlanting} className="space-y-4 pt-4">
@@ -565,6 +565,7 @@ export default function PlantingsPage() {
                   value={selectedPlantTypeName} 
                   onValueChange={handlePlantTypeChange}
                   required
+                  disabled={isViewer || !!editingPlanting}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a plant type" />
@@ -584,7 +585,7 @@ export default function PlantingsPage() {
                   name="variety"
                   value={selectedVariety} 
                   onValueChange={setSelectedVariety}
-                  disabled={!selectedPlantTypeName}
+                  disabled={!selectedPlantTypeName || isViewer || !!editingPlanting}
                   required
                 >
                   <SelectTrigger>
@@ -601,7 +602,7 @@ export default function PlantingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="location_id">Location</Label>
-                <Select name="location_id" required defaultValue={editingPlanting?.location_id}>
+                <Select name="location_id" required defaultValue={editingPlanting?.location_id} disabled={isViewer}>
                   <SelectTrigger><SelectValue placeholder="Select a location" /></SelectTrigger>
                   <SelectContent>
                     {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
@@ -616,6 +617,7 @@ export default function PlantingsPage() {
                   type="number" 
                   defaultValue={editingPlanting?.quantity} 
                   required 
+                  disabled={isViewer}
                   onChange={(e) => {
                     const qty = parseInt(e.target.value) || 0;
                     const trays = Math.round(qty / 220);
@@ -648,12 +650,12 @@ export default function PlantingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="date_planted">Date Planted</Label>
-                <Input id="date_planted" name="date_planted" type="date" defaultValue={editingPlanting?.date_planted || new Date().toISOString().split('T')[0]} required />
+                <Input id="date_planted" name="date_planted" type="date" defaultValue={editingPlanting?.date_planted || new Date().toISOString().split('T')[0]} required disabled={isViewer} />
               </div>
               {editingPlanting && (
                 <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
-                  <Select name="status" defaultValue={editingPlanting?.status}>
+                  <Select name="status" defaultValue={editingPlanting?.status} disabled={isViewer}>
                     <SelectTrigger><SelectValue/></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="active">Active</SelectItem>
@@ -664,10 +666,16 @@ export default function PlantingsPage() {
                 </div>
               )}
             </div>
-            <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" className="bg-lime-600 hover:bg-lime-700">Save Planting</Button>
-            </div>
+            {!isViewer ? (
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" className="bg-lime-600 hover:bg-lime-700">Save Planting</Button>
+              </div>
+            ) : (
+              <div className="flex justify-end pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Close</Button>
+              </div>
+            )}
           </form>
         </DialogContent>
       </Dialog>
