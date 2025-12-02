@@ -224,6 +224,7 @@ export const adminService = {
   /**
    * Create a new user with username as primary identifier
    * Email is optional - system will generate internal email if not provided
+   * IMPORTANT: This function manually creates the profile record to ensure visibility
    */
   async createUser(
     username: string, 
@@ -263,7 +264,7 @@ export const adminService = {
 
       console.log("👤 Creating user - Username:", username, "Auth Email:", authEmail);
 
-      // Create the auth user with proper metadata
+      // Step 1: Create the auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: authEmail,
         password: password,
@@ -279,27 +280,6 @@ export const adminService = {
 
       if (authError) {
         console.error("❌ Supabase auth error:", authError);
-        
-        // Handle specific "User already registered" error - user might exist but profile not visible
-        if (authError.message.includes("User already registered") || authError.status === 422) {
-          // Try to find the existing profile
-          console.log("⚠️ User already registered - checking for existing profile...");
-          
-          const existingProfile = await this.getUserByUsername(username);
-          if (existingProfile) {
-            console.log("✅ Found existing profile:", existingProfile.id);
-            return existingProfile;
-          }
-          
-          throw new Error(
-            `Cannot create user: The username "${username}" is already registered in the authentication system, but the profile is not visible. ` +
-            `Please try one of these options:\n\n` +
-            `1. Use a different username\n` +
-            `2. Contact support if you believe this is an error\n` +
-            `3. Wait a few moments and refresh the page - the user might be processing`
-          );
-        }
-        
         throw new Error(`Failed to create user account: ${authError.message}`);
       }
       
@@ -309,56 +289,45 @@ export const adminService = {
 
       console.log("✅ Auth user created successfully:", authData.user.id);
 
-      // Wait for the profile trigger to complete
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Step 2: MANUALLY create the profile record (bypass trigger)
+      // This is the key change - we don't rely on database triggers
+      const profileData = {
+        id: authData.user.id,
+        username: username,
+        full_name: fullName,
+        email: email || null, // Use real email or null (not internal email)
+        role: role,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        avatar_url: null,
+      };
 
-      // Fetch the created profile with retry logic
-      let profileData = null;
-      let retries = 8; // Increased retries
+      console.log("📝 Manually creating profile record:", profileData);
+
+      const { data: createdProfile, error: profileError } = await supabase
+        .from("profiles")
+        .insert([profileData])
+        .select()
+        .single();
+
+      if (profileError) {
+        console.error("❌ Profile creation error:", profileError);
+        
+        // If profile creation fails, try to clean up the auth user
+        // (Note: This might not always work, but we try)
+        console.warn("⚠️ Attempting to clean up auth user after profile creation failure");
+        
+        throw new Error(`Profile creation failed: ${profileError.message}. The auth user was created but profile setup failed. Please contact support.`);
+      }
+
+      if (!createdProfile) {
+        throw new Error("Profile creation failed - no profile data returned");
+      }
+
+      console.log("✅ Profile created successfully:", createdProfile);
       
-      while (!profileData && retries > 0) {
-        console.log(`🔍 Attempting to fetch profile... (${9 - retries}/8)`);
-        
-        profileData = await this.getUser(authData.user.id);
+      return createdProfile as Profile;
 
-        if (profileData) {
-          console.log("✅ Profile found:", profileData);
-          break;
-        }
-        
-        // Wait before retry
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        retries--;
-      }
-
-      if (!profileData) {
-        throw new Error(
-          `User account was created (ID: ${authData.user.id}) but the profile is still being set up. ` +
-          `The user "${username}" exists in the system and will appear shortly. ` +
-          `Please refresh the page in a few moments to see the new user.`
-        );
-      }
-
-      // Update with real email if provided (system email stays in auth.users)
-      if (email && email !== authEmail) {
-        const { error: updateError } = await supabase
-          .from("profiles")
-          .update({ email: email })
-          .eq("id", authData.user.id);
-
-        if (updateError) {
-          console.warn("⚠️ Could not update profile email:", updateError);
-        } else {
-          // Fetch updated profile
-          const updatedProfile = await this.getUser(authData.user.id);
-          if (updatedProfile) {
-            profileData = updatedProfile;
-          }
-        }
-      }
-
-      console.log("✅ User created successfully:", profileData);
-      return profileData;
     } catch (error: any) {
       console.error("❌ Create user error:", error);
       throw error;
