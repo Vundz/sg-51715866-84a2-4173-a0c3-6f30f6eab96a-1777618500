@@ -109,27 +109,73 @@ export const adminService = {
   },
 
   /**
+   * Get a single user profile by ID
+   */
+  async getUser(userId: string): Promise<Profile | null> {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (error) {
+        console.error("Error fetching user:", error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error("Get user error:", error);
+      return null;
+    }
+  },
+
+  /**
+   * Get a user profile by username
+   */
+  async getUserByUsername(username: string): Promise<Profile | null> {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("username", username)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching user by username:", error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error("Get user by username error:", error);
+      return null;
+    }
+  },
+
+  /**
    * Get all users (admin only)
    */
   async getAllUsers(): Promise<Profile[]> {
-    // Force fresh data with cache control and unique query modifier
+    // Force fresh data with timestamp-based cache busting
     const timestamp = Date.now();
+    const cacheKey = `users_${timestamp}`;
+    
+    console.log(`📥 Fetching users [${cacheKey}]...`);
     
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .order("created_at", { ascending: false })
-      // Use timestamp in a way that forces query uniqueness
-      .gte("created_at", "1970-01-01T00:00:00.000Z")
-      .limit(1000); // Add explicit limit to make query more deterministic
+      .limit(1000);
 
     if (error) {
-      console.error("Error fetching users:", error);
+      console.error("❌ Error fetching users:", error);
       throw error;
     }
     
-    // Log for debugging
-    console.log(`✓ Fetched ${data?.length || 0} users at ${new Date(timestamp).toISOString()}`);
+    console.log(`✅ Fetched ${data?.length || 0} users at ${new Date(timestamp).toISOString()}`);
     
     return data || [];
   },
@@ -215,7 +261,7 @@ export const adminService = {
         }
       }
 
-      console.log("Creating user - Username:", username, "Auth Email:", authEmail);
+      console.log("👤 Creating user - Username:", username, "Auth Email:", authEmail);
 
       // Create the auth user with proper metadata
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -232,16 +278,25 @@ export const adminService = {
       });
 
       if (authError) {
-        console.error("Supabase auth error:", authError);
+        console.error("❌ Supabase auth error:", authError);
         
-        // Handle specific "User already registered" error
+        // Handle specific "User already registered" error - user might exist but profile not visible
         if (authError.message.includes("User already registered") || authError.status === 422) {
+          // Try to find the existing profile
+          console.log("⚠️ User already registered - checking for existing profile...");
+          
+          const existingProfile = await this.getUserByUsername(username);
+          if (existingProfile) {
+            console.log("✅ Found existing profile:", existingProfile.id);
+            return existingProfile;
+          }
+          
           throw new Error(
-            `Cannot create user: The username "${username}" or email "${authEmail}" is already registered in the system. ` +
-            `This could mean:\n` +
-            `1. A user with this username already exists\n` +
-            `2. A previous account creation may have partially completed\n\n` +
-            `Please try a different username or contact support if you believe this is an error.`
+            `Cannot create user: The username "${username}" is already registered in the authentication system, but the profile is not visible. ` +
+            `Please try one of these options:\n\n` +
+            `1. Use a different username\n` +
+            `2. Contact support if you believe this is an error\n` +
+            `3. Wait a few moments and refresh the page - the user might be processing`
           );
         }
         
@@ -252,43 +307,35 @@ export const adminService = {
         throw new Error("Failed to create user - no user data returned from Supabase");
       }
 
-      console.log("Auth user created successfully:", authData.user.id);
+      console.log("✅ Auth user created successfully:", authData.user.id);
 
-      // Wait for the profile trigger to complete - increased delay for reliability
-      await new Promise(resolve => setTimeout(resolve, 4000));
+      // Wait for the profile trigger to complete
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Fetch the created profile with aggressive retry logic
+      // Fetch the created profile with retry logic
       let profileData = null;
-      let retries = 5; // Increased from 3 to 5 retries
+      let retries = 8; // Increased retries
       
       while (!profileData && retries > 0) {
-        console.log(`Attempting to fetch profile... (${6 - retries}/5)`);
+        console.log(`🔍 Attempting to fetch profile... (${9 - retries}/8)`);
         
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", authData.user.id)
-          .single();
+        profileData = await this.getUser(authData.user.id);
 
-        if (!error && data) {
-          profileData = data;
-          console.log("Profile found:", data);
+        if (profileData) {
+          console.log("✅ Profile found:", profileData);
           break;
         }
         
-        if (error) {
-          console.warn("Profile fetch error:", error);
-        }
-        
-        // Wait before retry - longer delay between retries
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
         retries--;
       }
 
       if (!profileData) {
         throw new Error(
-          "User account was created but the profile is still being set up. " +
-          "Please wait a moment and refresh the page to see the new user."
+          `User account was created (ID: ${authData.user.id}) but the profile is still being set up. ` +
+          `The user "${username}" exists in the system and will appear shortly. ` +
+          `Please refresh the page in a few moments to see the new user.`
         );
       }
 
@@ -300,25 +347,20 @@ export const adminService = {
           .eq("id", authData.user.id);
 
         if (updateError) {
-          console.warn("Could not update profile email:", updateError);
+          console.warn("⚠️ Could not update profile email:", updateError);
         } else {
           // Fetch updated profile
-          const { data: updatedProfile } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", authData.user.id)
-            .single();
-          
+          const updatedProfile = await this.getUser(authData.user.id);
           if (updatedProfile) {
             profileData = updatedProfile;
           }
         }
       }
 
-      console.log("User created successfully:", profileData);
+      console.log("✅ User created successfully:", profileData);
       return profileData;
     } catch (error: any) {
-      console.error("Create user error:", error);
+      console.error("❌ Create user error:", error);
       throw error;
     }
   },

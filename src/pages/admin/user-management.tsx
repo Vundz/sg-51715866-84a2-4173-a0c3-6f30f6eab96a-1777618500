@@ -177,6 +177,7 @@ export default function UserManagementPage() {
         setTimeout(() => {
           setDialogOpen(false);
           setSuccess(null);
+          setCreatingUser(false);
         }, 1500);
       } else {
         if (!formData.password) {
@@ -199,40 +200,66 @@ export default function UserManagementPage() {
         
         console.log("✅ User created successfully:", newUser.id);
         
-        // TRIPLE STRATEGY FOR GUARANTEED REFRESH:
+        // COMPREHENSIVE REFRESH STRATEGY:
+        
         // 1. Immediately add to local state
         setUsers(prevUsers => [newUser, ...prevUsers]);
+        console.log("✅ User added to local state");
         
-        // 2. Force component re-render
+        // 2. Force component re-render with key increment
         setRefreshKey(prev => prev + 1);
+        console.log("✅ Refresh key updated");
         
-        // 3. Refresh from database after short delay
-        setTimeout(async () => {
-          console.log("🔄 Refreshing user list from database...");
-          await loadUsers();
-        }, 500);
+        // 3. Verify the user is now in the list
+        const verifyUser = await adminService.getUserByUsername(formData.username);
+        if (verifyUser) {
+          console.log("✅ Verified user exists in database:", verifyUser.id);
+        } else {
+          console.warn("⚠️ User not found in verification check");
+        }
         
-        setSuccess("✅ User created successfully!");
+        // 4. Reload the full user list from database
+        console.log("🔄 Refreshing user list from database...");
+        await loadUsers();
         
-        // Close dialog
+        setSuccess(`✅ User "${formData.username}" created successfully!`);
+        
+        // Close dialog after success
         setTimeout(() => {
           setDialogOpen(false);
           setSuccess(null);
           setCreatingUser(false);
-        }, 1500);
+        }, 2000);
       }
     } catch (err: any) {
       console.error("❌ User creation/update error:", err);
       
-      // Format error message nicely for "User already registered" errors
       const errorMessage = err.message || "Failed to save user.";
       
-      if (errorMessage.includes("User already registered") || errorMessage.includes("already registered")) {
+      // Check if the error indicates the user exists but isn't visible
+      if (errorMessage.includes("already registered in the authentication system")) {
+        setError(
+          `⚠️ User Creation Issue\n\n` +
+          errorMessage +
+          `\n\nPlease click the "Refresh" button or reload the page to check if the user appears.`
+        );
+        
+        // Try to reload users anyway
+        setTimeout(async () => {
+          console.log("🔄 Attempting to reload users after 'already registered' error...");
+          await loadUsers();
+        }, 2000);
+      } else if (errorMessage.includes("User already registered") || errorMessage.includes("already registered")) {
         setError(
           `⚠️ Username or email already exists!\n\n` +
           `The username "${formData.username}" or associated email is already registered. ` +
-          `Please try a different username.`
+          `Please try a different username, or refresh the page to see if the user exists.`
         );
+        
+        // Try to reload users
+        setTimeout(async () => {
+          await loadUsers();
+        }, 2000);
       } else if (errorMessage.includes("already taken")) {
         setError(errorMessage);
       } else {
@@ -443,6 +470,15 @@ export default function UserManagementPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={loadUsers}
+            className="gap-2"
+            disabled={loading}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
           <Button
             variant="outline"
             onClick={() => router.push("/admin/roles-permissions")}
