@@ -186,7 +186,9 @@ export default function HarvestsPage() {
           .highlight { background: #000; color: #fff; padding: 4px 8px; text-align: center; font-weight: bold; font-size: 14px; margin: 8px 0; }
           .footer { border-top: 2px dashed #000; padding-top: 8px; margin-top: 12px; text-align: center; font-size: 10px; }
           .notes { border: 1px solid #000; padding: 6px; margin-top: 8px; min-height: 40px; }
-          .barcode { text-align: center; font-size: 10px; margin: 8px 0; }
+          table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+          th, td { text-align: left; padding: 4px 2px; border-bottom: 1px solid #000; }
+          th { font-weight: bold; background: #f0f0f0; }
         </style>
       </head>
       <body>
@@ -196,24 +198,27 @@ export default function HarvestsPage() {
         </div>
         <div class="section">
           <div class="section-title">Order Details</div>
-          <div class="info-row"><span class="label">Dispatch ID:</span><span class="value">${harvest.id}</span></div>
+          <div class="info-row"><span class="label">Dispatch ID:</span><span class="value">${harvest.id.slice(0, 8)}</span></div>
           <div class="info-row"><span class="label">Date:</span><span class="value">${new Date(harvest.harvest_date).toLocaleDateString()}</span></div>
           <div class="info-row"><span class="label">Time:</span><span class="value">${new Date().toLocaleTimeString()}</span></div>
         </div>
-        <div class="highlight">QUANTITY: ${harvest.quantity_harvested} UNITS</div>
+        <div class="highlight">QUANTITY: ${formatNumber(harvest.quantity_harvested)} UNITS</div>
         <div class="section">
           <div class="section-title">Product Information</div>
-          <div class="info-row"><span class="label">Plant Type:</span><span class="value">${details.plant_types?.name}</span></div>
-          <div class="info-row"><span class="label">Variety:</span><span class="value">${details.plant_types?.variety}</span></div>
-          <div class="info-row"><span class="label">Batch:</span><span class="value">${details.batch_number || details.id}</span></div>
-        </div>
-        <div class="section">
-          <div class="section-title">Location Details</div>
-          <div class="info-row"><span class="label">Greenhouse:</span><span class="value">${details.locations?.name}</span></div>
-          <div class="info-row"><span class="label">Planting Date:</span><span class="value">${new Date(details.date_planted).toLocaleDateString()}</span></div>
+          <table>
+            <tr>
+              <th>Variety</th>
+              <th>Batch</th>
+              <th>Location</th>
+            </tr>
+            <tr>
+              <td>${details.plant_types?.variety || 'N/A'}</td>
+              <td>${details.batch_number || 'N/A'}</td>
+              <td>${details.locations?.name || 'N/A'}</td>
+            </tr>
+          </table>
         </div>
         ${harvest.notes ? `<div class="section"><div class="section-title">Notes</div><div class="notes">${harvest.notes}</div></div>` : ""}
-        <div class="barcode"><div style="font-size: 20px; letter-spacing: 2px;">||||| ${harvest.id.slice(-8)} |||||</div></div>
         <div class="footer"><p>Packed by: _________________</p><p>Checked by: _________________</p><p style="margin-top: 8px;">Thank you for your business!</p></div>
       </body>
       </html>
