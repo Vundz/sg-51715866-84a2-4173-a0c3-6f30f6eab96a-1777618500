@@ -171,23 +171,111 @@ export default function HarvestsPage() {
             body {
               margin: 0;
               padding: 0;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
           }
           
-          body { font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4; padding: 10mm; max-width: 80mm; margin: 0 auto; color: #000; }
-          .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 12px; }
-          .header h1 { margin: 0; font-size: 18px; font-weight: bold; color: #000; }
-          .header h2 { margin: 4px 0 0 0; font-size: 14px; font-weight: normal; color: #000; }
-          .section { margin-bottom: 12px; }
-          .section-title { font-weight: bold; font-size: 13px; margin-bottom: 4px; text-transform: uppercase; color: #000; }
-          .info-row { display: flex; justify-content: space-between; margin-bottom: 3px; color: #000; }
-          .label { font-weight: bold; color: #000; }
-          .value { text-align: right; color: #000; }
-          .footer { border-top: 2px dashed #000; padding-top: 8px; margin-top: 12px; text-align: center; font-size: 10px; color: #000; }
-          .notes { border: 1px solid #000; padding: 6px; margin-top: 8px; min-height: 40px; color: #000; }
-          table { width: 100%; border-collapse: collapse; margin: 8px 0; }
-          th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid #000; font-size: 13px; color: #000; }
-          th { font-weight: bold; background: #f0f0f0; color: #000; font-size: 14px; }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          
+          body { 
+            font-family: 'Courier New', monospace; 
+            font-size: 12px; 
+            line-height: 1.4; 
+            padding: 10mm; 
+            max-width: 80mm; 
+            margin: 0 auto; 
+            color: #000 !important;
+          }
+          .header { 
+            text-align: center; 
+            border-bottom: 2px dashed #000; 
+            padding-bottom: 8px; 
+            margin-bottom: 12px; 
+          }
+          .header h1 { 
+            margin: 0; 
+            font-size: 18px; 
+            font-weight: bold; 
+            color: #000 !important;
+          }
+          .header h2 { 
+            margin: 4px 0 0 0; 
+            font-size: 14px; 
+            font-weight: normal; 
+            color: #000 !important;
+          }
+          .section { 
+            margin-bottom: 12px; 
+          }
+          .section-title { 
+            font-weight: bold; 
+            font-size: 14px; 
+            margin-bottom: 4px; 
+            text-transform: uppercase; 
+            color: #000 !important;
+          }
+          .info-row { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 3px; 
+            color: #000 !important;
+          }
+          .label { 
+            font-weight: bold; 
+            color: #000 !important;
+          }
+          .value { 
+            text-align: right; 
+            color: #000 !important;
+            font-weight: bold !important;
+          }
+          .footer { 
+            border-top: 2px dashed #000; 
+            padding-top: 8px; 
+            margin-top: 12px; 
+            text-align: center; 
+            font-size: 10px; 
+            color: #000 !important;
+          }
+          .notes { 
+            border: 1px solid #000; 
+            padding: 6px; 
+            margin-top: 8px; 
+            min-height: 40px; 
+            color: #000 !important;
+            font-weight: bold !important;
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 8px 0;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          th, td { 
+            text-align: left; 
+            padding: 8px 4px; 
+            border-bottom: 2px solid #000 !important;
+            font-size: 16px !important;
+            color: #000 !important;
+            font-weight: bold !important;
+          }
+          th { 
+            font-weight: 900 !important;
+            background: #f0f0f0 !important;
+            color: #000 !important;
+            font-size: 16px !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          td {
+            font-weight: 700 !important;
+            color: #000 !important;
+          }
         </style>
       </head>
       <body>
