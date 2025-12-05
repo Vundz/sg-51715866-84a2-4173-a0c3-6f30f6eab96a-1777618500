@@ -71,12 +71,18 @@ const UpcomingHarvestsReport: React.FC = () => {
     return Array.from(
       new Set(
         plantings
-          .filter(p => p.plant_type_id === selectedPlantType)
+          .filter(p => p.plant_types?.name === selectedPlantType)
           .map(p => p.variety)
           .filter(Boolean)
       )
     );
   }, [plantings, selectedPlantType]);
+
+  // Get unique plant type names (deduplicated)
+  const uniquePlantTypeNames = useMemo(() => {
+    const names = new Set(plantTypes.map(pt => pt.name));
+    return Array.from(names).sort();
+  }, [plantTypes]);
 
   // Filter and process upcoming harvests
   const upcomingHarvests = useMemo(() => {
@@ -91,8 +97,8 @@ const UpcomingHarvestsReport: React.FC = () => {
           return false;
         }
 
-        // Filter by plant type
-        if (selectedPlantType !== "all" && p.plant_type_id !== selectedPlantType) {
+        // Filter by plant type (now using name instead of ID)
+        if (selectedPlantType !== "all" && p.plant_types?.name !== selectedPlantType) {
           return false;
         }
 
@@ -331,8 +337,8 @@ const UpcomingHarvestsReport: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Plant Types</SelectItem>
-                  {plantTypes.map(pt => (
-                    <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>
+                  {uniquePlantTypeNames.map(name => (
+                    <SelectItem key={name} value={name}>{name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
