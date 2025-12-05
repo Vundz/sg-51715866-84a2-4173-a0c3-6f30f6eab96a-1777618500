@@ -174,20 +174,20 @@ export default function HarvestsPage() {
             }
           }
           
-          body { font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4; padding: 10mm; max-width: 80mm; margin: 0 auto; }
+          body { font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4; padding: 10mm; max-width: 80mm; margin: 0 auto; color: #000; }
           .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 12px; }
-          .header h1 { margin: 0; font-size: 18px; font-weight: bold; }
-          .header h2 { margin: 4px 0 0 0; font-size: 14px; font-weight: normal; }
+          .header h1 { margin: 0; font-size: 18px; font-weight: bold; color: #000; }
+          .header h2 { margin: 4px 0 0 0; font-size: 14px; font-weight: normal; color: #000; }
           .section { margin-bottom: 12px; }
-          .section-title { font-weight: bold; font-size: 13px; margin-bottom: 4px; text-transform: uppercase; }
-          .info-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
-          .label { font-weight: bold; }
-          .value { text-align: right; }
-          .footer { border-top: 2px dashed #000; padding-top: 8px; margin-top: 12px; text-align: center; font-size: 10px; }
-          .notes { border: 1px solid #000; padding: 6px; margin-top: 8px; min-height: 40px; }
+          .section-title { font-weight: bold; font-size: 13px; margin-bottom: 4px; text-transform: uppercase; color: #000; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 3px; color: #000; }
+          .label { font-weight: bold; color: #000; }
+          .value { text-align: right; color: #000; }
+          .footer { border-top: 2px dashed #000; padding-top: 8px; margin-top: 12px; text-align: center; font-size: 10px; color: #000; }
+          .notes { border: 1px solid #000; padding: 6px; margin-top: 8px; min-height: 40px; color: #000; }
           table { width: 100%; border-collapse: collapse; margin: 8px 0; }
-          th, td { text-align: left; padding: 4px 2px; border-bottom: 1px solid #000; }
-          th { font-weight: bold; background: #f0f0f0; }
+          th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid #000; font-size: 13px; color: #000; }
+          th { font-weight: bold; background: #f0f0f0; color: #000; font-size: 14px; }
         </style>
       </head>
       <body>
