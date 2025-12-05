@@ -268,7 +268,7 @@ export default function HarvestsPage() {
             font-weight: 900 !important;
             background: #f0f0f0 !important;
             color: #000 !important;
-            font-size: 16px !important;
+            font-size: 18px !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -306,7 +306,7 @@ export default function HarvestsPage() {
             </tr>
           </table>
         </div>
-        ${harvest.notes ? `<div class="section"><div class="section-title">Notes</div><div class="notes">${harvest.notes}</div></div>` : ""}
+        ${harvest.notes ? `<div class="section"><div class="notes">${harvest.notes}</div></div>` : '<div class="section"><div class="notes"></div></div>'}
         <div class="footer"><p>Packed by: _________________</p><p>Checked by: _________________</p><p style="margin-top: 8px;">Thank you for your business!</p></div>
       </body>
       </html>
@@ -548,6 +548,7 @@ export default function HarvestsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Planting</TableHead>
+                <TableHead>Batch Number</TableHead>
                 <TableHead>Qty Harvested</TableHead>
                 <TableHead>Harvest Date</TableHead>
                 <TableHead>Status</TableHead>
@@ -556,13 +557,14 @@ export default function HarvestsPage() {
             </TableHeader>
             <TableBody>
               {filteredHarvests.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center h-24">No harvests recorded yet.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center h-24">No harvests recorded yet.</TableCell></TableRow>
               ) : (
                 filteredHarvests.map(h => {
                   const details = h.plantings;
                   return (
                     <TableRow key={h.id}>
                       <TableCell className="font-medium">{details?.plant_types?.name || "N/A"}<br/><span className="text-xs text-gray-500">{details?.plant_types?.variety}</span></TableCell>
+                      <TableCell className="font-mono text-sm">{details?.batch_number || "N/A"}</TableCell>
                       <TableCell>{formatNumber(h.quantity_harvested)}</TableCell>
                       <TableCell>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
                       <TableCell>
