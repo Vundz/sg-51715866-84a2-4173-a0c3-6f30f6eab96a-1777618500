@@ -2,7 +2,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BarChart, Calendar, Package, MapPin, Sprout, TrendingUp, FileText as ReportIcon, ArrowRight, TestTube2 } from "lucide-react";
+import { BarChart, Calendar, Package, MapPin, Sprout, TrendingUp, FileText as ReportIcon, ArrowRight, TestTube2, FileText } from "lucide-react";
 import { plantingService } from "@/services/plantingService";
 import { harvestService } from "@/services/harvestService";
 import { locationService } from "@/services/locationService";
@@ -189,6 +189,27 @@ export default function ReportsPage() {
             </Link>
           );
         })}
+
+        {/* Customer Availability Report */}
+        <Link href="/reports/customer-availability">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-green-500 h-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Sprout className="w-5 h-5 text-green-600" />
+                Seedlings Availability
+              </CardTitle>
+              <CardDescription>
+                Customer-friendly availability report
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Clean, professional view of available seedlings for customer orders. 
+                Perfect for sharing availability and ready dates.
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
   );
