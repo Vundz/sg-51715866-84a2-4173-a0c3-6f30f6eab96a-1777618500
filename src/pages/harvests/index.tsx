@@ -183,7 +183,6 @@ export default function HarvestsPage() {
           .info-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
           .label { font-weight: bold; }
           .value { text-align: right; }
-          .highlight { background: #000; color: #fff; padding: 4px 8px; text-align: center; font-weight: bold; font-size: 14px; margin: 8px 0; }
           .footer { border-top: 2px dashed #000; padding-top: 8px; margin-top: 12px; text-align: center; font-size: 10px; }
           .notes { border: 1px solid #000; padding: 6px; margin-top: 8px; min-height: 40px; }
           table { width: 100%; border-collapse: collapse; margin: 8px 0; }
@@ -202,18 +201,19 @@ export default function HarvestsPage() {
           <div class="info-row"><span class="label">Date:</span><span class="value">${new Date(harvest.harvest_date).toLocaleDateString()}</span></div>
           <div class="info-row"><span class="label">Time:</span><span class="value">${new Date().toLocaleTimeString()}</span></div>
         </div>
-        <div class="highlight">QUANTITY: ${formatNumber(harvest.quantity_harvested)} UNITS</div>
         <div class="section">
           <div class="section-title">Product Information</div>
           <table>
             <tr>
               <th>Variety</th>
               <th>Batch</th>
+              <th>Qty</th>
               <th>Location</th>
             </tr>
             <tr>
               <td>${details.plant_types?.variety || 'N/A'}</td>
               <td>${details.batch_number || 'N/A'}</td>
+              <td>${formatNumber(harvest.quantity_harvested)}</td>
               <td>${details.locations?.name || 'N/A'}</td>
             </tr>
           </table>
