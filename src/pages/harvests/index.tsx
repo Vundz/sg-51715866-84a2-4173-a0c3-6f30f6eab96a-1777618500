@@ -587,7 +587,7 @@ export default function HarvestsPage() {
                   <SelectValue placeholder="All Plantings" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Plantings</SelectItem>
+                  <SelectItem value="__all__">All Plantings</SelectItem>
                   {plantings.filter(p => p.status === "active" && p.batch_number && p.batch_number.trim() !== "").map(p => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.plant_types?.name} ({p.batch_number})
