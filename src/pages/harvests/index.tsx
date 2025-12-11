@@ -29,11 +29,11 @@ export default function HarvestsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredHarvests, setFilteredHarvests] = useState<HarvestWithDetails[]>([]);
   const [filters, setFilters] = useState({
-    planting_id: "",
-    variety: "",
+    planting_id: "__all__",
+    variety: "__all__",
     date_from: "",
     date_to: "",
-    status: "",
+    status: "__all__",
   });
   const [selectedPlantingId, setSelectedPlantingId] = useState<string>("");
   const [harvestQuantity, setHarvestQuantity] = useState<number>(0);
@@ -87,12 +87,12 @@ export default function HarvestsPage() {
     }
     
     // Planting filter
-    if (filters.planting_id) {
+    if (filters.planting_id && filters.planting_id !== "__all__") {
       filtered = filtered.filter(h => h.planting_id === filters.planting_id);
     }
     
     // Variety filter
-    if (filters.variety) {
+    if (filters.variety && filters.variety !== "__all__") {
       filtered = filtered.filter(h => h.plantings?.plant_types?.variety === filters.variety);
     }
     
@@ -105,7 +105,7 @@ export default function HarvestsPage() {
     }
     
     // Status filter
-    if (filters.status) {
+    if (filters.status && filters.status !== "__all__") {
       filtered = filtered.filter(h => h.status === filters.status);
     }
     
@@ -588,7 +588,7 @@ export default function HarvestsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All Plantings</SelectItem>
-                  {plantings.filter(p => p.status === "active").map(p => (
+                  {plantings.filter(p => p.status === "active" && p.batch_number && p.batch_number.trim() !== "").map(p => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.plant_types?.name} ({p.batch_number})
                     </SelectItem>
@@ -604,7 +604,7 @@ export default function HarvestsPage() {
                   <SelectValue placeholder="All Varieties" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Varieties</SelectItem>
+                  <SelectItem value="__all__">All Varieties</SelectItem>
                   {uniqueVarieties.map(variety => (
                     <SelectItem key={variety} value={variety}>
                       {variety}
@@ -621,7 +621,7 @@ export default function HarvestsPage() {
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Status</SelectItem>
+                  <SelectItem value="__all__">All Status</SelectItem>
                   <SelectItem value="harvested">Harvested</SelectItem>
                   <SelectItem value="sold">Sold</SelectItem>
                   <SelectItem value="processed">Processed</SelectItem>
@@ -644,12 +644,12 @@ export default function HarvestsPage() {
               />
             </div>
 
-            {(filters.planting_id || filters.variety || filters.status || filters.date_from || filters.date_to || searchQuery) && (
+            {(filters.planting_id !== "__all__" || filters.variety !== "__all__" || filters.status !== "__all__" || filters.date_from || filters.date_to || searchQuery) && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setFilters({ planting_id: "", variety: "", date_from: "", date_to: "", status: "" });
+                  setFilters({ planting_id: "__all__", variety: "__all__", date_from: "", date_to: "", status: "__all__" });
                   setSearchQuery("");
                 }}
               >
