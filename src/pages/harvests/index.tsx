@@ -30,6 +30,7 @@ export default function HarvestsPage() {
   const [filteredHarvests, setFilteredHarvests] = useState<HarvestWithDetails[]>([]);
   const [filters, setFilters] = useState({
     planting_id: "",
+    variety: "",
     date_from: "",
     date_to: "",
     status: "",
@@ -75,28 +76,53 @@ export default function HarvestsPage() {
 
   useEffect(() => {
     let filtered = harvests;
+    
+    // Search filter
     if (searchQuery) {
-        filtered = filtered.filter(h => 
-            h.plantings?.plant_types?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            h.plantings?.plant_types?.variety.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            h.plantings?.batch_number?.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+      filtered = filtered.filter(h => 
+        h.plantings?.plant_types?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        h.plantings?.plant_types?.variety.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        h.plantings?.batch_number?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
     }
+    
+    // Planting filter
     if (filters.planting_id) {
-        filtered = filtered.filter(h => h.planting_id === filters.planting_id);
+      filtered = filtered.filter(h => h.planting_id === filters.planting_id);
     }
+    
+    // Variety filter
+    if (filters.variety) {
+      filtered = filtered.filter(h => h.plantings?.plant_types?.variety === filters.variety);
+    }
+    
+    // Date range filters
     if (filters.date_from) {
       filtered = filtered.filter(h => new Date(h.harvest_date) >= new Date(filters.date_from));
     }
     if (filters.date_to) {
       filtered = filtered.filter(h => new Date(h.harvest_date) <= new Date(filters.date_to));
     }
+    
+    // Status filter
     if (filters.status) {
       filtered = filtered.filter(h => h.status === filters.status);
     }
     
     setFilteredHarvests(filtered);
   }, [harvests, searchQuery, filters]);
+
+  // Calculate total harvested based on filters
+  const totalHarvested = filteredHarvests.reduce((sum, h) => sum + h.quantity_harvested, 0);
+
+  // Get unique varieties for filter
+  const uniqueVarieties = Array.from(
+    new Set(
+      harvests
+        .map(h => h.plantings?.plant_types?.variety)
+        .filter(Boolean)
+    )
+  ).sort();
 
   const getRemainingQuantity = (planting: PlantingWithDetails) => {
     const harvested = harvestedQuantities[planting.id] || 0;
@@ -542,6 +568,93 @@ export default function HarvestsPage() {
         <CardHeader>
           <CardTitle>Harvest Log</CardTitle>
           <CardDescription>A complete history of all recorded harvests with dispatch slip printing.</CardDescription>
+          
+          {/* Search and Filters */}
+          <div className="space-y-4 pt-4">
+            <Input
+              placeholder="Search by plant name, variety, or batch number..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-md"
+            />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+              <Select 
+                value={filters.planting_id} 
+                onValueChange={(value) => setFilters({ ...filters, planting_id: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All Plantings" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Plantings</SelectItem>
+                  {plantings.filter(p => p.status === "active").map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.plant_types?.name} ({p.batch_number})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select 
+                value={filters.variety} 
+                onValueChange={(value) => setFilters({ ...filters, variety: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All Varieties" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Varieties</SelectItem>
+                  {uniqueVarieties.map(variety => (
+                    <SelectItem key={variety} value={variety}>{variety}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select 
+                value={filters.status} 
+                onValueChange={(value) => setFilters({ ...filters, status: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Status</SelectItem>
+                  <SelectItem value="harvested">Harvested</SelectItem>
+                  <SelectItem value="sold">Sold</SelectItem>
+                  <SelectItem value="processed">Processed</SelectItem>
+                  <SelectItem value="waste">Waste</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Input
+                type="date"
+                placeholder="From Date"
+                value={filters.date_from}
+                onChange={(e) => setFilters({ ...filters, date_from: e.target.value })}
+              />
+
+              <Input
+                type="date"
+                placeholder="To Date"
+                value={filters.date_to}
+                onChange={(e) => setFilters({ ...filters, date_to: e.target.value })}
+              />
+            </div>
+
+            {(filters.planting_id || filters.variety || filters.status || filters.date_from || filters.date_to || searchQuery) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setFilters({ planting_id: "", variety: "", date_from: "", date_to: "", status: "" });
+                  setSearchQuery("");
+                }}
+              >
+                Clear All Filters
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -557,7 +670,7 @@ export default function HarvestsPage() {
             </TableHeader>
             <TableBody>
               {filteredHarvests.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center h-24">No harvests recorded yet.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center h-24">No harvests found matching your filters.</TableCell></TableRow>
               ) : (
                 filteredHarvests.map(h => {
                   const details = h.plantings;
@@ -590,6 +703,28 @@ export default function HarvestsPage() {
               )}
             </TableBody>
           </Table>
+
+          {/* Total Harvested Summary */}
+          {filteredHarvests.length > 0 && (
+            <div className="mt-4 flex justify-end">
+              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-6 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                    Total Harvested:
+                  </span>
+                  <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                    {formatNumber(totalHarvested)}
+                  </span>
+                  <span className="text-sm text-blue-600 dark:text-blue-400">
+                    seedlings
+                  </span>
+                </div>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 text-right">
+                  {filteredHarvests.length} harvest record{filteredHarvests.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
