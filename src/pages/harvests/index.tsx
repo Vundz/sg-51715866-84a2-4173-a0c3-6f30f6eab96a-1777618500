@@ -606,7 +606,9 @@ export default function HarvestsPage() {
                 <SelectContent>
                   <SelectItem value="">All Varieties</SelectItem>
                   {uniqueVarieties.map(variety => (
-                    <SelectItem key={variety} value={variety}>{variety}</SelectItem>
+                    <SelectItem key={variety} value={variety}>
+                      {variety}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
