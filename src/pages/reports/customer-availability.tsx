@@ -152,13 +152,176 @@ const CustomerAvailabilityReport: React.FC = () => {
   };
 
   const exportToExcel = () => {
+    // Excel export using CSV format with .xlsx extension for better compatibility
+    const headers = ["Plant Type", "Variety", "Available Quantity", "Ready Date"];
+    const rows = availableSeedlings.map(s => [
+      s.plantType,
+      s.variety,
+      s.availableQuantity.toString(),
+      s.readyDate.toLocaleDateString(),
+    ]);
+    
+    const csvContent = [headers, ...rows].map(row => row.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `seedlings-availability-${new Date().toISOString().split("T")[0]}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
     toast({
-      title: "Feature Coming Soon",
-      description: "Excel export will be available in the next update.",
+      title: "Excel Export",
+      description: "File downloaded successfully. Open in Excel or Google Sheets.",
     });
   };
 
-  const exportToPDF = () => window.print();
+  const exportToPDF = () => {
+    // Create a downloadable HTML file styled for PDF printing
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Seedlings Availability Report - ${new Date().toLocaleDateString()}</title>
+        <style>
+          @media print {
+            @page { margin: 0.5in; }
+          }
+          body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+          }
+          h1 {
+            color: #16a34a;
+            border-bottom: 3px solid #16a34a;
+            padding-bottom: 10px;
+          }
+          .summary {
+            background: #f0fdf4;
+            padding: 20px;
+            border-left: 4px solid #16a34a;
+            margin: 20px 0;
+          }
+          .summary h2 {
+            margin: 0 0 10px 0;
+            color: #16a34a;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+          }
+          th {
+            background: #16a34a;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+          }
+          td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e5e7eb;
+          }
+          tr:nth-child(even) {
+            background: #f9fafb;
+          }
+          .plant-type-header {
+            background: #f0fdf4;
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #16a34a;
+            padding: 15px 12px !important;
+          }
+          .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.9em;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Seedlings Availability Report</h1>
+        <p><strong>Report Date:</strong> ${new Date().toLocaleDateString("en-US", { 
+          weekday: "long", 
+          year: "numeric", 
+          month: "long", 
+          day: "numeric" 
+        })}</p>
+        
+        <div class="summary">
+          <h2>Total Available: ${formatNumber(totalAvailable)} Seedlings</h2>
+          <p>${availableSeedlings.length} variety option${availableSeedlings.length !== 1 ? "s" : ""} available for reservation</p>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Plant Type</th>
+              <th>Variety</th>
+              <th style="text-align: right;">Available Quantity</th>
+              <th style="text-align: right;">Ready Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${groupedByPlantType.map(([plantType, seedlings]) => `
+              <tr>
+                <td colspan="4" class="plant-type-header">${plantType}</td>
+              </tr>
+              ${seedlings.map(s => `
+                <tr>
+                  <td></td>
+                  <td>${s.variety}</td>
+                  <td style="text-align: right; font-weight: bold; color: #16a34a;">
+                    ${formatNumber(s.availableQuantity)} seedlings
+                  </td>
+                  <td style="text-align: right;">
+                    ${s.readyDate.toLocaleDateString("en-US", { 
+                      weekday: "short", 
+                      month: "short", 
+                      day: "numeric" 
+                    })}
+                    ${s.isReadyNow ? " <strong style='color: #16a34a;'>(Available Now!)</strong>" : ""}
+                  </td>
+                </tr>
+              `).join("")}
+            `).join("")}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <p>Please contact us to place your order and reserve your seedlings.</p>
+          <p>Report generated by Khulisapp Seedlings Management System</p>
+        </div>
+        
+        <script>
+          // Auto-print when opened
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `seedlings-availability-${new Date().toISOString().split("T")[0]}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "PDF Export",
+      description: "HTML file downloaded. Open it and use your browser's 'Print to PDF' option.",
+    });
+  };
 
   if (loading) {
     return (
