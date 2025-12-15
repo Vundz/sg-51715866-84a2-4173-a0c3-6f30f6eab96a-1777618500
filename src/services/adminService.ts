@@ -435,14 +435,28 @@ export const adminService = {
    * Delete a user's profile.
    */
   async deleteUser(userId: string): Promise<boolean> {
-    const { error } = await supabase
-      .from("profiles")
-      .delete()
-      .eq("id", userId);
+    // Get current user session for authentication
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error("You must be logged in to perform this action");
+    }
 
-    if (error) throw error;
-    // Here you would typically also call an edge function to delete the auth user
-    // e.g., await supabase.functions.invoke('delete-user', { body: { userId } })
+    // Call secure server-side API endpoint
+    const response = await fetch("/api/admin/delete-user", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ userId }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Failed to delete user");
+    }
+
     return true;
   },
 
