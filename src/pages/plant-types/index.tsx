@@ -11,18 +11,18 @@ import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
 
 export default function PlantTypesPage() {
   const { user, profile } = useAuth();
+  const permissions = usePermissions("plant_types");
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPlantType, setEditingPlantType] = useState<PlantType | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-
-  const isViewer = profile?.role === "viewer";
 
   useEffect(() => {
     loadPlantTypes();
@@ -122,7 +122,7 @@ export default function PlantTypesPage() {
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">Manage the types and varieties of plants you grow.</p>
         </div>
-        {!isViewer && (
+        {permissions.canCreate && (
           <Button onClick={() => handleOpenDialog()} className="bg-green-600 hover:bg-green-700">
             <Plus className="w-4 h-4 mr-2" />
             Add Plant Type
@@ -135,33 +135,33 @@ export default function PlantTypesPage() {
           <DialogHeader>
             <DialogTitle>{editingPlantType ? "Edit Plant Type" : "Add Plant Type"}</DialogTitle>
             <DialogDescription>
-             {isViewer ? "Viewing plant type details. No changes can be made." : (editingPlantType ? "Update the details for this plant type." : "Create a new plant type and variety.")}
+             {!permissions.canCreate && !permissions.canUpdate ? "Viewing plant type details. No changes can be made." : (editingPlantType ? "Update the details for this plant type." : "Create a new plant type and variety.")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSavePlantType} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Plant Name <span className="text-red-500">*</span></Label>
-              <Input id="name" name="name" defaultValue={editingPlantType?.name} required disabled={isViewer}/>
+              <Input id="name" name="name" defaultValue={editingPlantType?.name} required disabled={!permissions.canCreate && !permissions.canUpdate}/>
             </div>
             <div className="space-y-2">
               <Label htmlFor="variety">Variety <span className="text-red-500">*</span></Label>
-              <Input id="variety" name="variety" defaultValue={editingPlantType?.variety} required disabled={isViewer}/>
+              <Input id="variety" name="variety" defaultValue={editingPlantType?.variety} required disabled={!permissions.canCreate && !permissions.canUpdate}/>
             </div>
              <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" name="description" defaultValue={editingPlantType?.description ?? ''} disabled={isViewer}/>
+              <Textarea id="description" name="description" defaultValue={editingPlantType?.description ?? ''} disabled={!permissions.canCreate && !permissions.canUpdate}/>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="growth_duration">Growth Duration (days) <span className="text-red-500">*</span></Label>
-                <Input id="growth_duration" name="growth_duration" type="number" defaultValue={editingPlantType?.growth_duration} required disabled={isViewer}/>
+                <Input id="growth_duration" name="growth_duration" type="number" defaultValue={editingPlantType?.growth_duration} required disabled={!permissions.canCreate && !permissions.canUpdate}/>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="germination_rate">Germination Rate (%)</Label>
-                <Input id="germination_rate" name="germination_rate" type="number" min="0" max="100" defaultValue={editingPlantType?.germination_rate ?? ''} disabled={isViewer}/>
+                <Input id="germination_rate" name="germination_rate" type="number" min="0" max="100" defaultValue={editingPlantType?.germination_rate ?? ''} disabled={!permissions.canCreate && !permissions.canUpdate}/>
               </div>
             </div>
-            {!isViewer ? (
+            {(permissions.canCreate || permissions.canUpdate) ? (
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button type="submit" className="bg-green-600 hover:bg-green-700">Save</Button>
@@ -207,10 +207,14 @@ export default function PlantTypesPage() {
                       <TableCell>{pt.growth_duration} days</TableCell>
                       <TableCell>{pt.germination_rate ? `${pt.germination_rate}%` : 'N/A'}</TableCell>
                       <TableCell className="text-right">
-                        {!isViewer ? (
+                        {permissions.canUpdate || permissions.canDelete ? (
                           <div className="flex gap-1 justify-end">
-                            <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(pt)}><Edit className="w-4 h-4" /></Button>
-                            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlantType(pt.id)}><Trash2 className="w-4 h-4" /></Button>
+                            {permissions.canUpdate && (
+                              <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(pt)}><Edit className="w-4 h-4" /></Button>
+                            )}
+                            {permissions.canDelete && (
+                              <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlantType(pt.id)}><Trash2 className="w-4 h-4" /></Button>
+                            )}
                           </div>
                         ) : (
                           <span className="text-xs text-gray-400 italic">View only</span>

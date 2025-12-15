@@ -15,6 +15,7 @@ import { AlertCircle } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 import { formatNumber } from "@/lib/format";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type HarvestPayload = Omit<Database["public"]["Tables"]["harvests"]["Row"], "id" | "created_at" | "updated_at">;
 
@@ -26,6 +27,7 @@ interface SelectedHarvest {
 
 export default function BulkHarvestPage() {
   const { user, profile } = useAuth();
+  const permissions = usePermissions("harvests");
   const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedHarvests, setSelectedHarvests] = useState<Record<string, SelectedHarvest>>({});
@@ -50,15 +52,15 @@ export default function BulkHarvestPage() {
   }, [plantings, searchQuery]);
 
   useEffect(() => {
-    if (isViewer) {
-      toast({
-        title: "Access Denied",
-        description: "Viewers cannot create harvests. Redirecting...",
-        variant: "destructive"
+    if (!permissions.canCreate) {
+      toast({ 
+        title: "Access Denied", 
+        description: "You don't have permission to create harvests. Redirecting...", 
+        variant: "destructive" 
       });
       router.push("/harvests");
     }
-  }, [isViewer, router, toast]);
+  }, [permissions.canCreate, router, toast]);
 
   useEffect(() => {
     const loadPlantings = async () => {
@@ -96,7 +98,7 @@ export default function BulkHarvestPage() {
     loadPlantings();
   }, [toast]);
 
-  if (isViewer) {
+  if (!permissions.canCreate) {
     return (
       <div className="max-w-7xl mx-auto p-8 text-center">
         <p className="text-gray-600">Redirecting...</p>

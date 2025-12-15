@@ -13,6 +13,7 @@ import { plantingService } from "@/services/plantingService";
 import { formatNumber } from "@/lib/format";
 import type { Database } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type Location = Database["public"]["Tables"]["locations"]["Row"];
 type Planting = Database["public"]["Tables"]["plantings"]["Row"] & {
@@ -21,13 +22,12 @@ type Planting = Database["public"]["Tables"]["plantings"]["Row"] & {
 
 export default function LocationsPage() {
   const { user, profile } = useAuth();
+  const permissions = usePermissions("locations");
   const [locations, setLocations] = useState<Location[]>([]);
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const isViewer = profile?.role === "viewer";
 
   useEffect(() => {
     loadData();
@@ -165,7 +165,7 @@ export default function LocationsPage() {
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">Manage your greenhouses and nursery locations.</p>
         </div>
-        {!isViewer && (
+        {permissions.canCreate && (
           <Button onClick={() => handleOpenDialog()} className="bg-green-600 hover:bg-green-700">
             <Plus className="w-4 h-4 mr-2" />
             Add Location
@@ -178,23 +178,23 @@ export default function LocationsPage() {
           <DialogHeader>
             <DialogTitle>{editingLocation ? "Edit" : "Add"} Location</DialogTitle>
             <DialogDescription>
-              {isViewer ? "Viewing location details. No changes can be made." : (editingLocation ? "Update the details of this location." : "Create a new location for your plantings.")}
+              {!permissions.canCreate && !permissions.canUpdate ? "Viewing location details. No changes can be made." : (editingLocation ? "Update the details of this location." : "Create a new location for your plantings.")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveLocation} className="space-y-4 pt-4">
             <div className="space-y-2">
               <Label htmlFor="name">Location Name</Label>
-              <Input id="name" name="name" defaultValue={editingLocation?.name} required disabled={isViewer}/>
+              <Input id="name" name="name" defaultValue={editingLocation?.name} required disabled={!permissions.canCreate && !permissions.canUpdate}/>
             </div>
             <div className="space-y-2">
               <Label htmlFor="type">Location Type</Label>
-              <Input id="type" name="type" defaultValue={editingLocation?.type || "Greenhouse"} required disabled={isViewer}/>
+              <Input id="type" name="type" defaultValue={editingLocation?.type || "Greenhouse"} required disabled={!permissions.canCreate && !permissions.canUpdate}/>
             </div>
             <div className="space-y-2">
               <Label htmlFor="capacity">Capacity</Label>
-              <Input id="capacity" name="capacity" type="number" defaultValue={editingLocation?.capacity || ""} required disabled={isViewer}/>
+              <Input id="capacity" name="capacity" type="number" defaultValue={editingLocation?.capacity || ""} required disabled={!permissions.canCreate && !permissions.canUpdate}/>
             </div>
-            {!isViewer ? (
+            {(permissions.canCreate || permissions.canUpdate) ? (
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button type="submit" className="bg-green-600 hover:bg-green-700" disabled={loading}>
@@ -265,20 +265,23 @@ export default function LocationsPage() {
                         </div>
                         
                         <div className="flex gap-1 ml-4" onClick={(e) => e.stopPropagation()}>
-                          {!isViewer && (
-                            <>
-                              <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(location)}>
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="text-red-600" 
-                                onClick={() => handleDeleteLocation(location.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </>
+                          {permissions.canUpdate && (
+                            <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(location)}>
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {permissions.canDelete && (
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="text-red-600" 
+                              onClick={() => handleDeleteLocation(location.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {!permissions.canUpdate && !permissions.canDelete && (
+                            <span className="text-xs text-gray-400 italic">View only</span>
                           )}
                         </div>
                       </div>
