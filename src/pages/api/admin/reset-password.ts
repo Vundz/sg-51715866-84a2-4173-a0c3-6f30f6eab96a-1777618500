@@ -12,6 +12,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Check if environment variables are available
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      console.error("Missing NEXT_PUBLIC_SUPABASE_URL");
+      return res.status(500).json({ error: "Server configuration error: Missing Supabase URL" });
+    }
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("Missing SUPABASE_SERVICE_ROLE_KEY");
+      return res.status(500).json({ error: "Server configuration error: Missing Service Role Key. Please add SUPABASE_SERVICE_ROLE_KEY to your .env.local file and restart the server." });
+    }
+
     // Get the user's session token to verify they're authenticated
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -69,6 +80,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Password must be at least 8 characters long" });
     }
 
+    console.log("Updating password for user:", userId);
+
     // Update the user's password using admin privileges
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       userId,
@@ -81,6 +94,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         error: `Failed to update password: ${updateError.message}` 
       });
     }
+
+    console.log("Password updated successfully for user:", userId);
 
     // Success
     return res.status(200).json({ 

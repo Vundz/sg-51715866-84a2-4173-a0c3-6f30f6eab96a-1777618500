@@ -12,6 +12,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Check if environment variables are available
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      console.error("Missing NEXT_PUBLIC_SUPABASE_URL");
+      return res.status(500).json({ error: "Server configuration error: Missing Supabase URL" });
+    }
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("Missing SUPABASE_SERVICE_ROLE_KEY");
+      return res.status(500).json({ error: "Server configuration error: Missing Service Role Key" });
+    }
+
+    if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY");
+      return res.status(500).json({ error: "Server configuration error: Missing Anon Key" });
+    }
+
     // Get the user's session token to verify they're authenticated
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -64,6 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Create admin client with SERVICE ROLE key for privileged operations
+    console.log("Creating admin client with SERVICE_ROLE_KEY...");
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -76,6 +93,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     // Step 1: Delete from profiles table (will cascade delete related records due to FK constraints)
+    console.log("Attempting to delete profile for user:", userId);
     const { error: profileDeleteError } = await supabaseAdmin
       .from("profiles")
       .delete()
@@ -88,6 +106,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
+    console.log("Profile deleted successfully, now deleting auth user...");
+
     // Step 2: Delete from auth.users table using admin API
     const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
@@ -98,6 +118,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         error: `User profile deleted but auth account deletion failed: ${authDeleteError.message}` 
       });
     }
+
+    console.log("User deleted successfully:", userId);
 
     // Success
     return res.status(200).json({ 
