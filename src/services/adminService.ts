@@ -281,19 +281,14 @@ export const adminService = {
 
       // Check auth.users table for the email to avoid "User already registered" error
       console.log("🔍 Checking if auth user exists with email:", authEmail);
-      const { data: existingAuthUsers, error: authCheckError } = await supabase.auth.admin.listUsers();
+      const { data: existingProfile, error: profileCheckError } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .eq("email", authEmail)
+        .maybeSingle();
       
-      if (!authCheckError && existingAuthUsers) {
-        const authUserExists = existingAuthUsers.users.some((u: User) => u.email === authEmail);
-        if (authUserExists) {
-          // Check if profile exists for this auth user
-          const existingUser = await this.getUserByUsername(username);
-          if (existingUser) {
-            throw new Error(`User "${username}" already exists in the system.`);
-          } else {
-            throw new Error(`An auth user with this email already exists but has no profile. Please contact support to resolve this issue.`);
-          }
-        }
+      if (existingProfile) {
+        throw new Error(`User with email "${authEmail}" already exists in the system.`);
       }
 
       console.log("✅ Pre-flight checks passed - creating user:", username);
