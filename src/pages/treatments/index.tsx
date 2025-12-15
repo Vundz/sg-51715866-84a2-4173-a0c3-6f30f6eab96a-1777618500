@@ -15,6 +15,7 @@ import { plantingService, PlantingWithDetails } from "@/services/plantingService
 import { useToast } from "@/hooks/use-toast";
 import { group } from "console";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 
 // We need to group the results from the service by treatment
 interface GroupedTreatment {
@@ -34,6 +35,7 @@ interface GroupedTreatment {
 
 export default function TreatmentsPage() {
   const { user, profile } = useAuth();
+  const permissions = usePermissions("treatments");
   const [treatments, setTreatments] = useState<GroupedTreatment[]>([]);
   const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -209,7 +211,7 @@ export default function TreatmentsPage() {
           <p className="text-gray-600 dark:text-gray-400 mt-2">Log and manage all chemical and fertilizer applications.</p>
         </div>
         
-        {!isViewer && (
+        {permissions.canCreate && (
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => handleOpenDialog(null, true)} disabled={activePlantings.length === 0}><ChevronsRight className="w-4 h-4 mr-2" />Bulk Apply</Button>
             <Button onClick={() => handleOpenDialog()} className="bg-cyan-600 hover:bg-cyan-700"><Plus className="w-4 h-4 mr-2" />Add Treatment</Button>
@@ -281,7 +283,7 @@ export default function TreatmentsPage() {
               <div className="space-y-2"><Label htmlFor="applied_by">Applied By</Label><Input id="applied_by" name="applied_by" defaultValue={editingTreatment?.applied_by || ""} disabled={isViewer}/></div>
             </div>
             <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" name="notes" defaultValue={editingTreatment?.notes || ""} disabled={isViewer}/></div>
-            {!isViewer ? (
+            {(permissions.canCreate || permissions.canUpdate) ? (
               <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="outline" onClick={handleCloseDialog}>Cancel</Button><Button type="submit" className="bg-cyan-600 hover:bg-cyan-700">Save Treatment</Button></div>
             ) : (
               <div className="flex justify-end gap-2 pt-4">
@@ -316,14 +318,21 @@ export default function TreatmentsPage() {
                   <TableCell>{t.type}</TableCell>
                   <TableCell>{t.plantings.map(p => p.batch_number).join(', ')}</TableCell>
                   <TableCell className="text-right">
-                    {!isViewer ? (
-                      <div className="flex gap-1 justify-end">
-                        <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(t)}><Edit className="w-4 h-4" /></Button>
-                        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteTreatment(t.id)}><Trash2 className="w-4 h-4" /></Button>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-400 italic">View only</span>
-                    )}
+                    <div className="flex gap-1 justify-end">
+                      {permissions.canUpdate && (
+                        <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(t)} title="Edit treatment">
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      )}
+                      {permissions.canDelete && (
+                        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteTreatment(t.id)} title="Delete treatment">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                      {!permissions.canUpdate && !permissions.canDelete && (
+                        <span className="text-xs text-gray-400 italic">View only</span>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

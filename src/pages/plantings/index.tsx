@@ -15,6 +15,7 @@ import { plantTypeService } from "@/services/plantTypeService";
 import { locationService } from "@/services/locationService";
 import { reservationService } from "@/services/reservationService";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/format";
@@ -40,6 +41,7 @@ const generateBatchNumber = (plantTypeName: string, variety: string, datePlanted
 
 export default function PlantingsPage() {
   const { user, profile } = useAuth();
+  const permissions = usePermissions("plantings");
   const { toast } = useToast();
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
@@ -533,7 +535,7 @@ export default function PlantingsPage() {
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">Track all your seedling batches from planting to harvest.</p>
         </div>
-        {!isViewer && (
+        {permissions.canCreate && (
           <div className="flex gap-2">
             <Button onClick={() => setIsImportDialogOpen(true)} variant="outline" className="border-lime-600 text-lime-600 hover:bg-lime-50">
               <Upload className="w-4 h-4 mr-2" />
@@ -666,7 +668,7 @@ export default function PlantingsPage() {
                 </div>
               )}
             </div>
-            {!isViewer ? (
+            {(permissions.canCreate || permissions.canUpdate) ? (
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                 <Button type="submit" className="bg-lime-600 hover:bg-lime-700">Save Planting</Button>
@@ -1033,14 +1035,21 @@ export default function PlantingsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        {!isViewer ? (
-                          <div className="flex gap-1 justify-end">
-                            <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(p)}><Edit className="w-4 h-4" /></Button>
-                            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(p.id)}><Trash2 className="w-4 h-4" /></Button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400 italic">View only</span>
-                        )}
+                        <div className="flex gap-1 justify-end">
+                          {permissions.canUpdate && (
+                            <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(p)} title="Edit planting">
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {permissions.canDelete && (
+                            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(p.id)} title="Delete planting">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {!permissions.canUpdate && !permissions.canDelete && (
+                            <span className="text-xs text-gray-400 italic">View only</span>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

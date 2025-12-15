@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Database } from "@/integrations/supabase/types";
 import { formatNumber } from "@/lib/format";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type Reservation = Database["public"]["Tables"]["reservations"]["Row"];
 type Planting = Database["public"]["Tables"]["plantings"]["Row"];
@@ -71,6 +72,7 @@ const ReservationsPage: React.FC = () => {
   const router = useRouter();
   const { toast } = useToast();
   const { user, profile } = useAuth();
+  const permissions = usePermissions("reservations");
   const { planting: plantingIdFilter } = router.query;
   
   const isViewer = profile?.role === "viewer";
@@ -394,7 +396,7 @@ const ReservationsPage: React.FC = () => {
             )}
           </p>
         </div>
-        {!isViewer && (
+        {permissions.canCreate && (
           <div className="flex gap-2">
             {plantingIdFilter && (
               <Button variant="outline" onClick={() => router.push("/reservations")}>
@@ -992,7 +994,7 @@ const ReservationsPage: React.FC = () => {
               />
             </div>
 
-            {!isViewer ? (
+            {(permissions.canCreate || permissions.canUpdate) ? (
               <div className="flex justify-end gap-2 pt-4 border-t">
                 <Button type="button" variant="outline" onClick={handleCloseDialog}>
                   Cancel
@@ -1107,42 +1109,45 @@ const ReservationsPage: React.FC = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        {!isViewer ? (
-                          <div className="flex gap-1 justify-end">
-                            {r.status === "pending" && (
-                              <>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  onClick={() => handleOpenDialog(r)} 
-                                  title="Edit"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  className="text-green-600 hover:text-green-700" 
-                                  onClick={() => handleOpenStatusDialog(r, "completed")} 
-                                  title="Complete"
-                                >
-                                  <CheckCircle2 className="w-4 h-4" />
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
-                                  className="text-red-600 hover:text-red-700" 
-                                  onClick={() => handleOpenStatusDialog(r, "cancelled")} 
-                                  title="Cancel"
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400 italic">View only</span>
-                        )}
+                        <div className="flex gap-1 justify-end">
+                          {r.status === "pending" && (
+                            <>
+                              {permissions.canUpdate && (
+                                <>
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    onClick={() => handleOpenDialog(r)} 
+                                    title="Edit reservation"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    className="text-green-600 hover:text-green-700" 
+                                    onClick={() => handleOpenStatusDialog(r, "completed")} 
+                                    title="Complete reservation"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    className="text-red-600 hover:text-red-700" 
+                                    onClick={() => handleOpenStatusDialog(r, "cancelled")} 
+                                    title="Cancel reservation"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </Button>
+                                </>
+                              )}
+                            </>
+                          )}
+                          {!permissions.canUpdate && (
+                            <span className="text-xs text-gray-400 italic">View only</span>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
