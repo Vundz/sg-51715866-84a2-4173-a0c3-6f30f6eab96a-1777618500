@@ -197,17 +197,10 @@ export default function RolesPermissionsPage() {
       setInitializing(true);
       setError(null);
       
-      const response = await fetch("/api/init-permissions", {
-        method: "POST",
-      });
+      // Use client-side initialization instead of API route
+      const result = await rolePermissionService.initializePermissionsSystem();
       
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to initialize permissions");
-      }
-      
-      setSuccess(`Permissions initialized successfully! (${data.count} records created)`);
+      setSuccess(`Permissions initialized successfully! (${result.count} records created)`);
       await loadData();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
