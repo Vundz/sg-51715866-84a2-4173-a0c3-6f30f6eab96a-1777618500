@@ -251,6 +251,60 @@ export default function RolesPermissionsPage() {
     );
   }
 
+  // Add check for empty permissions data
+  const hasPermissions = Object.keys(permissionsByModule).length > 0;
+  
+  if (!hasPermissions && !loading) {
+    return (
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2"><Shield className="h-8 w-8" />Roles & Permissions Matrix</h1>
+            <p className="text-muted-foreground mt-1">Configure role-based access control across all system modules</p>
+          </div>
+          <Button variant="outline" onClick={() => router.push("/admin/user-management")} className="gap-2">
+            <Users className="h-4 w-4" />User Management
+          </Button>
+        </div>
+
+        <Card className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-yellow-800 dark:text-yellow-400">
+              <AlertCircle className="h-5 w-5" />
+              Permissions Not Initialized
+            </CardTitle>
+            <CardDescription>
+              The permissions system needs to be initialized before you can configure roles.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              Click the button below to set up the default permissions structure for your system. 
+              This will create all necessary permission records in the database.
+            </p>
+            <Button 
+              onClick={handleInitializePermissions} 
+              disabled={initializing}
+              className="gap-2"
+            >
+              {initializing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Initializing...
+                </>
+              ) : (
+                <>
+                  <Shield className="h-4 w-4" />
+                  Initialize Permissions System
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-start">
