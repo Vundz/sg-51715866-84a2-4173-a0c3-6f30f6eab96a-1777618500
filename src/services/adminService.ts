@@ -164,6 +164,7 @@ export const adminService = {
     const randomSuffix = Math.random().toString(36).substring(7);
     
     console.log(`📥 [${timestamp}-${randomSuffix}] Fetching users with cache bust...`);
+    console.log(`🔍 [NEW CODE] Using profiles table query (NOT admin API)`);
     
     // Fetch directly from profiles table (works with RLS)
     // No admin API needed - RLS policies control access
