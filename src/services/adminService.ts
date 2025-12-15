@@ -164,7 +164,7 @@ export const adminService = {
     const randomSuffix = Math.random().toString(36).substring(7);
     
     console.log(`📥 [${timestamp}-${randomSuffix}] Fetching users with cache bust...`);
-    console.log(`🔍 [NEW CODE] Using profiles table query (NOT admin API)`);
+    console.log(`🔍 [FIXED] Using profiles table query (NOT admin API)`);
     
     // Fetch directly from profiles table (works with RLS)
     // No admin API needed - RLS policies control access
@@ -180,16 +180,6 @@ export const adminService = {
     }
     
     console.log(`✅ [${timestamp}] Fetched ${data?.length || 0} users from database`);
-    
-    // Log each user for debugging
-    if (data && data.length > 0) {
-      console.log("📋 User list:", data.map(u => ({
-        username: u.username,
-        email: u.email,
-        role: u.role,
-        created: new Date(u.created_at).toLocaleString()
-      })));
-    }
     
     return data || [];
   },
