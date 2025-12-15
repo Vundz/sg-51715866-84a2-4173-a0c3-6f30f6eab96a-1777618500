@@ -227,13 +227,30 @@ export default function TreatmentsPage() {
             {isBulkMode ? (
               <div className="space-y-2">
                 <Label>Select Plantings *</Label>
+                <div className="flex items-center gap-2 mb-2 p-2 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
+                  <Checkbox 
+                    id="select-all" 
+                    checked={selectedPlantingIds.length === activePlantings.length && activePlantings.length > 0}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedPlantingIds(activePlantings.map(p => p.id));
+                      } else {
+                        setSelectedPlantingIds([]);
+                      }
+                    }}
+                    disabled={isViewer}
+                  />
+                  <Label htmlFor="select-all" className="font-semibold text-blue-900 dark:text-blue-100 cursor-pointer">
+                    Select All ({activePlantings.length} plantings)
+                  </Label>
+                </div>
                 <ScrollArea className="h-48 rounded-md border p-2">
                   {activePlantings.map(p => {
                     const details = getPlantingDetails(p.id);
                     return (
                     <div key={p.id} className="flex items-center gap-2 mb-2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
                       <Checkbox id={`bulk-${p.id}`} checked={selectedPlantingIds.includes(p.id)} onCheckedChange={() => togglePlantingSelection(p.id)} disabled={isViewer}/>
-                      <Label htmlFor={`bulk-${p.id}`} className="font-normal w-full">{details.name} ({details.variety}) - Planted: {details.datePlanted}</Label>
+                      <Label htmlFor={`bulk-${p.id}`} className="font-normal w-full cursor-pointer">{details.name} ({details.variety}) - Planted: {details.datePlanted}</Label>
                     </div>
                   )})}
                 </ScrollArea>
