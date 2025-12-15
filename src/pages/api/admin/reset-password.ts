@@ -20,26 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const token = authHeader.split(" ")[1];
 
-    // Create a Supabase client with ANON key to verify the user's session
-    const supabaseClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    );
-
-    // Verify the user's token with the ANON key client
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
-    
-    if (authError || !user) {
-      return res.status(401).json({ error: "Unauthorized - Invalid session" });
-    }
-
-    // Create a separate admin client with SERVICE ROLE key for privileged operations
+    // Create admin client with SERVICE ROLE key for all operations
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -51,14 +32,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     );
 
-    // Check if the authenticated user is an admin using the admin client
+    // Verify the user's token and get their user ID
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error("Auth verification failed:", authError);
+      return res.status(401).json({ error: "Unauthorized - Invalid session" });
+    }
+
+    // Check if the authenticated user is an admin
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("role")
       .eq("id", user.id)
       .single();
 
-    if (profileError || !profile || profile.role !== "admin") {
+    if (profileError) {
+      console.error("Profile fetch error:", profileError);
+      return res.status(500).json({ error: "Failed to verify admin status" });
+    }
+
+    if (!profile || profile.role !== "admin") {
+      console.log("Access denied - user role:", profile?.role);
       return res.status(403).json({ error: "Forbidden - Admin access required" });
     }
 
