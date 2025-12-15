@@ -165,7 +165,8 @@ export const adminService = {
     
     console.log(`📥 [${timestamp}-${randomSuffix}] Fetching users with cache bust...`);
     
-    // Strategy 1: Add cache-busting headers
+    // Fetch directly from profiles table (works with RLS)
+    // No admin API needed - RLS policies control access
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
@@ -179,7 +180,7 @@ export const adminService = {
     
     console.log(`✅ [${timestamp}] Fetched ${data?.length || 0} users from database`);
     
-    // Strategy 2: Log each user for debugging
+    // Log each user for debugging
     if (data && data.length > 0) {
       console.log("📋 User list:", data.map(u => ({
         username: u.username,
