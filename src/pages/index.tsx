@@ -13,8 +13,8 @@ import { Leaf, AlertCircle, Loader2 } from "lucide-react";
 export default function LoginPage() {
   const router = useRouter();
   const { user, loading: authLoading, login } = useAuth();
-  const [email, setEmail] = useState("admin@khulisapp.com");
-  const [password, setPassword] = useState("Admin123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [initializingAdmin, setInitializingAdmin] = useState(false);
