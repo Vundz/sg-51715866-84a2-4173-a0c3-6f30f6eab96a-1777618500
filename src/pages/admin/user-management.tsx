@@ -241,13 +241,23 @@ export default function UserManagementPage() {
   const handleDelete = async (userId: string, username: string | null) => {
     if (!confirm(`Are you sure you want to delete user "${username || userId}"?`)) return;
     setError(null);
+    setLoading(true);
+    
     try {
       await adminService.deleteUser(userId);
       setSuccess("User deleted successfully!");
+      
+      // Add a small delay to ensure database has processed the deletion
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Force a complete refresh
       await loadUsers();
+      
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.message || "Failed to delete user.");
+    } finally {
+      setLoading(false);
     }
   };
 
