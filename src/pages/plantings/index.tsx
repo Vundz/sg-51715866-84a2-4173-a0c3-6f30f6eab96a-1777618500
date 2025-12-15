@@ -98,7 +98,7 @@ export default function PlantingsPage() {
   };
 
   const getReservedQuantity = (plantingId: string): number => {
-    const activeReservations = reservations.filter(r => r.planting_id === plantingId && r.status === 'active');
+    const activeReservations = reservations.filter(r => r.planting_id === plantingId && r.status === 'pending');
     return activeReservations.reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
   };
   
