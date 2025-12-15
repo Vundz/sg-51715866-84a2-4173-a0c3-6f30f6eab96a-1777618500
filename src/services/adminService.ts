@@ -283,16 +283,18 @@ export const adminService = {
 
       console.log("✅ Pre-flight checks passed - creating user:", username);
 
-      // Step 1: Create the auth user using ADMIN API (does NOT auto-login)
-      console.log("👤 Creating auth user with Admin API - email:", authEmail);
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      // Step 1: Create the auth user using REGULAR signUp (NOT admin API)
+      console.log("👤 Creating auth user with regular signUp - email:", authEmail);
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: authEmail,
         password: password,
-        email_confirm: true, // Auto-confirm the email
-        user_metadata: {
-          full_name: fullName,
-          username: username,
-          role: role,
+        options: {
+          data: {
+            full_name: fullName,
+            username: username,
+            role: role,
+          },
+          emailRedirectTo: undefined, // Prevent email confirmation emails
         },
       });
 
@@ -317,9 +319,9 @@ export const adminService = {
         throw new Error("Failed to create user - no user data returned from Supabase");
       }
 
-      console.log("✅ Auth user created successfully with Admin API:", authData.user.id);
+      console.log("✅ Auth user created successfully:", authData.user.id);
 
-      // Step 2: MANUALLY create the profile record (bypass trigger)
+      // Step 2: MANUALLY create the profile record (bypass trigger if needed)
       const profileData = {
         id: authData.user.id,
         username: username,
