@@ -432,7 +432,7 @@ export const adminService = {
   },
 
   /**
-   * Delete a user's profile.
+   * Delete a user's profile (simplified version)
    */
   async deleteUser(userId: string): Promise<boolean> {
     // Get current user session for authentication
@@ -441,7 +441,7 @@ export const adminService = {
       throw new Error("You must be logged in to perform this action");
     }
 
-    // Call secure server-side API endpoint
+    // Call server-side API endpoint
     const response = await fetch("/api/admin/delete-user", {
       method: "POST",
       headers: {
