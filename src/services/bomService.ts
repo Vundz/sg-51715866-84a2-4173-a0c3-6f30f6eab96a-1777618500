@@ -9,6 +9,15 @@ type BOMSettingInsert = Database["public"]["Tables"]["bom_settings"]["Insert"];
 type BOMTemplateInsert = Database["public"]["Tables"]["bom_templates"]["Insert"];
 type BOMTemplateUpdate = Database["public"]["Tables"]["bom_templates"]["Update"];
 
+/**
+ * Safely convert any value to a number
+ */
+const toNumber = (value: any, fallback: number = 0): number => {
+  if (value === null || value === undefined) return fallback;
+  const num = Number(value);
+  return isNaN(num) ? fallback : num;
+};
+
 export const bomService = {
   // ============================================
   // BOM SETTINGS (Configuration Parameters)
@@ -384,19 +393,10 @@ export const bomService = {
       .eq("plant_type_id", plantTypeId)
       .maybeSingle();
 
-    // Use parseFloat with explicit handling to avoid type inference issues
-    const rawSeedCost = seedCostData?.cost_per_seed;
-    const seedCostPerUnit: number = rawSeedCost ? parseFloat(String(rawSeedCost)) : 0;
-    
-    const rawGermRate = seedCostData?.germination_rate;
-    const germinationRate: number = rawGermRate 
-      ? parseFloat(String(rawGermRate)) / 100 
-      : getSetting("default_germination_rate", 90.0) / 100;
-    
-    const rawBuffer = seedCostData?.buffer_percent;
-    const seedBuffer: number = rawBuffer 
-      ? parseFloat(String(rawBuffer)) / 100 
-      : getSetting("default_seed_buffer_percent", 10.0) / 100;
+    // Use the safe number conversion helper
+    const seedCostPerUnit = toNumber(seedCostData?.cost_per_seed, 0);
+    const germinationRate = toNumber(seedCostData?.germination_rate, 90) / 100;
+    const seedBuffer = toNumber(seedCostData?.buffer_percent, 10) / 100;
     
     const seedsNeeded = quantity * (1 + seedBuffer) / germinationRate;
     const seedCost = seedsNeeded * seedCostPerUnit;
