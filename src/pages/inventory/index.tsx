@@ -29,7 +29,7 @@ const TRANSACTION_TYPES = [
 
 export default function InventoryPage() {
   const { user, profile } = useAuth();
-  const permissions = usePermissions("plantings");
+  const permissions = usePermissions("inventory");
   const [items, setItems] = useState<InventoryItemWithLowStock[]>([]);
   const [transactions, setTransactions] = useState<StockTransactionWithItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);

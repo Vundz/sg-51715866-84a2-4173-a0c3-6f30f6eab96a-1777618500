@@ -20,6 +20,7 @@ interface ModulePermissions {
   reservations: PermissionConfig;
   reports: PermissionConfig;
   admin: PermissionConfig;
+  inventory: PermissionConfig;
 }
 
 /**
@@ -35,6 +36,7 @@ const DEFAULT_PERMISSIONS: Record<UserRole, ModulePermissions> = {
     reservations: { canCreate: true, canRead: true, canUpdate: true, canDelete: true },
     reports: { canCreate: false, canRead: true, canUpdate: false, canDelete: false },
     admin: { canCreate: true, canRead: true, canUpdate: true, canDelete: true },
+    inventory: { canCreate: true, canRead: true, canUpdate: true, canDelete: true },
   },
   manager: {
     locations: { canCreate: true, canRead: true, canUpdate: true, canDelete: false },
@@ -45,6 +47,7 @@ const DEFAULT_PERMISSIONS: Record<UserRole, ModulePermissions> = {
     reservations: { canCreate: true, canRead: true, canUpdate: true, canDelete: false },
     reports: { canCreate: false, canRead: true, canUpdate: false, canDelete: false },
     admin: { canCreate: false, canRead: false, canUpdate: false, canDelete: false },
+    inventory: { canCreate: true, canRead: true, canUpdate: true, canDelete: false },
   },
   staff: {
     locations: { canCreate: false, canRead: true, canUpdate: false, canDelete: false },
@@ -55,6 +58,7 @@ const DEFAULT_PERMISSIONS: Record<UserRole, ModulePermissions> = {
     reservations: { canCreate: true, canRead: true, canUpdate: true, canDelete: false },
     reports: { canCreate: false, canRead: true, canUpdate: false, canDelete: false },
     admin: { canCreate: false, canRead: false, canUpdate: false, canDelete: false },
+    inventory: { canCreate: true, canRead: true, canUpdate: true, canDelete: false },
   },
   viewer: {
     locations: { canCreate: false, canRead: true, canUpdate: false, canDelete: false },
@@ -65,6 +69,7 @@ const DEFAULT_PERMISSIONS: Record<UserRole, ModulePermissions> = {
     reservations: { canCreate: false, canRead: true, canUpdate: false, canDelete: false },
     reports: { canCreate: false, canRead: true, canUpdate: false, canDelete: false },
     admin: { canCreate: false, canRead: false, canUpdate: false, canDelete: false },
+    inventory: { canCreate: false, canRead: true, canUpdate: false, canDelete: false },
   },
 };
 
