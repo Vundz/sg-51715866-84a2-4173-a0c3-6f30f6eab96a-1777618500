@@ -48,45 +48,17 @@ export const inventoryService = {
    * Create a new inventory item
    */
   async createInventoryItem(
-    item: Omit<InventoryItem, "id" | "created_at" | "updated_at" | "current_stock">,
-    openingStock: number = 0
+    item: Omit<InventoryItem, "id" | "created_at" | "updated_at" | "current_stock">
   ): Promise<InventoryItem> {
-    const { data: { user } } = await supabase.auth.getUser();
-
     // 1. Create the inventory item
-    const { data: newItem, error: itemError } = await supabase
+    const { data, error } = await supabase
       .from("inventory_items")
-      .insert([{ ...item, current_stock: openingStock }])
+      .insert([{ ...item, current_stock: 0 }])
       .select()
       .single();
 
-    if (itemError) throw itemError;
-
-    // 2. If opening stock > 0, create a transaction record
-    if (openingStock > 0 && newItem) {
-      const transactionData = {
-        item_id: newItem.id,
-        transaction_type: "adjustment", // Using adjustment for opening stock
-        quantity: openingStock,
-        unit_price: item.unit_price,
-        total_cost: openingStock * item.unit_price,
-        notes: "Opening Stock",
-        transaction_date: new Date().toISOString(),
-        created_by: user?.id
-      };
-
-      const { error: txError } = await supabase
-        .from("stock_transactions")
-        .insert([transactionData]);
-
-      if (txError) {
-        console.error("Error creating opening stock transaction:", txError);
-        // Note: We don't rollback the item creation here as it's not critical, 
-        // but in a strict system we might want to.
-      }
-    }
-
-    return newItem;
+    if (error) throw error;
+    return data;
   },
 
   /**
