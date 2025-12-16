@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter, Upload, Download } from "lucide-react";
+import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter, Upload, Download, PlusCircle } from "lucide-react";
 import { plantingService } from "@/services/plantingService";
 import { plantTypeService } from "@/services/plantTypeService";
 import { locationService } from "@/services/locationService";
@@ -56,6 +56,13 @@ export default function PlantingsPage() {
   // Form state for plant type and variety selection
   const [selectedPlantTypeName, setSelectedPlantTypeName] = useState<string>("");
   const [selectedVariety, setSelectedVariety] = useState<string>("");
+  
+  // Quick-add dialogs
+  const [isAddPlantTypeDialogOpen, setIsAddPlantTypeDialogOpen] = useState(false);
+  const [isAddVarietyDialogOpen, setIsAddVarietyDialogOpen] = useState(false);
+  const [newPlantTypeName, setNewPlantTypeName] = useState("");
+  const [newVarietyName, setNewVarietyName] = useState("");
+  const [newPlantTypeGrowthDuration, setNewPlantTypeGrowthDuration] = useState("30");
   
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState("");
@@ -179,6 +186,82 @@ export default function PlantingsPage() {
 
     return filtered;
   }, [plantings, searchQuery, filterType, filterValue]);
+
+  // Quick-add Plant Type
+  const handleQuickAddPlantType = async () => {
+    if (!newPlantTypeName.trim()) {
+      toast({ title: "Error", description: "Please enter a plant type name.", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const newPlantType = await plantTypeService.createPlantType({
+        name: newPlantTypeName.trim(),
+        variety: "Standard", // Default variety
+        growth_duration: parseInt(newPlantTypeGrowthDuration),
+        description: null,
+        germination_rate: null,
+      });
+
+      // Reload plant types
+      const updatedPlantTypes = await plantTypeService.getPlantTypes();
+      setPlantTypes(updatedPlantTypes);
+
+      // Auto-select the new plant type
+      setSelectedPlantTypeName(newPlantType.name);
+      setSelectedVariety("Standard");
+
+      // Close dialog and reset
+      setIsAddPlantTypeDialogOpen(false);
+      setNewPlantTypeName("");
+      setNewPlantTypeGrowthDuration("30");
+
+      toast({ title: "Success", description: `Plant type "${newPlantType.name}" added successfully!` });
+    } catch (error) {
+      console.error("Error adding plant type:", error);
+      toast({ title: "Error", description: "Failed to add plant type.", variant: "destructive" });
+    }
+  };
+
+  // Quick-add Variety
+  const handleQuickAddVariety = async () => {
+    if (!selectedPlantTypeName) {
+      toast({ title: "Error", description: "Please select a plant type first.", variant: "destructive" });
+      return;
+    }
+
+    if (!newVarietyName.trim()) {
+      toast({ title: "Error", description: "Please enter a variety name.", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const newPlantType = await plantTypeService.createPlantType({
+        name: selectedPlantTypeName,
+        variety: newVarietyName.trim(),
+        growth_duration: parseInt(newPlantTypeGrowthDuration),
+        description: null,
+        germination_rate: null,
+      });
+
+      // Reload plant types
+      const updatedPlantTypes = await plantTypeService.getPlantTypes();
+      setPlantTypes(updatedPlantTypes);
+
+      // Auto-select the new variety
+      setSelectedVariety(newPlantType.variety);
+
+      // Close dialog and reset
+      setIsAddVarietyDialogOpen(false);
+      setNewVarietyName("");
+      setNewPlantTypeGrowthDuration("30");
+
+      toast({ title: "Success", description: `Variety "${newPlantType.variety}" added successfully!` });
+    } catch (error) {
+      console.error("Error adding variety:", error);
+      toast({ title: "Error", description: "Failed to add variety.", variant: "destructive" });
+    }
+  };
 
   const handleSavePlanting = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -549,6 +632,7 @@ export default function PlantingsPage() {
         )}
       </div>
 
+      {/* Main Planting Dialog with Smart Dropdowns */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
@@ -558,18 +642,19 @@ export default function PlantingsPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSavePlanting} className="space-y-4 pt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="plantTypeName">
-                  Plant Type <span className="text-red-500">*</span>
-                </Label>
+            {/* Plant Type with Quick Add */}
+            <div className="space-y-2">
+              <Label htmlFor="plantTypeName">
+                Plant Type <span className="text-red-500">*</span>
+              </Label>
+              <div className="flex gap-2">
                 <Select 
                   value={selectedPlantTypeName} 
                   onValueChange={handlePlantTypeChange}
                   required
                   disabled={isViewer || !!editingPlanting}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="flex-1">
                     <SelectValue placeholder="Select a plant type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -578,11 +663,27 @@ export default function PlantingsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {!editingPlanting && !isViewer && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsAddPlantTypeDialogOpen(true)}
+                    title="Add new plant type"
+                    className="shrink-0"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="variety">
-                  Variety <span className="text-red-500">*</span>
-                </Label>
+            </div>
+
+            {/* Variety with Quick Add */}
+            <div className="space-y-2">
+              <Label htmlFor="variety">
+                Variety <span className="text-red-500">*</span>
+              </Label>
+              <div className="flex gap-2">
                 <Select 
                   name="variety"
                   value={selectedVariety} 
@@ -590,7 +691,7 @@ export default function PlantingsPage() {
                   disabled={!selectedPlantTypeName || isViewer || !!editingPlanting}
                   required
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="flex-1">
                     <SelectValue placeholder={selectedPlantTypeName ? "Select a variety" : "Select plant type first"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -599,8 +700,21 @@ export default function PlantingsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {!editingPlanting && !isViewer && selectedPlantTypeName && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsAddVarietyDialogOpen(true)}
+                    title="Add new variety"
+                    className="shrink-0"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="location_id">Location</Label>
@@ -679,6 +793,102 @@ export default function PlantingsPage() {
               </div>
             )}
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Add Plant Type Dialog */}
+      <Dialog open={isAddPlantTypeDialogOpen} onOpenChange={setIsAddPlantTypeDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New Plant Type</DialogTitle>
+            <DialogDescription>
+              Create a new plant type to add to the list
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPlantTypeName">Plant Type Name *</Label>
+              <Input
+                id="newPlantTypeName"
+                value={newPlantTypeName}
+                onChange={(e) => setNewPlantTypeName(e.target.value)}
+                placeholder="e.g., Tomato, Cabbage, Lettuce"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newPlantTypeGrowthDuration">Growth Duration (days) *</Label>
+              <Input
+                id="newPlantTypeGrowthDuration"
+                type="number"
+                value={newPlantTypeGrowthDuration}
+                onChange={(e) => setNewPlantTypeGrowthDuration(e.target.value)}
+                placeholder="30"
+              />
+              <p className="text-xs text-gray-500">Days from planting to harvest</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => {
+              setIsAddPlantTypeDialogOpen(false);
+              setNewPlantTypeName("");
+              setNewPlantTypeGrowthDuration("30");
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleQuickAddPlantType} className="bg-lime-600 hover:bg-lime-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Plant Type
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Add Variety Dialog */}
+      <Dialog open={isAddVarietyDialogOpen} onOpenChange={setIsAddVarietyDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New Variety</DialogTitle>
+            <DialogDescription>
+              Add a new variety for <strong>{selectedPlantTypeName}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="newVarietyName">Variety Name *</Label>
+              <Input
+                id="newVarietyName"
+                value={newVarietyName}
+                onChange={(e) => setNewVarietyName(e.target.value)}
+                placeholder="e.g., Cherry Red, Roma, Beefsteak"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newVarietyGrowthDuration">Growth Duration (days) *</Label>
+              <Input
+                id="newVarietyGrowthDuration"
+                type="number"
+                value={newPlantTypeGrowthDuration}
+                onChange={(e) => setNewPlantTypeGrowthDuration(e.target.value)}
+                placeholder="30"
+              />
+              <p className="text-xs text-gray-500">Days from planting to harvest for this variety</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => {
+              setIsAddVarietyDialogOpen(false);
+              setNewVarietyName("");
+              setNewPlantTypeGrowthDuration("30");
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleQuickAddVariety} className="bg-lime-600 hover:bg-lime-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Variety
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -762,7 +972,7 @@ export default function PlantingsPage() {
                         />
                         <Label
                           htmlFor="ignoreErrors"
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-700 cursor-pointer"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                         >
                           Ignore errors and import valid data
                         </Label>
