@@ -9,51 +9,32 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, Edit, Trash2, Settings, Tag, Ruler, Building2, AlertCircle, CheckCircle2, ArrowLeft } from "lucide-react";
+import { Plus, Edit, Trash2, Settings, Tag, Ruler, Building2, AlertCircle, CheckCircle2, ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { inventorySettingsService } from "@/services/inventorySettingsService";
+import type { InventoryCategory, InventoryUnit, InventorySupplier } from "@/services/inventorySettingsService";
 import Link from "next/link";
-
-interface Category {
-  id: string;
-  name: string;
-  color: string;
-  description?: string;
-}
-
-interface Unit {
-  id: string;
-  name: string;
-  abbreviation: string;
-  type: string; // 'volume', 'weight', 'count'
-}
-
-interface Supplier {
-  id: string;
-  name: string;
-  contact_person?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  notes?: string;
-}
 
 export default function InventorySettingsPage() {
   const router = useRouter();
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [categories, setCategories] = useState<InventoryCategory[]>([]);
+  const [units, setUnits] = useState<InventoryUnit[]>([]);
+  const [suppliers, setSuppliers] = useState<InventorySupplier[]>([]);
   
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [isUnitDialogOpen, setIsUnitDialogOpen] = useState(false);
   const [isSupplierDialogOpen, setIsSupplierDialogOpen] = useState(false);
   
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
-  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [editingCategory, setEditingCategory] = useState<InventoryCategory | null>(null);
+  const [editingUnit, setEditingUnit] = useState<InventoryUnit | null>(null);
+  const [editingSupplier, setEditingSupplier] = useState<InventorySupplier | null>(null);
+  
+  const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(false);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -63,173 +44,191 @@ export default function InventorySettingsPage() {
     loadData();
   }, [isAdmin, router]);
 
-  const loadData = () => {
-    // Load from localStorage
-    const savedCategories = localStorage.getItem("inventory_categories");
-    const savedUnits = localStorage.getItem("inventory_units");
-    const savedSuppliers = localStorage.getItem("inventory_suppliers");
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [categoriesData, unitsData, suppliersData] = await Promise.all([
+        inventorySettingsService.getCategories(),
+        inventorySettingsService.getUnits(),
+        inventorySettingsService.getSuppliers(),
+      ]);
 
-    if (savedCategories) {
-      setCategories(JSON.parse(savedCategories));
-    } else {
-      // Default categories
-      const defaultCategories: Category[] = [
-        { id: "1", name: "Fungicide", color: "#9333ea", description: "Fungal disease treatment" },
-        { id: "2", name: "Insecticide", color: "#dc2626", description: "Insect pest control" },
-        { id: "3", name: "Fertilizer", color: "#16a34a", description: "Plant nutrition" },
-        { id: "4", name: "Other", color: "#6b7280", description: "Miscellaneous items" },
-      ];
-      setCategories(defaultCategories);
-      localStorage.setItem("inventory_categories", JSON.stringify(defaultCategories));
-    }
+      setCategories(categoriesData);
+      setUnits(unitsData);
+      setSuppliers(suppliersData);
 
-    if (savedUnits) {
-      setUnits(JSON.parse(savedUnits));
-    } else {
-      // Default units
-      const defaultUnits: Unit[] = [
-        { id: "1", name: "Liters", abbreviation: "L", type: "volume" },
-        { id: "2", name: "Milliliters", abbreviation: "ml", type: "volume" },
-        { id: "3", name: "Kilograms", abbreviation: "kg", type: "weight" },
-        { id: "4", name: "Grams", abbreviation: "g", type: "weight" },
-        { id: "5", name: "Bags", abbreviation: "bags", type: "count" },
-        { id: "6", name: "Bottles", abbreviation: "bottles", type: "count" },
-        { id: "7", name: "Sachets", abbreviation: "sachets", type: "count" },
-        { id: "8", name: "Packets", abbreviation: "packets", type: "count" },
-      ];
-      setUnits(defaultUnits);
-      localStorage.setItem("inventory_units", JSON.stringify(defaultUnits));
-    }
-
-    if (savedSuppliers) {
-      setSuppliers(JSON.parse(savedSuppliers));
+      // Auto-initialize defaults if tables are empty
+      if (categoriesData.length === 0 && unitsData.length === 0) {
+        await handleInitializeDefaults();
+      }
+    } catch (error) {
+      console.error("Error loading inventory settings:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load inventory settings.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSaveCategory = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleInitializeDefaults = async () => {
+    try {
+      setInitializing(true);
+      await inventorySettingsService.initializeDefaults();
+      await loadData();
+      toast({
+        title: "Success",
+        description: "Default categories and units initialized successfully.",
+      });
+    } catch (error) {
+      console.error("Error initializing defaults:", error);
+      toast({
+        title: "Error",
+        description: "Failed to initialize default settings.",
+        variant: "destructive",
+      });
+    } finally {
+      setInitializing(false);
+    }
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    const category: Category = {
-      id: editingCategory?.id || Date.now().toString(),
+    const categoryData = {
       name: formData.get("name") as string,
       color: formData.get("color") as string,
-      description: formData.get("description") as string || undefined,
+      description: formData.get("description") as string || null,
     };
 
-    let updatedCategories;
-    if (editingCategory) {
-      updatedCategories = categories.map((c) => (c.id === editingCategory.id ? category : c));
-    } else {
-      updatedCategories = [...categories, category];
+    try {
+      if (editingCategory) {
+        await inventorySettingsService.updateCategory(editingCategory.id, categoryData);
+        toast({ title: "Success", description: "Category updated successfully." });
+      } else {
+        await inventorySettingsService.createCategory(categoryData);
+        toast({ title: "Success", description: "Category created successfully." });
+      }
+      
+      await loadData();
+      setIsCategoryDialogOpen(false);
+      setEditingCategory(null);
+    } catch (error) {
+      console.error("Error saving category:", error);
+      toast({ title: "Error", description: "Failed to save category.", variant: "destructive" });
     }
-
-    setCategories(updatedCategories);
-    localStorage.setItem("inventory_categories", JSON.stringify(updatedCategories));
-    
-    toast({
-      title: "Success",
-      description: `Category ${editingCategory ? "updated" : "created"} successfully.`,
-    });
-    
-    setIsCategoryDialogOpen(false);
-    setEditingCategory(null);
   };
 
-  const handleDeleteCategory = (id: string, name: string) => {
+  const handleDeleteCategory = async (id: string, name: string) => {
     if (!confirm(`Delete category "${name}"? This cannot be undone.`)) return;
     
-    const updatedCategories = categories.filter((c) => c.id !== id);
-    setCategories(updatedCategories);
-    localStorage.setItem("inventory_categories", JSON.stringify(updatedCategories));
-    
-    toast({ title: "Success", description: "Category deleted successfully." });
+    try {
+      await inventorySettingsService.deleteCategory(id);
+      await loadData();
+      toast({ title: "Success", description: "Category deleted successfully." });
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      toast({ title: "Error", description: "Failed to delete category.", variant: "destructive" });
+    }
   };
 
-  const handleSaveUnit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveUnit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    const unit: Unit = {
-      id: editingUnit?.id || Date.now().toString(),
+    const unitData = {
       name: formData.get("name") as string,
       abbreviation: formData.get("abbreviation") as string,
       type: formData.get("type") as string,
     };
 
-    let updatedUnits;
-    if (editingUnit) {
-      updatedUnits = units.map((u) => (u.id === editingUnit.id ? unit : u));
-    } else {
-      updatedUnits = [...units, unit];
+    try {
+      if (editingUnit) {
+        await inventorySettingsService.updateUnit(editingUnit.id, unitData);
+        toast({ title: "Success", description: "Unit updated successfully." });
+      } else {
+        await inventorySettingsService.createUnit(unitData);
+        toast({ title: "Success", description: "Unit created successfully." });
+      }
+      
+      await loadData();
+      setIsUnitDialogOpen(false);
+      setEditingUnit(null);
+    } catch (error) {
+      console.error("Error saving unit:", error);
+      toast({ title: "Error", description: "Failed to save unit.", variant: "destructive" });
     }
-
-    setUnits(updatedUnits);
-    localStorage.setItem("inventory_units", JSON.stringify(updatedUnits));
-    
-    toast({
-      title: "Success",
-      description: `Unit ${editingUnit ? "updated" : "created"} successfully.`,
-    });
-    
-    setIsUnitDialogOpen(false);
-    setEditingUnit(null);
   };
 
-  const handleDeleteUnit = (id: string, name: string) => {
+  const handleDeleteUnit = async (id: string, name: string) => {
     if (!confirm(`Delete unit "${name}"? This cannot be undone.`)) return;
     
-    const updatedUnits = units.filter((u) => u.id !== id);
-    setUnits(updatedUnits);
-    localStorage.setItem("inventory_units", JSON.stringify(updatedUnits));
-    
-    toast({ title: "Success", description: "Unit deleted successfully." });
+    try {
+      await inventorySettingsService.deleteUnit(id);
+      await loadData();
+      toast({ title: "Success", description: "Unit deleted successfully." });
+    } catch (error) {
+      console.error("Error deleting unit:", error);
+      toast({ title: "Error", description: "Failed to delete unit.", variant: "destructive" });
+    }
   };
 
-  const handleSaveSupplier = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveSupplier = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
-    const supplier: Supplier = {
-      id: editingSupplier?.id || Date.now().toString(),
+    const supplierData = {
       name: formData.get("name") as string,
-      contact_person: formData.get("contact_person") as string || undefined,
-      email: formData.get("email") as string || undefined,
-      phone: formData.get("phone") as string || undefined,
-      address: formData.get("address") as string || undefined,
-      notes: formData.get("notes") as string || undefined,
+      contact_person: formData.get("contact_person") as string || null,
+      email: formData.get("email") as string || null,
+      phone: formData.get("phone") as string || null,
+      address: formData.get("address") as string || null,
+      notes: formData.get("notes") as string || null,
     };
 
-    let updatedSuppliers;
-    if (editingSupplier) {
-      updatedSuppliers = suppliers.map((s) => (s.id === editingSupplier.id ? supplier : s));
-    } else {
-      updatedSuppliers = [...suppliers, supplier];
+    try {
+      if (editingSupplier) {
+        await inventorySettingsService.updateSupplier(editingSupplier.id, supplierData);
+        toast({ title: "Success", description: "Supplier updated successfully." });
+      } else {
+        await inventorySettingsService.createSupplier(supplierData);
+        toast({ title: "Success", description: "Supplier created successfully." });
+      }
+      
+      await loadData();
+      setIsSupplierDialogOpen(false);
+      setEditingSupplier(null);
+    } catch (error) {
+      console.error("Error saving supplier:", error);
+      toast({ title: "Error", description: "Failed to save supplier.", variant: "destructive" });
     }
-
-    setSuppliers(updatedSuppliers);
-    localStorage.setItem("inventory_suppliers", JSON.stringify(updatedSuppliers));
-    
-    toast({
-      title: "Success",
-      description: `Supplier ${editingSupplier ? "updated" : "created"} successfully.`,
-    });
-    
-    setIsSupplierDialogOpen(false);
-    setEditingSupplier(null);
   };
 
-  const handleDeleteSupplier = (id: string, name: string) => {
+  const handleDeleteSupplier = async (id: string, name: string) => {
     if (!confirm(`Delete supplier "${name}"? This cannot be undone.`)) return;
     
-    const updatedSuppliers = suppliers.filter((s) => s.id !== id);
-    setSuppliers(updatedSuppliers);
-    localStorage.setItem("inventory_suppliers", JSON.stringify(updatedSuppliers));
-    
-    toast({ title: "Success", description: "Supplier deleted successfully." });
+    try {
+      await inventorySettingsService.deleteSupplier(id);
+      await loadData();
+      toast({ title: "Success", description: "Supplier deleted successfully." });
+    } catch (error) {
+      console.error("Error deleting supplier:", error);
+      toast({ title: "Error", description: "Failed to delete supplier.", variant: "destructive" });
+    }
   };
 
   if (!isAdmin) return null;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
@@ -249,21 +248,40 @@ export default function InventorySettingsPage() {
             Manage categories, units of measure, and suppliers
           </p>
         </div>
+        {(categories.length === 0 || units.length === 0) && (
+          <Button
+            onClick={handleInitializeDefaults}
+            disabled={initializing}
+            className="gap-2"
+          >
+            {initializing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Initializing...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                Initialize Defaults
+              </>
+            )}
+          </Button>
+        )}
       </div>
 
       <Tabs defaultValue="categories" className="space-y-4">
         <TabsList>
           <TabsTrigger value="categories" className="gap-2">
             <Tag className="w-4 h-4" />
-            Categories
+            Categories ({categories.length})
           </TabsTrigger>
           <TabsTrigger value="units" className="gap-2">
             <Ruler className="w-4 h-4" />
-            Units
+            Units ({units.length})
           </TabsTrigger>
           <TabsTrigger value="suppliers" className="gap-2">
             <Building2 className="w-4 h-4" />
-            Suppliers
+            Suppliers ({suppliers.length})
           </TabsTrigger>
         </TabsList>
 
@@ -285,54 +303,68 @@ export default function InventorySettingsPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Color</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {categories.map((category) => (
-                    <TableRow key={category.id}>
-                      <TableCell className="font-medium">{category.name}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-6 h-6 rounded"
-                            style={{ backgroundColor: category.color }}
-                          />
-                          <span className="text-sm text-muted-foreground">{category.color}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {category.description || "-"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-1 justify-end">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => { setEditingCategory(category); setIsCategoryDialogOpen(true); }}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600"
-                            onClick={() => handleDeleteCategory(category.id, category.name)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+              {categories.length === 0 ? (
+                <div className="text-center py-12">
+                  <Tag className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">No categories created yet</p>
+                  <Button
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() => { setEditingCategory(null); setIsCategoryDialogOpen(true); }}
+                  >
+                    Add Your First Category
+                  </Button>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Color</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {categories.map((category) => (
+                      <TableRow key={category.id}>
+                        <TableCell className="font-medium">{category.name}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-6 h-6 rounded"
+                              style={{ backgroundColor: category.color }}
+                            />
+                            <span className="text-sm text-muted-foreground">{category.color}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {category.description || "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-1 justify-end">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => { setEditingCategory(category); setIsCategoryDialogOpen(true); }}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600"
+                              onClick={() => handleDeleteCategory(category.id, category.name)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -355,46 +387,60 @@ export default function InventorySettingsPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Abbreviation</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {units.map((unit) => (
-                    <TableRow key={unit.id}>
-                      <TableCell className="font-medium">{unit.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{unit.abbreviation}</Badge>
-                      </TableCell>
-                      <TableCell className="capitalize">{unit.type}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-1 justify-end">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => { setEditingUnit(unit); setIsUnitDialogOpen(true); }}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600"
-                            onClick={() => handleDeleteUnit(unit.id, unit.name)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+              {units.length === 0 ? (
+                <div className="text-center py-12">
+                  <Ruler className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">No units created yet</p>
+                  <Button
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() => { setEditingUnit(null); setIsUnitDialogOpen(true); }}
+                  >
+                    Add Your First Unit
+                  </Button>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Abbreviation</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {units.map((unit) => (
+                      <TableRow key={unit.id}>
+                        <TableCell className="font-medium">{unit.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{unit.abbreviation}</Badge>
+                        </TableCell>
+                        <TableCell className="capitalize">{unit.type}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-1 justify-end">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => { setEditingUnit(unit); setIsUnitDialogOpen(true); }}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600"
+                              onClick={() => handleDeleteUnit(unit.id, unit.name)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -511,7 +557,7 @@ export default function InventorySettingsPage() {
               <Input
                 id="description"
                 name="description"
-                defaultValue={editingCategory?.description}
+                defaultValue={editingCategory?.description || ""}
                 placeholder="Brief description"
               />
             </div>
@@ -609,7 +655,7 @@ export default function InventorySettingsPage() {
                 <Input
                   id="contact_person"
                   name="contact_person"
-                  defaultValue={editingSupplier?.contact_person}
+                  defaultValue={editingSupplier?.contact_person || ""}
                   placeholder="John Doe"
                 />
               </div>
@@ -621,7 +667,7 @@ export default function InventorySettingsPage() {
                   id="supplier_email"
                   name="email"
                   type="email"
-                  defaultValue={editingSupplier?.email}
+                  defaultValue={editingSupplier?.email || ""}
                   placeholder="contact@supplier.com"
                 />
               </div>
@@ -630,7 +676,7 @@ export default function InventorySettingsPage() {
                 <Input
                   id="supplier_phone"
                   name="phone"
-                  defaultValue={editingSupplier?.phone}
+                  defaultValue={editingSupplier?.phone || ""}
                   placeholder="+260 XXX XXXXXX"
                 />
               </div>
@@ -640,7 +686,7 @@ export default function InventorySettingsPage() {
               <Input
                 id="supplier_address"
                 name="address"
-                defaultValue={editingSupplier?.address}
+                defaultValue={editingSupplier?.address || ""}
                 placeholder="Street address, city, country"
               />
             </div>
@@ -649,7 +695,7 @@ export default function InventorySettingsPage() {
               <Input
                 id="supplier_notes"
                 name="notes"
-                defaultValue={editingSupplier?.notes}
+                defaultValue={editingSupplier?.notes || ""}
                 placeholder="Additional information"
               />
             </div>
