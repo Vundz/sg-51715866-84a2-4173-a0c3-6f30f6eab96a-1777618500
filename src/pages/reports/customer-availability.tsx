@@ -16,6 +16,12 @@ import { formatNumber } from "@/lib/format";
 type PlantingData = Awaited<ReturnType<typeof plantingService.getPlantingsWithDetails>>[0];
 type ReservationData = Awaited<ReturnType<typeof reservationService.getReservations>>[0];
 
+interface ColumnConfig {
+  id: string;
+  label: string;
+  enabled: boolean;
+}
+
 const CustomerAvailabilityReport: React.FC = () => {
   const [plantings, setPlantings] = useState<PlantingData[]>([]);
   const [reservations, setReservations] = useState<ReservationData[]>([]);
@@ -25,7 +31,24 @@ const CustomerAvailabilityReport: React.FC = () => {
   // Filters
   const [daysThreshold, setDaysThreshold] = useState("30");
   const [selectedPlantType, setSelectedPlantType] = useState<string>("all");
+  
+  // Column selection
+  const [columns, setColumns] = useState<ColumnConfig[]>([
+    { id: "plantType", label: "Plant Type", enabled: true },
+    { id: "variety", label: "Variety", enabled: true },
+    { id: "quantity", label: "Available Quantity", enabled: true },
+    { id: "readyDate", label: "Ready Date", enabled: true },
+  ]);
+  
   const { toast } = useToast();
+
+  const toggleColumn = (columnId: string) => {
+    setColumns(prev => prev.map(col => 
+      col.id === columnId ? { ...col, enabled: !col.enabled } : col
+    ));
+  };
+
+  const enabledColumns = useMemo(() => columns.filter(c => c.enabled), [columns]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -136,13 +159,17 @@ const CustomerAvailabilityReport: React.FC = () => {
   }, [availableSeedlings]);
 
   const exportToCSV = () => {
-    const headers = ["Plant Type", "Variety", "Available Quantity", "Ready Date"];
-    const rows = availableSeedlings.map(s => [
-      s.plantType,
-      s.variety,
-      s.availableQuantity,
-      s.readyDate.toLocaleDateString(),
-    ]);
+    const headers = enabledColumns.map(c => c.label);
+    const rows = availableSeedlings.map(s => {
+      const row: string[] = [];
+      enabledColumns.forEach(col => {
+        if (col.id === "plantType") row.push(s.plantType);
+        if (col.id === "variety") row.push(s.variety);
+        if (col.id === "quantity") row.push(s.availableQuantity.toString());
+        if (col.id === "readyDate") row.push(s.readyDate.toLocaleDateString());
+      });
+      return row;
+    });
     
     const csvContent = [headers, ...rows].map(row => row.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -155,14 +182,17 @@ const CustomerAvailabilityReport: React.FC = () => {
   };
 
   const exportToExcel = () => {
-    // Excel export using CSV format with .xlsx extension for better compatibility
-    const headers = ["Plant Type", "Variety", "Available Quantity", "Ready Date"];
-    const rows = availableSeedlings.map(s => [
-      s.plantType,
-      s.variety,
-      s.availableQuantity.toString(),
-      s.readyDate.toLocaleDateString(),
-    ]);
+    const headers = enabledColumns.map(c => c.label);
+    const rows = availableSeedlings.map(s => {
+      const row: string[] = [];
+      enabledColumns.forEach(col => {
+        if (col.id === "plantType") row.push(s.plantType);
+        if (col.id === "variety") row.push(s.variety);
+        if (col.id === "quantity") row.push(s.availableQuantity.toString());
+        if (col.id === "readyDate") row.push(s.readyDate.toLocaleDateString());
+      });
+      return row;
+    });
     
     const csvContent = [headers, ...rows].map(row => row.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -224,10 +254,10 @@ const CustomerAvailabilityReport: React.FC = () => {
           <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
             <thead>
               <tr>
-                <th style="background: #16a34a; color: white; padding: 12px; text-align: left; font-weight: bold;">Plant Type</th>
-                <th style="background: #16a34a; color: white; padding: 12px; text-align: left; font-weight: bold;">Variety</th>
-                <th style="background: #16a34a; color: white; padding: 12px; text-align: right; font-weight: bold;">Available Quantity</th>
-                <th style="background: #16a34a; color: white; padding: 12px; text-align: right; font-weight: bold;">Ready Date</th>
+                ${enabledColumns.find(c => c.id === "plantType") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: left; font-weight: bold;">Plant Type</th>' : ''}
+                ${enabledColumns.find(c => c.id === "variety") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: left; font-weight: bold;">Variety</th>' : ''}
+                ${enabledColumns.find(c => c.id === "quantity") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: right; font-weight: bold;">Available Quantity</th>' : ''}
+                ${enabledColumns.find(c => c.id === "readyDate") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: right; font-weight: bold;">Ready Date</th>' : ''}
               </tr>
             </thead>
             <tbody>
@@ -246,16 +276,24 @@ const CustomerAvailabilityReport: React.FC = () => {
       const sortedPlantTypes = Object.keys(groupedByPlantType).sort();
       let rowIndex = 0;
 
+      const showPlantType = enabledColumns.find(c => c.id === "plantType");
+      const showVariety = enabledColumns.find(c => c.id === "variety");
+      const showQuantity = enabledColumns.find(c => c.id === "quantity");
+      const showReadyDate = enabledColumns.find(c => c.id === "readyDate");
+      const colSpan = enabledColumns.length;
+
       sortedPlantTypes.forEach(plantType => {
         const plantings = groupedByPlantType[plantType];
         
-        // Plant type header row
-        htmlContent += `
+        // Plant type header row (only if plant type column is enabled)
+        if (showPlantType) {
+          htmlContent += `
           <tr>
-            <td colspan="4" style="background: #f0fdf4; font-weight: bold; font-size: 1.1em; color: #16a34a; padding: 15px 12px;">
+            <td colspan="${colSpan}" style="background: #f0fdf4; font-weight: bold; font-size: 1.1em; color: #16a34a; padding: 15px 12px;">
               ${plantType}
             </td>
           </tr>`;
+        }
         
         // Variety rows
         plantings.forEach(p => {
@@ -270,18 +308,32 @@ const CustomerAvailabilityReport: React.FC = () => {
           const bgColor = rowIndex % 2 === 0 ? '#f9fafb' : '#ffffff';
           rowIndex++;
           
-          htmlContent += `
-            <tr>
-              <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor};"></td>
-              <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor};">${p.variety || 'N/A'}</td>
+          htmlContent += `<tr>`;
+          
+          if (showPlantType) {
+            htmlContent += `<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor};"></td>`;
+          }
+          
+          if (showVariety) {
+            htmlContent += `<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor};">${p.variety || 'N/A'}</td>`;
+          }
+          
+          if (showQuantity) {
+            htmlContent += `
               <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor}; text-align: right; font-weight: bold; color: #16a34a;">
                 ${formatNumber(p.availableQuantity)} seedlings
-              </td>
+              </td>`;
+          }
+          
+          if (showReadyDate) {
+            htmlContent += `
               <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor}; text-align: right;">
                 ${formattedReadyDate}
                 ${isAvailableNow ? " <strong style='color: #16a34a;'>(Available Now!)</strong>" : ""}
-              </td>
-            </tr>`;
+              </td>`;
+          }
+          
+          htmlContent += `</tr>`;
         });
       });
 
@@ -428,10 +480,10 @@ const CustomerAvailabilityReport: React.FC = () => {
         {/* Filters */}
         <Card>
           <CardHeader>
-            <CardTitle>Filters</CardTitle>
-            <CardDescription>Customize the availability view</CardDescription>
+            <CardTitle>Filters & Display Options</CardTitle>
+            <CardDescription>Customize the availability view and select columns to display</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Show seedlings ready within</Label>
@@ -465,7 +517,31 @@ const CustomerAvailabilityReport: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-4 flex items-center justify-between">
+            {/* Column Selection */}
+            <div className="space-y-3 pt-4 border-t">
+              <Label className="text-base font-semibold">Display Columns</Label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {columns.map(col => (
+                  <div key={col.id} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id={`col-${col.id}`}
+                      checked={col.enabled}
+                      onChange={() => toggleColumn(col.id)}
+                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                    />
+                    <label
+                      htmlFor={`col-${col.id}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      {col.label}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t">
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Showing {availableSeedlings.length} available variety option{availableSeedlings.length !== 1 ? "s" : ""}
               </p>
@@ -514,39 +590,45 @@ const CustomerAvailabilityReport: React.FC = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Variety</TableHead>
-                        <TableHead className="text-right">Available Quantity</TableHead>
-                        <TableHead className="text-right">Ready Date</TableHead>
+                        {enabledColumns.find(c => c.id === "variety") && <TableHead>Variety</TableHead>}
+                        {enabledColumns.find(c => c.id === "quantity") && <TableHead className="text-right">Available Quantity</TableHead>}
+                        {enabledColumns.find(c => c.id === "readyDate") && <TableHead className="text-right">Ready Date</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {seedlings.map(s => (
                         <TableRow key={s.id}>
-                          <TableCell className="font-medium">{s.variety}</TableCell>
-                          <TableCell className="text-right">
-                            <span className="font-semibold text-green-600">
-                              {formatNumber(s.availableQuantity)}
-                            </span>
-                            <span className="text-xs text-gray-500 ml-1">seedlings</span>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex flex-col items-end">
-                              <span className="font-medium">
-                                {s.readyDate.toLocaleDateString("en-US", { 
-                                  weekday: "short", 
-                                  month: "short", 
-                                  day: "numeric" 
-                                })}
+                          {enabledColumns.find(c => c.id === "variety") && (
+                            <TableCell className="font-medium">{s.variety}</TableCell>
+                          )}
+                          {enabledColumns.find(c => c.id === "quantity") && (
+                            <TableCell className="text-right">
+                              <span className="font-semibold text-green-600">
+                                {formatNumber(s.availableQuantity)}
                               </span>
-                              {s.isReadyNow ? (
-                                <span className="text-xs text-green-600 font-semibold">Available Now!</span>
-                              ) : (
-                                <span className="text-xs text-gray-500">
-                                  {s.daysUntilReady === 1 ? "Tomorrow" : `in ${s.daysUntilReady} days`}
+                              <span className="text-xs text-gray-500 ml-1">seedlings</span>
+                            </TableCell>
+                          )}
+                          {enabledColumns.find(c => c.id === "readyDate") && (
+                            <TableCell className="text-right">
+                              <div className="flex flex-col items-end">
+                                <span className="font-medium">
+                                  {s.readyDate.toLocaleDateString("en-US", { 
+                                    weekday: "short", 
+                                    month: "short", 
+                                    day: "numeric" 
+                                  })}
                                 </span>
-                              )}
-                            </div>
-                          </TableCell>
+                                {s.isReadyNow ? (
+                                  <span className="text-xs text-green-600 font-semibold">Available Now!</span>
+                                ) : (
+                                  <span className="text-xs text-gray-500">
+                                    {s.daysUntilReady === 1 ? "Tomorrow" : `in ${s.daysUntilReady} days`}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
