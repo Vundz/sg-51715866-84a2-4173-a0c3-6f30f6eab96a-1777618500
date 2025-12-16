@@ -133,6 +133,18 @@ export default function InventoryPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
+    const itemId = formData.get("item_id") as string;
+    
+    // Validation: Ensure item is selected
+    if (!itemId) {
+      toast({ 
+        title: "Error", 
+        description: "Please select an inventory item.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
     const transactionType = formData.get("transaction_type") as "purchase" | "usage" | "adjustment" | "waste";
     const quantity = parseFloat(formData.get("quantity") as string);
     const unitPrice = formData.get("unit_price") ? parseFloat(formData.get("unit_price") as string) : undefined;
@@ -141,7 +153,7 @@ export default function InventoryPage() {
     const adjustedQuantity = (transactionType === "usage" || transactionType === "waste") ? -Math.abs(quantity) : Math.abs(quantity);
     
     const transactionData = {
-      item_id: formData.get("item_id") as string,
+      item_id: itemId,
       transaction_type: transactionType,
       quantity: adjustedQuantity,
       unit_price: unitPrice,
