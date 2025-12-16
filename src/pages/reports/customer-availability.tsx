@@ -204,7 +204,7 @@ const CustomerAvailabilityReport: React.FC = () => {
         }
         return a.daysUntilReady - b.daysUntilReady;
       });
-  }, [plantings, reservations, daysThreshold, selectedPlantType, selectedVariety]);
+  }, [plantings, reservations, daysThreshold, selectedPlantTypes, selectedVarieties]);
 
   // Group by plant type for better presentation
   const groupedByPlantType = useMemo(() => {

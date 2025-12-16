@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Edit, Trash2, TestTube2, ChevronsRight } from "lucide-react";
 import { treatmentService, TreatmentWithPlantings } from "@/services/treatmentService";
 import { plantingService, PlantingWithDetails } from "@/services/plantingService";
+import { locationService } from "@/services/locationService";
 import { useToast } from "@/hooks/use-toast";
 import { group } from "console";
 import { useAuth } from "@/contexts/AuthContext";
@@ -33,15 +34,20 @@ interface GroupedTreatment {
   }[];
 }
 
+type Location = Awaited<ReturnType<typeof locationService.getLocations>>[0];
+
 export default function TreatmentsPage() {
   const { user, profile } = useAuth();
   const permissions = usePermissions("treatments");
   const [treatments, setTreatments] = useState<GroupedTreatment[]>([]);
   const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTreatment, setEditingTreatment] = useState<GroupedTreatment | null>(null);
   const [isBulkMode, setIsBulkMode] = useState(false);
+  const [applicationMode, setApplicationMode] = useState<"batch" | "location" | "both">("batch");
   const [selectedPlantingIds, setSelectedPlantingIds] = useState<string[]>([]);
+  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
@@ -55,14 +61,16 @@ export default function TreatmentsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [treatmentsData, plantingsData] = await Promise.all([
+      const [treatmentsData, plantingsData, locationsData] = await Promise.all([
         treatmentService.getTreatments(),
         plantingService.getPlantingsWithDetails(),
+        locationService.getLocations(),
       ]);
 
       const groupedTreatments = groupTreatments(treatmentsData);
       setTreatments(groupedTreatments);
       setPlantings(plantingsData);
+      setLocations(locationsData);
     } catch (error) {
       console.error("Error loading data:", error);
       toast({ title: "Error", description: "Failed to load data.", variant: "destructive" });
@@ -111,6 +119,19 @@ export default function TreatmentsPage() {
     ), [treatments, searchQuery]);
 
   const activePlantings = plantings.filter(p => p.status === "active");
+
+  // Filter plantings based on selected locations (for location-based application)
+  const filteredPlantingsByLocation = useMemo(() => {
+    if (applicationMode === "batch") {
+      return activePlantings;
+    }
+    
+    if (selectedLocationIds.length === 0) {
+      return activePlantings;
+    }
+    
+    return activePlantings.filter(p => selectedLocationIds.includes(p.location_id));
+  }, [activePlantings, selectedLocationIds, applicationMode]);
 
   const getPlantingDetails = (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
@@ -185,7 +206,9 @@ export default function TreatmentsPage() {
   const handleOpenDialog = (treatment: GroupedTreatment | null = null, bulk = false) => {
     setEditingTreatment(treatment);
     setIsBulkMode(bulk || (treatment !== null && treatment.plantings.length > 1));
+    setApplicationMode("batch");
     setSelectedPlantingIds(treatment?.plantings.map(p => p.id) || []);
+    setSelectedLocationIds([]);
     setIsDialogOpen(true);
   };
 
@@ -193,12 +216,47 @@ export default function TreatmentsPage() {
     setIsDialogOpen(false);
     setEditingTreatment(null);
     setSelectedPlantingIds([]);
+    setSelectedLocationIds([]);
+    setApplicationMode("batch");
   }
   
   const togglePlantingSelection = (plantingId: string) => {
     setSelectedPlantingIds(prev =>
       prev.includes(plantingId) ? prev.filter(id => id !== plantingId) : [...prev, plantingId]
     );
+  };
+
+  const toggleLocationSelection = (locationId: string) => {
+    setSelectedLocationIds(prev => {
+      const newSelection = prev.includes(locationId) 
+        ? prev.filter(id => id !== locationId) 
+        : [...prev, locationId];
+      
+      // When locations change, auto-select all plantings in those locations
+      if (applicationMode === "location") {
+        const plantingsInLocations = activePlantings
+          .filter(p => newSelection.includes(p.location_id))
+          .map(p => p.id);
+        setSelectedPlantingIds(plantingsInLocations);
+      }
+      
+      return newSelection;
+    });
+  };
+
+  const selectAllLocations = () => {
+    if (selectedLocationIds.length === locations.length) {
+      setSelectedLocationIds([]);
+      if (applicationMode === "location") {
+        setSelectedPlantingIds([]);
+      }
+    } else {
+      const allLocationIds = locations.map(l => l.id);
+      setSelectedLocationIds(allLocationIds);
+      if (applicationMode === "location") {
+        setSelectedPlantingIds(activePlantings.map(p => p.id));
+      }
+    }
   };
 
   if (loading) return <div className="flex items-center justify-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600"></div></div>;
@@ -227,35 +285,137 @@ export default function TreatmentsPage() {
           </DialogHeader>
           <form onSubmit={handleSaveTreatment} className="space-y-4 pt-4">
             {isBulkMode ? (
-              <div className="space-y-2">
-                <Label>Select Plantings *</Label>
-                <div className="flex items-center gap-2 mb-2 p-2 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
-                  <Checkbox 
-                    id="select-all" 
-                    checked={selectedPlantingIds.length === activePlantings.length && activePlantings.length > 0}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedPlantingIds(activePlantings.map(p => p.id));
-                      } else {
+              <div className="space-y-4">
+                {/* Application Mode Toggle */}
+                <div className="space-y-2">
+                  <Label>Application Method</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      type="button"
+                      variant={applicationMode === "batch" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setApplicationMode("batch");
+                        setSelectedLocationIds([]);
+                      }}
+                      className="w-full"
+                      disabled={isViewer}
+                    >
+                      By Batch
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={applicationMode === "location" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setApplicationMode("location");
                         setSelectedPlantingIds([]);
-                      }
-                    }}
-                    disabled={isViewer}
-                  />
-                  <Label htmlFor="select-all" className="font-semibold text-blue-900 dark:text-blue-100 cursor-pointer">
-                    Select All ({activePlantings.length} plantings)
-                  </Label>
+                      }}
+                      className="w-full"
+                      disabled={isViewer}
+                    >
+                      By Location
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={applicationMode === "both" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setApplicationMode("both")}
+                      className="w-full"
+                      disabled={isViewer}
+                    >
+                      Both
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {applicationMode === "batch" && "Select specific planting batches"}
+                    {applicationMode === "location" && "Apply to all plantings in selected locations"}
+                    {applicationMode === "both" && "Select locations, then refine by specific batches"}
+                  </p>
                 </div>
-                <ScrollArea className="h-48 rounded-md border p-2">
-                  {activePlantings.map(p => {
-                    const details = getPlantingDetails(p.id);
-                    return (
-                    <div key={p.id} className="flex items-center gap-2 mb-2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
-                      <Checkbox id={`bulk-${p.id}`} checked={selectedPlantingIds.includes(p.id)} onCheckedChange={() => togglePlantingSelection(p.id)} disabled={isViewer}/>
-                      <Label htmlFor={`bulk-${p.id}`} className="font-normal w-full cursor-pointer">{details.name} ({details.variety}) - Planted: {details.datePlanted}</Label>
+
+                {/* Location Selection (shown for "location" or "both" modes) */}
+                {(applicationMode === "location" || applicationMode === "both") && (
+                  <div className="space-y-2">
+                    <Label>Select Locations *</Label>
+                    <div className="flex items-center gap-2 mb-2 p-2 bg-purple-50 dark:bg-purple-950 rounded border border-purple-200 dark:border-purple-800">
+                      <Checkbox 
+                        id="select-all-locations" 
+                        checked={selectedLocationIds.length === locations.length && locations.length > 0}
+                        onCheckedChange={selectAllLocations}
+                        disabled={isViewer}
+                      />
+                      <Label htmlFor="select-all-locations" className="font-semibold text-purple-900 dark:text-purple-100 cursor-pointer">
+                        Select All Locations ({locations.length} total)
+                      </Label>
                     </div>
-                  )})}
-                </ScrollArea>
+                    <ScrollArea className="h-32 rounded-md border p-2 bg-background">
+                      {locations.map(loc => (
+                        <div key={loc.id} className="flex items-center gap-2 mb-2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+                          <Checkbox 
+                            id={`location-${loc.id}`} 
+                            checked={selectedLocationIds.includes(loc.id)} 
+                            onCheckedChange={() => toggleLocationSelection(loc.id)} 
+                            disabled={isViewer}
+                          />
+                          <Label htmlFor={`location-${loc.id}`} className="font-normal w-full cursor-pointer flex justify-between">
+                            <span>{loc.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {activePlantings.filter(p => p.location_id === loc.id).length} planting(s)
+                            </span>
+                          </Label>
+                        </div>
+                      ))}
+                    </ScrollArea>
+                    {selectedLocationIds.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {selectedLocationIds.length} location(s) selected → {filteredPlantingsByLocation.length} planting(s) affected
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Planting Selection (shown for "batch" or "both" modes) */}
+                {(applicationMode === "batch" || applicationMode === "both") && (
+                  <div className="space-y-2">
+                    <Label>
+                      {applicationMode === "both" ? "Refine Selection (Optional)" : "Select Plantings *"}
+                    </Label>
+                    <div className="flex items-center gap-2 mb-2 p-2 bg-blue-50 dark:bg-blue-950 rounded border border-blue-200 dark:border-blue-800">
+                      <Checkbox 
+                        id="select-all" 
+                        checked={selectedPlantingIds.length === filteredPlantingsByLocation.length && filteredPlantingsByLocation.length > 0}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedPlantingIds(filteredPlantingsByLocation.map(p => p.id));
+                          } else {
+                            setSelectedPlantingIds([]);
+                          }
+                        }}
+                        disabled={isViewer}
+                      />
+                      <Label htmlFor="select-all" className="font-semibold text-blue-900 dark:text-blue-100 cursor-pointer">
+                        Select All ({filteredPlantingsByLocation.length} {applicationMode === "both" ? "filtered " : ""}plantings)
+                      </Label>
+                    </div>
+                    <ScrollArea className="h-48 rounded-md border p-2 bg-background">
+                      {filteredPlantingsByLocation.map(p => {
+                        const details = getPlantingDetails(p.id);
+                        return (
+                        <div key={p.id} className="flex items-center gap-2 mb-2 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+                          <Checkbox id={`bulk-${p.id}`} checked={selectedPlantingIds.includes(p.id)} onCheckedChange={() => togglePlantingSelection(p.id)} disabled={isViewer}/>
+                          <Label htmlFor={`bulk-${p.id}`} className="font-normal w-full cursor-pointer text-sm">
+                            <div className="flex justify-between items-center">
+                              <span>{details.name} ({details.variety})</span>
+                              <span className="text-xs text-muted-foreground">{p.locations?.name}</span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">Batch: {p.batch_number} • Planted: {details.datePlanted}</div>
+                          </Label>
+                        </div>
+                      )})}
+                    </ScrollArea>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
