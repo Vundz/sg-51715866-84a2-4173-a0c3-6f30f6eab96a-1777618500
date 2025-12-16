@@ -182,59 +182,195 @@ const CustomerAvailabilityReport: React.FC = () => {
   const exportToPDF = async () => {
     try {
       setExporting(true);
-      toast({
-        title: "Generating PDF",
-        description: "Please wait while we generate your PDF...",
-      });
-
-      // Get the report content element
-      const reportContent = document.getElementById("seedlings-report-content");
-      if (!reportContent) {
-        throw new Error("Report content not found");
-      }
-
-      // Create canvas from HTML
-      const canvas = await html2canvas(reportContent, {
-        scale: 2,
-        logging: false,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-      });
-
-      const imgData = canvas.toDataURL("image/png");
       
-      // Calculate PDF dimensions
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
+      // Generate the HTML content with the customer-friendly design
+      const today = new Date();
+      const formattedDate = today.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      const shortDate = today.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit' 
+      }).replace(/\//g, '-');
 
-      // Create PDF
-      const pdf = new jsPDF("p", "mm", "a4");
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      // Group plantings by plant type
+      const groupedByPlantType: Record<string, typeof availableSeedlings> = {};
+      availableSeedlings.forEach(p => {
+        const typeName = p.plantType;
+        if (!groupedByPlantType[typeName]) {
+          groupedByPlantType[typeName] = [];
+        }
+        groupedByPlantType[typeName].push(p);
+      });
 
-      // Add new pages if content is longer than one page
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
+      // Sort plant types alphabetically
+      const sortedPlantTypes = Object.keys(groupedByPlantType).sort();
 
-      // Download PDF
-      pdf.save(`seedlings-availability-${new Date().toISOString().split("T")[0]}.pdf`);
+      // Build table rows
+      let tableRows = '';
+      sortedPlantTypes.forEach(plantType => {
+        const plantings = groupedByPlantType[plantType];
+        
+        // Plant type header row
+        tableRows += `
+              <tr>
+                <td colspan="4" class="plant-type-header">${plantType}</td>
+              </tr>`;
+        
+        // Variety rows
+        plantings.forEach(p => {
+          const readyDate = new Date(p.readyDate);
+          const isAvailableNow = readyDate <= today;
+          const formattedReadyDate = readyDate.toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric'
+          });
+          
+          tableRows += `
+                <tr>
+                  <td></td>
+                  <td>${p.variety || 'N/A'}</td>
+                  <td style="text-align: right; font-weight: bold; color: #16a34a;">
+                    ${formatNumber(p.availableQuantity)} seedlings
+                  </td>
+                  <td style="text-align: right;">
+                    ${formattedReadyDate}
+                    ${isAvailableNow ? " <strong style='color: #16a34a;'>(Available Now!)</strong>" : ""}
+                  </td>
+                </tr>`;
+        });
+      });
+
+      const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Seedlings Availability Report - ${shortDate}</title>
+        <style>
+          @media print {
+            @page { margin: 0.5in; }
+          }
+          body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+          }
+          h1 {
+            color: #16a34a;
+            border-bottom: 3px solid #16a34a;
+            padding-bottom: 10px;
+          }
+          .summary {
+            background: #f0fdf4;
+            padding: 20px;
+            border-left: 4px solid #16a34a;
+            margin: 20px 0;
+          }
+          .summary h2 {
+            margin: 0 0 10px 0;
+            color: #16a34a;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+          }
+          th {
+            background: #16a34a;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+          }
+          td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e5e7eb;
+          }
+          tr:nth-child(even) {
+            background: #f9fafb;
+          }
+          .plant-type-header {
+            background: #f0fdf4;
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #16a34a;
+            padding: 15px 12px !important;
+          }
+          .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #6b7280;
+            font-size: 0.9em;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>Seedlings Availability Report</h1>
+        <p><strong>Report Date:</strong> ${formattedDate}</p>
+        
+        <div class="summary">
+          <h2>Total Available: ${formatNumber(totalAvailable)} Seedlings</h2>
+          <p>${availableSeedlings.length} variety options available for reservation</p>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Plant Type</th>
+              <th>Variety</th>
+              <th style="text-align: right;">Available Quantity</th>
+              <th style="text-align: right;">Ready Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          <p>Please contact us to place your order and reserve your seedlings.</p>
+          <p>Report generated by Khulisapp Seedlings Management System</p>
+        </div>
+        
+        <script>
+          // Auto-print when opened
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+      // Create a Blob and download
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `seedlings-availability-${shortDate}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
       toast({
         title: "Success",
-        description: "PDF downloaded successfully!",
+        description: "Report downloaded successfully! Open the HTML file to print as PDF.",
       });
     } catch (error) {
       console.error("Error generating PDF:", error);
       toast({
         title: "Error",
-        description: "Failed to generate PDF. Please try again.",
+        description: "Failed to generate report. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -281,7 +417,7 @@ const CustomerAvailabilityReport: React.FC = () => {
             <FileSpreadsheet className="w-4 h-4" />
             Excel
           </Button>
-          <Button onClick={exportToPDF} variant="outline" size="sm" className="gap-2" disabled={exporting}>
+          <Button onClick={exportToPDF} disabled={exporting} className="gap-2">
             {exporting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -290,7 +426,7 @@ const CustomerAvailabilityReport: React.FC = () => {
             ) : (
               <>
                 <Download className="w-4 h-4" />
-                PDF
+                Download Report
               </>
             )}
           </Button>
