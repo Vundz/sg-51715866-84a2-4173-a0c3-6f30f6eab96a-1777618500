@@ -31,6 +31,7 @@ const CustomerAvailabilityReport: React.FC = () => {
   // Filters
   const [daysThreshold, setDaysThreshold] = useState("30");
   const [selectedPlantType, setSelectedPlantType] = useState<string>("all");
+  const [selectedVariety, setSelectedVariety] = useState<string>("all");
   
   // Column selection
   const [columns, setColumns] = useState<ColumnConfig[]>([
@@ -82,6 +83,21 @@ const CustomerAvailabilityReport: React.FC = () => {
     return Array.from(names).sort();
   }, [plantings]);
 
+  // Get unique varieties for the selected plant type
+  const availableVarieties = useMemo(() => {
+    if (selectedPlantType === "all") {
+      return Array.from(new Set(plantings.map(p => p.variety).filter(Boolean)));
+    }
+    return Array.from(
+      new Set(
+        plantings
+          .filter(p => p.plant_types?.name === selectedPlantType)
+          .map(p => p.variety)
+          .filter(Boolean)
+      )
+    );
+  }, [plantings, selectedPlantType]);
+
   // Process available seedlings
   const availableSeedlings = useMemo(() => {
     const today = new Date();
@@ -97,6 +113,11 @@ const CustomerAvailabilityReport: React.FC = () => {
 
         // Filter by plant type
         if (selectedPlantType !== "all" && p.plant_types?.name !== selectedPlantType) {
+          return false;
+        }
+
+        // Filter by variety
+        if (selectedVariety !== "all" && p.variety !== selectedVariety) {
           return false;
         }
 
@@ -141,7 +162,7 @@ const CustomerAvailabilityReport: React.FC = () => {
         }
         return a.daysUntilReady - b.daysUntilReady;
       });
-  }, [plantings, reservations, daysThreshold, selectedPlantType]);
+  }, [plantings, reservations, daysThreshold, selectedPlantType, selectedVariety]);
 
   // Group by plant type for better presentation
   const groupedByPlantType = useMemo(() => {
@@ -504,7 +525,7 @@ const CustomerAvailabilityReport: React.FC = () => {
             <CardDescription>Customize the availability view and select columns to display</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Show seedlings ready within</Label>
                 <Select value={daysThreshold} onValueChange={setDaysThreshold}>
@@ -523,7 +544,10 @@ const CustomerAvailabilityReport: React.FC = () => {
 
               <div className="space-y-2">
                 <Label>Plant Type</Label>
-                <Select value={selectedPlantType} onValueChange={setSelectedPlantType}>
+                <Select value={selectedPlantType} onValueChange={(value) => {
+                  setSelectedPlantType(value);
+                  setSelectedVariety("all"); // Reset variety when plant type changes
+                }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -531,6 +555,25 @@ const CustomerAvailabilityReport: React.FC = () => {
                     <SelectItem value="all">All Plant Types</SelectItem>
                     {uniquePlantTypeNames.map(name => (
                       <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Variety</Label>
+                <Select 
+                  value={selectedVariety} 
+                  onValueChange={setSelectedVariety}
+                  disabled={selectedPlantType === "all"}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Varieties</SelectItem>
+                    {availableVarieties.map(variety => (
+                      <SelectItem key={variety} value={variety}>{variety}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -565,13 +608,16 @@ const CustomerAvailabilityReport: React.FC = () => {
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Showing {availableSeedlings.length} available variety option{availableSeedlings.length !== 1 ? "s" : ""}
               </p>
-              {selectedPlantType !== "all" && (
+              {(selectedPlantType !== "all" || selectedVariety !== "all") && (
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setSelectedPlantType("all")}
+                  onClick={() => {
+                    setSelectedPlantType("all");
+                    setSelectedVariety("all");
+                  }}
                 >
-                  Clear Filter
+                  Clear Filters
                 </Button>
               )}
             </div>
