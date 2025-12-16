@@ -15,6 +15,277 @@ export type Database = {
   }
   public: {
     Tables: {
+      bom_seed_costs: {
+        Row: {
+          buffer_percent: number | null
+          cost_per_seed: number
+          created_at: string | null
+          germination_rate: number | null
+          id: string
+          last_purchase_date: string | null
+          notes: string | null
+          plant_type_id: string
+          supplier_name: string | null
+          supplier_sku: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          buffer_percent?: number | null
+          cost_per_seed?: number
+          created_at?: string | null
+          germination_rate?: number | null
+          id?: string
+          last_purchase_date?: string | null
+          notes?: string | null
+          plant_type_id: string
+          supplier_name?: string | null
+          supplier_sku?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          buffer_percent?: number | null
+          cost_per_seed?: number
+          created_at?: string | null
+          germination_rate?: number | null
+          id?: string
+          last_purchase_date?: string | null
+          notes?: string | null
+          plant_type_id?: string
+          supplier_name?: string | null
+          supplier_sku?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bom_seed_costs_plant_type_id_fkey"
+            columns: ["plant_type_id"]
+            isOneToOne: true
+            referencedRelation: "plant_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bom_settings: {
+        Row: {
+          created_at: string | null
+          currency_code: string
+          default_germination_rate: number
+          default_seed_buffer_percent: number
+          electricity_cost_per_kwh: number
+          electricity_kwh_per_tray_per_day: number
+          harvest_hours_per_tray: number
+          id: string
+          labor_rate_per_hour: number
+          maintenance_hours_per_tray_per_week: number
+          medium_cost_per_unit: number
+          medium_unit_type: string
+          medium_volume_per_tray: number
+          medium_wastage_percent: number
+          overhead_percentage: number
+          planting_hours_per_tray: number
+          seedlings_per_tray: number
+          tray_cost: number
+          tray_lifespan_uses: number
+          updated_at: string | null
+          updated_by: string | null
+          water_cost_per_liter: number
+          water_liters_per_tray_per_day: number
+        }
+        Insert: {
+          created_at?: string | null
+          currency_code?: string
+          default_germination_rate?: number
+          default_seed_buffer_percent?: number
+          electricity_cost_per_kwh?: number
+          electricity_kwh_per_tray_per_day?: number
+          harvest_hours_per_tray?: number
+          id?: string
+          labor_rate_per_hour?: number
+          maintenance_hours_per_tray_per_week?: number
+          medium_cost_per_unit?: number
+          medium_unit_type?: string
+          medium_volume_per_tray?: number
+          medium_wastage_percent?: number
+          overhead_percentage?: number
+          planting_hours_per_tray?: number
+          seedlings_per_tray?: number
+          tray_cost?: number
+          tray_lifespan_uses?: number
+          updated_at?: string | null
+          updated_by?: string | null
+          water_cost_per_liter?: number
+          water_liters_per_tray_per_day?: number
+        }
+        Update: {
+          created_at?: string | null
+          currency_code?: string
+          default_germination_rate?: number
+          default_seed_buffer_percent?: number
+          electricity_cost_per_kwh?: number
+          electricity_kwh_per_tray_per_day?: number
+          harvest_hours_per_tray?: number
+          id?: string
+          labor_rate_per_hour?: number
+          maintenance_hours_per_tray_per_week?: number
+          medium_cost_per_unit?: number
+          medium_unit_type?: string
+          medium_volume_per_tray?: number
+          medium_wastage_percent?: number
+          overhead_percentage?: number
+          planting_hours_per_tray?: number
+          seedlings_per_tray?: number
+          tray_cost?: number
+          tray_lifespan_uses?: number
+          updated_at?: string | null
+          updated_by?: string | null
+          water_cost_per_liter?: number
+          water_liters_per_tray_per_day?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bom_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bom_template_items: {
+        Row: {
+          application_frequency: string | null
+          application_timing: string | null
+          applications_per_cycle: number | null
+          bom_template_id: string
+          created_at: string | null
+          estimated_unit_cost: number | null
+          id: string
+          inventory_item_id: string | null
+          item_category: string | null
+          item_name: string
+          notes: string | null
+          quantity_per_tray: number
+          unit_of_measure: string
+        }
+        Insert: {
+          application_frequency?: string | null
+          application_timing?: string | null
+          applications_per_cycle?: number | null
+          bom_template_id: string
+          created_at?: string | null
+          estimated_unit_cost?: number | null
+          id?: string
+          inventory_item_id?: string | null
+          item_category?: string | null
+          item_name: string
+          notes?: string | null
+          quantity_per_tray: number
+          unit_of_measure: string
+        }
+        Update: {
+          application_frequency?: string | null
+          application_timing?: string | null
+          applications_per_cycle?: number | null
+          bom_template_id?: string
+          created_at?: string | null
+          estimated_unit_cost?: number | null
+          id?: string
+          inventory_item_id?: string | null
+          item_category?: string | null
+          item_name?: string
+          notes?: string | null
+          quantity_per_tray?: number
+          unit_of_measure?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bom_template_items_bom_template_id_fkey"
+            columns: ["bom_template_id"]
+            isOneToOne: false
+            referencedRelation: "bom_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bom_template_items_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bom_templates: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          electricity_kwh_per_tray_per_day: number | null
+          expected_survival_rate: number | null
+          harvest_hours_per_tray: number | null
+          id: string
+          is_active: boolean | null
+          maintenance_hours_per_tray_per_week: number | null
+          medium_volume_per_tray: number | null
+          name: string
+          plant_type_id: string
+          planting_hours_per_tray: number | null
+          updated_at: string | null
+          version: number | null
+          water_liters_per_tray_per_day: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          electricity_kwh_per_tray_per_day?: number | null
+          expected_survival_rate?: number | null
+          harvest_hours_per_tray?: number | null
+          id?: string
+          is_active?: boolean | null
+          maintenance_hours_per_tray_per_week?: number | null
+          medium_volume_per_tray?: number | null
+          name: string
+          plant_type_id: string
+          planting_hours_per_tray?: number | null
+          updated_at?: string | null
+          version?: number | null
+          water_liters_per_tray_per_day?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          electricity_kwh_per_tray_per_day?: number | null
+          expected_survival_rate?: number | null
+          harvest_hours_per_tray?: number | null
+          id?: string
+          is_active?: boolean | null
+          maintenance_hours_per_tray_per_week?: number | null
+          medium_volume_per_tray?: number | null
+          name?: string
+          plant_type_id?: string
+          planting_hours_per_tray?: number | null
+          updated_at?: string | null
+          version?: number | null
+          water_liters_per_tray_per_day?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bom_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bom_templates_plant_type_id_fkey"
+            columns: ["plant_type_id"]
+            isOneToOne: false
+            referencedRelation: "plant_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       harvests: {
         Row: {
           created_at: string | null
@@ -304,6 +575,111 @@ export type Database = {
           variety?: string
         }
         Relationships: []
+      }
+      planting_bom_costs: {
+        Row: {
+          actual_cost_per_seedling: number | null
+          actual_fertilizer_cost: number | null
+          actual_labor_cost: number | null
+          actual_medium_cost: number | null
+          actual_overhead_cost: number | null
+          actual_seed_cost: number | null
+          actual_total_cost: number | null
+          actual_tray_cost: number | null
+          actual_treatment_cost: number | null
+          actual_utilities_cost: number | null
+          bom_template_id: string | null
+          calculation_date: string | null
+          cost_variance: number | null
+          estimated_cost_per_seedling: number | null
+          estimated_fertilizer_cost: number | null
+          estimated_labor_cost: number | null
+          estimated_medium_cost: number | null
+          estimated_overhead_cost: number | null
+          estimated_seed_cost: number | null
+          estimated_total_cost: number | null
+          estimated_tray_cost: number | null
+          estimated_treatment_cost: number | null
+          estimated_utilities_cost: number | null
+          id: string
+          last_updated: string | null
+          planting_id: string
+          variance_percentage: number | null
+        }
+        Insert: {
+          actual_cost_per_seedling?: number | null
+          actual_fertilizer_cost?: number | null
+          actual_labor_cost?: number | null
+          actual_medium_cost?: number | null
+          actual_overhead_cost?: number | null
+          actual_seed_cost?: number | null
+          actual_total_cost?: number | null
+          actual_tray_cost?: number | null
+          actual_treatment_cost?: number | null
+          actual_utilities_cost?: number | null
+          bom_template_id?: string | null
+          calculation_date?: string | null
+          cost_variance?: number | null
+          estimated_cost_per_seedling?: number | null
+          estimated_fertilizer_cost?: number | null
+          estimated_labor_cost?: number | null
+          estimated_medium_cost?: number | null
+          estimated_overhead_cost?: number | null
+          estimated_seed_cost?: number | null
+          estimated_total_cost?: number | null
+          estimated_tray_cost?: number | null
+          estimated_treatment_cost?: number | null
+          estimated_utilities_cost?: number | null
+          id?: string
+          last_updated?: string | null
+          planting_id: string
+          variance_percentage?: number | null
+        }
+        Update: {
+          actual_cost_per_seedling?: number | null
+          actual_fertilizer_cost?: number | null
+          actual_labor_cost?: number | null
+          actual_medium_cost?: number | null
+          actual_overhead_cost?: number | null
+          actual_seed_cost?: number | null
+          actual_total_cost?: number | null
+          actual_tray_cost?: number | null
+          actual_treatment_cost?: number | null
+          actual_utilities_cost?: number | null
+          bom_template_id?: string | null
+          calculation_date?: string | null
+          cost_variance?: number | null
+          estimated_cost_per_seedling?: number | null
+          estimated_fertilizer_cost?: number | null
+          estimated_labor_cost?: number | null
+          estimated_medium_cost?: number | null
+          estimated_overhead_cost?: number | null
+          estimated_seed_cost?: number | null
+          estimated_total_cost?: number | null
+          estimated_tray_cost?: number | null
+          estimated_treatment_cost?: number | null
+          estimated_utilities_cost?: number | null
+          id?: string
+          last_updated?: string | null
+          planting_id?: string
+          variance_percentage?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planting_bom_costs_bom_template_id_fkey"
+            columns: ["bom_template_id"]
+            isOneToOne: false
+            referencedRelation: "bom_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planting_bom_costs_planting_id_fkey"
+            columns: ["planting_id"]
+            isOneToOne: true
+            referencedRelation: "plantings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       planting_treatments: {
         Row: {

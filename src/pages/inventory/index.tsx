@@ -10,23 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Edit, Trash2, Package, AlertCircle, TrendingUp, TrendingDown, DollarSign, History, ShoppingCart } from "lucide-react";
+import { Plus, Edit, Trash2, Package, AlertCircle, TrendingUp, TrendingDown, DollarSign, History, ShoppingCart, Settings } from "lucide-react";
 import { inventoryService, InventoryItemWithLowStock, StockTransactionWithItem } from "@/services/inventoryService";
+import { inventorySettingsService } from "@/services/inventorySettingsService";
+import type { InventoryCategory, InventoryUnit } from "@/services/inventorySettingsService";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { formatNumber } from "@/lib/format";
-
-const CATEGORIES = [
-  { value: "fungicide", label: "Fungicide" },
-  { value: "insecticide", label: "Insecticide" },
-  { value: "fertilizer", label: "Fertilizer" },
-  { value: "other", label: "Other" },
-];
-
-const UNITS = [
-  "liters", "ml", "kg", "grams", "bags", "bottles", "sachets", "packets", "pieces"
-];
+import Link from "next/link";
 
 const TRANSACTION_TYPES = [
   { value: "purchase", label: "Purchase", icon: ShoppingCart, color: "text-green-600" },
@@ -40,6 +32,8 @@ export default function InventoryPage() {
   const permissions = usePermissions("plantings");
   const [items, setItems] = useState<InventoryItemWithLowStock[]>([]);
   const [transactions, setTransactions] = useState<StockTransactionWithItem[]>([]);
+  const [categories, setCategories] = useState<InventoryCategory[]>([]);
+  const [units, setUnits] = useState<InventoryUnit[]>([]);
   const [isItemDialogOpen, setIsItemDialogOpen] = useState(false);
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItemWithLowStock | null>(null);
@@ -59,12 +53,16 @@ export default function InventoryPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [itemsData, transactionsData] = await Promise.all([
+      const [itemsData, transactionsData, categoriesData, unitsData] = await Promise.all([
         inventoryService.getInventoryItems(),
         inventoryService.getStockTransactions(),
+        inventorySettingsService.getCategories(),
+        inventorySettingsService.getUnits(),
       ]);
       setItems(itemsData);
       setTransactions(transactionsData);
+      setCategories(categoriesData);
+      setUnits(unitsData);
     } catch (error) {
       console.error("Error loading inventory data:", error);
       toast({ title: "Error", description: "Failed to load inventory data.", variant: "destructive" });
@@ -187,13 +185,11 @@ export default function InventoryPage() {
     setSelectedItem(null);
   };
 
-  const getCategoryBadgeColor = (category: string) => {
-    switch (category) {
-      case "fungicide": return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
-      case "insecticide": return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
-      case "fertilizer": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200";
-    }
+  const getCategoryBadgeColor = (categoryName: string) => {
+    const category = categories.find(c => c.name === categoryName);
+    if (!category) return "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200";
+    
+    return `text-white dark:text-white`;
   };
 
   const getTransactionIcon = (type: string) => {
@@ -228,22 +224,30 @@ export default function InventoryPage() {
           </p>
         </div>
         
-        {permissions.canCreate && (
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => handleOpenTransactionDialog()}
-              className="gap-2"
-            >
-              <History className="w-4 h-4" />
-              Record Transaction
+        <div className="flex gap-2">
+          {permissions.canCreate && (
+            <>
+              <Button 
+                variant="outline" 
+                onClick={() => handleOpenTransactionDialog()}
+                className="gap-2"
+              >
+                <History className="w-4 h-4" />
+                Record Transaction
+              </Button>
+              <Button onClick={() => handleOpenItemDialog()} className="gap-2 bg-blue-600 hover:bg-blue-700">
+                <Plus className="w-4 h-4" />
+                Add Item
+              </Button>
+            </>
+          )}
+          <Link href="/settings/inventory">
+            <Button variant="outline" className="gap-2">
+              <Settings className="w-4 h-4" />
+              Settings
             </Button>
-            <Button onClick={() => handleOpenItemDialog()} className="gap-2 bg-blue-600 hover:bg-blue-700">
-              <Plus className="w-4 h-4" />
-              Add Item
-            </Button>
-          </div>
-        )}
+          </Link>
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -337,8 +341,8 @@ export default function InventoryPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Categories</SelectItem>
-                      {CATEGORIES.map(cat => (
-                        <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                      {categories.map(cat => (
+                        <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -371,81 +375,87 @@ export default function InventoryPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredItems.map(item => (
-                      <TableRow key={item.id} className={item.isLowStock ? "bg-red-50 dark:bg-red-950/20" : ""}>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{item.name}</span>
-                            {item.description && (
-                              <span className="text-xs text-gray-500">{item.description}</span>
-                            )}
-                            {item.isLowStock && (
-                              <Badge variant="destructive" className="mt-1 w-fit text-xs">
-                                Low Stock
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={getCategoryBadgeColor(item.category)}>
-                            {CATEGORIES.find(c => c.value === item.category)?.label || item.category}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-col items-end">
-                            <span className={`font-semibold ${item.isLowStock ? "text-red-600" : "text-blue-600"}`}>
-                              {formatNumber(Number(item.current_stock))}
-                            </span>
-                            <span className="text-xs text-gray-500">{item.unit_of_measure}</span>
-                            {item.minimum_stock > 0 && (
-                              <span className="text-xs text-gray-400">
-                                Min: {formatNumber(Number(item.minimum_stock))}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          K{formatNumber(Number(item.unit_price))}
-                        </TableCell>
-                        <TableCell className="text-right font-mono font-semibold text-green-600">
-                          K{formatNumber(Number(item.current_stock) * Number(item.unit_price))}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-1 justify-end">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleOpenTransactionDialog(item)}
-                              title="Record transaction"
-                              className="text-blue-600"
+                    filteredItems.map(item => {
+                      const category = categories.find(c => c.name === item.category);
+                      return (
+                        <TableRow key={item.id} className={item.isLowStock ? "bg-red-50 dark:bg-red-950/20" : ""}>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{item.name}</span>
+                              {item.description && (
+                                <span className="text-xs text-gray-500">{item.description}</span>
+                              )}
+                              {item.isLowStock && (
+                                <Badge variant="destructive" className="mt-1 w-fit text-xs">
+                                  Low Stock
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              className={getCategoryBadgeColor(item.category)}
+                              style={{ backgroundColor: category?.color }}
                             >
-                              <History className="w-4 h-4" />
-                            </Button>
-                            {permissions.canUpdate && (
+                              {item.category}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-col items-end">
+                              <span className={`font-semibold ${item.isLowStock ? "text-red-600" : "text-blue-600"}`}>
+                                {formatNumber(Number(item.current_stock))}
+                              </span>
+                              <span className="text-xs text-gray-500">{item.unit_of_measure}</span>
+                              {item.minimum_stock > 0 && (
+                                <span className="text-xs text-gray-400">
+                                  Min: {formatNumber(Number(item.minimum_stock))}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            K{formatNumber(Number(item.unit_price))}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-semibold text-green-600">
+                            K{formatNumber(Number(item.current_stock) * Number(item.unit_price))}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex gap-1 justify-end">
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => handleOpenItemDialog(item)}
-                                title="Edit item"
+                                onClick={() => handleOpenTransactionDialog(item)}
+                                title="Record transaction"
+                                className="text-blue-600"
                               >
-                                <Edit className="w-4 h-4" />
+                                <History className="w-4 h-4" />
                               </Button>
-                            )}
-                            {permissions.canDelete && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-red-600"
-                                onClick={() => handleDeleteItem(item.id, item.name)}
-                                title="Delete item"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                              {permissions.canUpdate && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleOpenItemDialog(item)}
+                                  title="Edit item"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {permissions.canDelete && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-red-600"
+                                  onClick={() => handleDeleteItem(item.id, item.name)}
+                                  title="Delete item"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -550,32 +560,44 @@ export default function InventoryPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="category">Category *</Label>
-                <Select name="category" defaultValue={editingItem?.category} required disabled={isViewer}>
+                <Select name="category" defaultValue={editingItem?.category} required disabled={isViewer || categories.length === 0}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
+                    <SelectValue placeholder={categories.length === 0 ? "No categories available" : "Select category"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map(cat => (
-                      <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                    {categories.map(cat => (
+                      <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {categories.length === 0 && (
+                  <p className="text-xs text-red-600">
+                    Please add categories in <Link href="/settings/inventory" className="underline">Inventory Settings</Link> first
+                  </p>
+                )}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="unit_of_measure">Unit of Measure *</Label>
-                <Select name="unit_of_measure" defaultValue={editingItem?.unit_of_measure} required disabled={isViewer}>
+                <Select name="unit_of_measure" defaultValue={editingItem?.unit_of_measure} required disabled={isViewer || units.length === 0}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select unit" />
+                    <SelectValue placeholder={units.length === 0 ? "No units available" : "Select unit"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {UNITS.map(unit => (
-                      <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                    {units.map(unit => (
+                      <SelectItem key={unit.id} value={unit.abbreviation}>
+                        {unit.name} ({unit.abbreviation})
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {units.length === 0 && (
+                  <p className="text-xs text-red-600">
+                    Please add units in <Link href="/settings/inventory" className="underline">Inventory Settings</Link> first
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -628,7 +650,7 @@ export default function InventoryPage() {
                 Cancel
               </Button>
               {!isViewer && (
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={categories.length === 0 || units.length === 0}>
                   {editingItem ? "Update Item" : "Create Item"}
                 </Button>
               )}
