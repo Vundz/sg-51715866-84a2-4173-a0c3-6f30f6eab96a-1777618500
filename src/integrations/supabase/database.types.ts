@@ -15,198 +15,98 @@ export type Database = {
   }
   public: {
     Tables: {
-      bom_seed_costs: {
+      bom_headers: {
         Row: {
-          buffer_percent: number | null
-          cost_per_seed: number | null
           created_at: string | null
-          germination_rate: number | null
+          created_by: string | null
           id: string
-          plant_type_id: string
+          name: string
+          notes: string | null
+          product_name: string
+          status: string | null
           updated_at: string | null
+          version: string | null
         }
         Insert: {
-          buffer_percent?: number | null
-          cost_per_seed?: number | null
           created_at?: string | null
-          germination_rate?: number | null
+          created_by?: string | null
           id?: string
-          plant_type_id: string
+          name: string
+          notes?: string | null
+          product_name: string
+          status?: string | null
           updated_at?: string | null
+          version?: string | null
         }
         Update: {
-          buffer_percent?: number | null
-          cost_per_seed?: number | null
           created_at?: string | null
-          germination_rate?: number | null
+          created_by?: string | null
           id?: string
-          plant_type_id?: string
+          name?: string
+          notes?: string | null
+          product_name?: string
+          status?: string | null
           updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bom_seed_costs_plant_type_id_fkey"
-            columns: ["plant_type_id"]
-            isOneToOne: true
-            referencedRelation: "plant_types"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bom_settings: {
-        Row: {
-          category: string
-          created_at: string | null
-          description: string | null
-          id: string
-          setting_key: string
-          setting_value: string
-          unit: string | null
-          updated_at: string | null
-          updated_by: string | null
-        }
-        Insert: {
-          category: string
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          setting_key: string
-          setting_value: string
-          unit?: string | null
-          updated_at?: string | null
-          updated_by?: string | null
-        }
-        Update: {
-          category?: string
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          setting_key?: string
-          setting_value?: string
-          unit?: string | null
-          updated_at?: string | null
-          updated_by?: string | null
+          version?: string | null
         }
         Relationships: []
       }
-      bom_template_items: {
+      bom_items: {
         Row: {
-          application_frequency: string
-          applications_per_cycle: number | null
-          bom_template_id: string
+          bom_header_id: string
           created_at: string | null
-          estimated_unit_cost: number | null
-          formula_quantity: number | null
-          formula_unit: string | null
+          formula: string | null
           id: string
           inventory_item_id: string | null
-          item_category: string
-          name: string
-          quantity_per_tray: number
+          item_name: string
+          notes: string | null
+          quantity: number
+          total_cost: number | null
           unit: string
+          unit_cost: number | null
           updated_at: string | null
         }
         Insert: {
-          application_frequency: string
-          applications_per_cycle?: number | null
-          bom_template_id: string
+          bom_header_id: string
           created_at?: string | null
-          estimated_unit_cost?: number | null
-          formula_quantity?: number | null
-          formula_unit?: string | null
+          formula?: string | null
           id?: string
           inventory_item_id?: string | null
-          item_category: string
-          name: string
-          quantity_per_tray: number
+          item_name: string
+          notes?: string | null
+          quantity: number
+          total_cost?: number | null
           unit: string
+          unit_cost?: number | null
           updated_at?: string | null
         }
         Update: {
-          application_frequency?: string
-          applications_per_cycle?: number | null
-          bom_template_id?: string
+          bom_header_id?: string
           created_at?: string | null
-          estimated_unit_cost?: number | null
-          formula_quantity?: number | null
-          formula_unit?: string | null
+          formula?: string | null
           id?: string
           inventory_item_id?: string | null
-          item_category?: string
-          name?: string
-          quantity_per_tray?: number
+          item_name?: string
+          notes?: string | null
+          quantity?: number
+          total_cost?: number | null
           unit?: string
+          unit_cost?: number | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "bom_template_items_bom_template_id_fkey"
-            columns: ["bom_template_id"]
+            foreignKeyName: "bom_items_bom_header_id_fkey"
+            columns: ["bom_header_id"]
             isOneToOne: false
-            referencedRelation: "bom_templates"
+            referencedRelation: "bom_headers"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "bom_template_items_inventory_item_id_fkey"
+            foreignKeyName: "bom_items_inventory_item_id_fkey"
             columns: ["inventory_item_id"]
             isOneToOne: false
             referencedRelation: "inventory_items"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bom_templates: {
-        Row: {
-          created_at: string | null
-          description: string | null
-          electricity_kwh_per_tray_per_day: number | null
-          expected_survival_rate: number | null
-          harvest_hours_per_tray: number | null
-          id: string
-          maintenance_hours_per_tray_per_week: number | null
-          medium_volume_per_tray: number | null
-          name: string
-          plant_type_id: string
-          planting_hours_per_tray: number | null
-          updated_at: string | null
-          water_liters_per_tray_per_day: number | null
-        }
-        Insert: {
-          created_at?: string | null
-          description?: string | null
-          electricity_kwh_per_tray_per_day?: number | null
-          expected_survival_rate?: number | null
-          harvest_hours_per_tray?: number | null
-          id?: string
-          maintenance_hours_per_tray_per_week?: number | null
-          medium_volume_per_tray?: number | null
-          name: string
-          plant_type_id: string
-          planting_hours_per_tray?: number | null
-          updated_at?: string | null
-          water_liters_per_tray_per_day?: number | null
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          electricity_kwh_per_tray_per_day?: number | null
-          expected_survival_rate?: number | null
-          harvest_hours_per_tray?: number | null
-          id?: string
-          maintenance_hours_per_tray_per_week?: number | null
-          medium_volume_per_tray?: number | null
-          name?: string
-          plant_type_id?: string
-          planting_hours_per_tray?: number | null
-          updated_at?: string | null
-          water_liters_per_tray_per_day?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bom_templates_plant_type_id_fkey"
-            columns: ["plant_type_id"]
-            isOneToOne: false
-            referencedRelation: "plant_types"
             referencedColumns: ["id"]
           },
         ]
