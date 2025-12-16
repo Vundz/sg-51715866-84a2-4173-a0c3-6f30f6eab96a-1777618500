@@ -7,6 +7,7 @@ export type BOMTemplate = Database["public"]["Tables"]["bom_templates"]["Row"];
 // Define explicit types for inserts to avoid deep type instantiation issues
 type BOMSettingInsert = Database["public"]["Tables"]["bom_settings"]["Insert"];
 type BOMTemplateInsert = Database["public"]["Tables"]["bom_templates"]["Insert"];
+type BOMTemplateUpdate = Database["public"]["Tables"]["bom_templates"]["Update"];
 
 export const bomService = {
   // ============================================
@@ -277,7 +278,7 @@ export const bomService = {
   /**
    * Update BOM template
    */
-  async updateTemplate(id: string, updates: Database["public"]["Tables"]["bom_templates"]["Update"]): Promise<BOMTemplate> {
+  async updateTemplate(id: string, updates: BOMTemplateUpdate): Promise<BOMTemplate> {
     const { data, error } = await supabase
       .from("bom_templates")
       .update(updates)
@@ -376,11 +377,6 @@ export const bomService = {
     const traysRequired = Math.ceil(quantity / seedlingsPerTray);
 
     // 1. SEED COST
-    // Note: seed_cost_per_unit is now in a separate table bom_seed_costs, or accessed differently
-    // For now, let's assume we fetch it separately or it's part of the template logic we designed in SQL
-    // But wait, in the SQL schema I defined `bom_seed_costs` table, NOT columns in `bom_templates`.
-    // The previous code assumed columns in `bom_templates`. I need to fix this logic.
-    
     // Let's fetch seed cost from the new table
     const { data: seedCostData } = await supabase
       .from("bom_seed_costs")
@@ -388,9 +384,9 @@ export const bomService = {
       .eq("plant_type_id", plantTypeId)
       .maybeSingle();
 
-    const seedCostPerUnit = seedCostData?.cost_per_seed || 0;
-    const germinationRate = seedCostData?.germination_rate || getSetting("default_germination_rate", 90.0) / 100;
-    const seedBuffer = (seedCostData?.buffer_percent || getSetting("default_seed_buffer_percent", 10.0)) / 100;
+    const seedCostPerUnit = Number(seedCostData?.cost_per_seed || 0);
+    const germinationRate = Number(seedCostData?.germination_rate || getSetting("default_germination_rate", 90.0)) / 100;
+    const seedBuffer = Number(seedCostData?.buffer_percent || getSetting("default_seed_buffer_percent", 10.0)) / 100;
     
     const seedsNeeded = quantity * (1 + seedBuffer) / germinationRate;
     const seedCost = seedsNeeded * seedCostPerUnit;
@@ -407,11 +403,6 @@ export const bomService = {
     const mediumCost = traysRequired * mediumVolumePerTray * mediumCostPerLiter * (1 + mediumWastageFactor);
 
     // 4. FERTILIZER COST
-    // In the new schema, these are in `bom_template_items`. 
-    // I need to fetch items linked to the template to calculate this accurately.
-    // For this Sprint 1 "Basic Cost Calculation", I'll use placeholders or simplified logic if I can't fetch items yet.
-    // Or I can update the service to fetch template items.
-    
     // Let's create a helper to fetch template items
     const { data: templateItems } = await supabase
       .from("bom_template_items")
@@ -429,7 +420,6 @@ export const bomService = {
     const weeksInCycle = Math.ceil(growthDurationDays / 7);
     
     for (const item of fertilizerItems) {
-        const apps = item.applications_per_cycle || 1; // Or calculate based on frequency if needed
         // For simplicity in Sprint 1, assuming applications_per_cycle is correct total
         // If frequency is 'weekly', we might need to calc: weeksInCycle
         let totalApps = item.applications_per_cycle || 1;
