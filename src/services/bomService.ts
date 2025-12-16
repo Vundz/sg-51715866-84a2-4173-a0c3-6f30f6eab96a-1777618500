@@ -384,13 +384,18 @@ export const bomService = {
       .eq("plant_type_id", plantTypeId)
       .maybeSingle();
 
-    // Safe number conversion with proper type handling
-    const seedCostPerUnit = seedCostData?.cost_per_seed ? Number(seedCostData.cost_per_seed) : 0;
-    const germinationRate = seedCostData?.germination_rate 
-      ? Number(seedCostData.germination_rate) / 100 
+    // Use parseFloat with explicit handling to avoid type inference issues
+    const rawSeedCost = seedCostData?.cost_per_seed;
+    const seedCostPerUnit: number = rawSeedCost ? parseFloat(String(rawSeedCost)) : 0;
+    
+    const rawGermRate = seedCostData?.germination_rate;
+    const germinationRate: number = rawGermRate 
+      ? parseFloat(String(rawGermRate)) / 100 
       : getSetting("default_germination_rate", 90.0) / 100;
-    const seedBuffer = seedCostData?.buffer_percent 
-      ? Number(seedCostData.buffer_percent) / 100 
+    
+    const rawBuffer = seedCostData?.buffer_percent;
+    const seedBuffer: number = rawBuffer 
+      ? parseFloat(String(rawBuffer)) / 100 
       : getSetting("default_seed_buffer_percent", 10.0) / 100;
     
     const seedsNeeded = quantity * (1 + seedBuffer) / germinationRate;
