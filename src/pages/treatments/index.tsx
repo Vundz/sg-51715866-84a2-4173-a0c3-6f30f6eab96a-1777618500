@@ -432,7 +432,7 @@ export default function TreatmentsPage() {
             )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label htmlFor="name">Chemical/Fertilizer Name *</Label><Input id="name" name="name" defaultValue={editingTreatment?.name || ""} required disabled={isViewer}/></div>
-              <div className="space-y-2"><Label htmlFor="type">Treatment Type *</Label><Select name="type" required defaultValue={editingTreatment?.type || undefined} disabled={isViewer}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="fungicide">Fungicide</SelectItem><SelectItem value="pesticide">Pesticide</SelectItem><SelectItem value="fertilizer">Fertilizer</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2"><Label htmlFor="type">Treatment Type *</Label><Select name="type" required defaultValue={editingTreatment?.type || undefined} disabled={isViewer}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="fungicide">Fungicide</SelectItem><SelectItem value="insecticide">Insecticide</SelectItem><SelectItem value="fertilizer">Fertilizer</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label htmlFor="dosage">Dosage</Label><Input id="dosage" name="dosage" defaultValue={editingTreatment?.dosage || ""} disabled={isViewer}/></div>
