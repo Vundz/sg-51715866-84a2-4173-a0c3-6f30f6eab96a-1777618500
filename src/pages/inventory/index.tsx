@@ -90,6 +90,8 @@ export default function InventoryPage() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
+    const openingStock = parseFloat(formData.get("opening_stock") as string) || 0;
+
     const itemData = {
       name: formData.get("name") as string,
       category: formData.get("category") as string,
@@ -101,10 +103,11 @@ export default function InventoryPage() {
 
     try {
       if (editingItem) {
+        // Update doesn't change opening stock, only current stock via transactions
         await inventoryService.updateInventoryItem(editingItem.id, itemData);
         toast({ title: "Success", description: "Item updated successfully." });
       } else {
-        await inventoryService.createInventoryItem(itemData);
+        await inventoryService.createInventoryItem(itemData, openingStock);
         toast({ title: "Success", description: "Item created successfully." });
       }
       
@@ -614,6 +617,24 @@ export default function InventoryPage() {
                   disabled={isViewer}
                 />
               </div>
+
+              {!editingItem && (
+                <div className="space-y-2">
+                  <Label htmlFor="opening_stock">Opening Stock</Label>
+                  <Input
+                    id="opening_stock"
+                    name="opening_stock"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    disabled={isViewer}
+                  />
+                  <p className="text-xs text-gray-500">
+                    Initial quantity on hand
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
