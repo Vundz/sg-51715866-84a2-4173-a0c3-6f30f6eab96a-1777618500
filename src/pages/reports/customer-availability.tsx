@@ -12,6 +12,7 @@ import { plantingService } from "@/services/plantingService";
 import { reservationService } from "@/services/reservationService";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/format";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type PlantingData = Awaited<ReturnType<typeof plantingService.getPlantingsWithDetails>>[0];
 type ReservationData = Awaited<ReturnType<typeof reservationService.getReservations>>[0];
@@ -28,10 +29,10 @@ const CustomerAvailabilityReport: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   
-  // Filters
+  // Filters - Changed to arrays for multi-select
   const [daysThreshold, setDaysThreshold] = useState("30");
-  const [selectedPlantType, setSelectedPlantType] = useState<string>("all");
-  const [selectedVariety, setSelectedVariety] = useState<string>("all");
+  const [selectedPlantTypes, setSelectedPlantTypes] = useState<string[]>([]);
+  const [selectedVarieties, setSelectedVarieties] = useState<string[]>([]);
   
   // Column selection
   const [columns, setColumns] = useState<ColumnConfig[]>([
@@ -49,6 +50,45 @@ const CustomerAvailabilityReport: React.FC = () => {
     setColumns(prev => prev.map(col => 
       col.id === columnId ? { ...col, enabled: !col.enabled } : col
     ));
+  };
+
+  const togglePlantType = (plantType: string) => {
+    setSelectedPlantTypes(prev => {
+      if (prev.includes(plantType)) {
+        return prev.filter(pt => pt !== plantType);
+      } else {
+        return [...prev, plantType];
+      }
+    });
+    // Clear variety selections when plant type changes
+    setSelectedVarieties([]);
+  };
+
+  const toggleVariety = (variety: string) => {
+    setSelectedVarieties(prev => {
+      if (prev.includes(variety)) {
+        return prev.filter(v => v !== variety);
+      } else {
+        return [...prev, variety];
+      }
+    });
+  };
+
+  const selectAllPlantTypes = () => {
+    if (selectedPlantTypes.length === uniquePlantTypeNames.length) {
+      setSelectedPlantTypes([]);
+    } else {
+      setSelectedPlantTypes([...uniquePlantTypeNames]);
+    }
+    setSelectedVarieties([]);
+  };
+
+  const selectAllVarieties = () => {
+    if (selectedVarieties.length === availableVarieties.length) {
+      setSelectedVarieties([]);
+    } else {
+      setSelectedVarieties([...availableVarieties]);
+    }
   };
 
   const enabledColumns = useMemo(() => columns.filter(c => c.enabled), [columns]);
@@ -83,20 +123,22 @@ const CustomerAvailabilityReport: React.FC = () => {
     return Array.from(names).sort();
   }, [plantings]);
 
-  // Get unique varieties for the selected plant type
+  // Get unique varieties for the selected plant types (multi-select)
   const availableVarieties = useMemo(() => {
-    if (selectedPlantType === "all") {
+    if (selectedPlantTypes.length === 0) {
+      // Show all varieties when no plant type selected
       return Array.from(new Set(plantings.map(p => p.variety).filter(Boolean)));
     }
+    // Show varieties only from selected plant types
     return Array.from(
       new Set(
         plantings
-          .filter(p => p.plant_types?.name === selectedPlantType)
+          .filter(p => p.plant_types?.name && selectedPlantTypes.includes(p.plant_types.name))
           .map(p => p.variety)
           .filter(Boolean)
       )
     );
-  }, [plantings, selectedPlantType]);
+  }, [plantings, selectedPlantTypes]);
 
   // Process available seedlings
   const availableSeedlings = useMemo(() => {
@@ -111,13 +153,13 @@ const CustomerAvailabilityReport: React.FC = () => {
           return false;
         }
 
-        // Filter by plant type
-        if (selectedPlantType !== "all" && p.plant_types?.name !== selectedPlantType) {
+        // Filter by plant types (multi-select)
+        if (selectedPlantTypes.length > 0 && !selectedPlantTypes.includes(p.plant_types?.name || "")) {
           return false;
         }
 
-        // Filter by variety
-        if (selectedVariety !== "all" && p.variety !== selectedVariety) {
+        // Filter by varieties (multi-select)
+        if (selectedVarieties.length > 0 && !selectedVarieties.includes(p.variety || "")) {
           return false;
         }
 
@@ -543,40 +585,90 @@ const CustomerAvailabilityReport: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <Label>Plant Type</Label>
-                <Select value={selectedPlantType} onValueChange={(value) => {
-                  setSelectedPlantType(value);
-                  setSelectedVariety("all"); // Reset variety when plant type changes
-                }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Plant Types</SelectItem>
-                    {uniquePlantTypeNames.map(name => (
-                      <SelectItem key={name} value={name}>{name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between">
+                  <Label>Plant Type</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={selectAllPlantTypes}
+                    className="h-6 text-xs"
+                  >
+                    {selectedPlantTypes.length === uniquePlantTypeNames.length ? "Clear All" : "Select All"}
+                  </Button>
+                </div>
+                <div className="border rounded-md p-3 max-h-48 overflow-y-auto bg-background">
+                  {uniquePlantTypeNames.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-2">No plant types available</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {uniquePlantTypeNames.map(name => (
+                        <div key={name} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`plant-type-${name}`}
+                            checked={selectedPlantTypes.includes(name)}
+                            onCheckedChange={() => togglePlantType(name)}
+                          />
+                          <label
+                            htmlFor={`plant-type-${name}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                          >
+                            {name}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {selectedPlantTypes.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {selectedPlantTypes.length} selected
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
-                <Label>Variety</Label>
-                <Select 
-                  value={selectedVariety} 
-                  onValueChange={setSelectedVariety}
-                  disabled={selectedPlantType === "all"}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Varieties</SelectItem>
-                    {availableVarieties.map(variety => (
-                      <SelectItem key={variety} value={variety}>{variety}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between">
+                  <Label>Variety</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={selectAllVarieties}
+                    className="h-6 text-xs"
+                    disabled={availableVarieties.length === 0}
+                  >
+                    {selectedVarieties.length === availableVarieties.length ? "Clear All" : "Select All"}
+                  </Button>
+                </div>
+                <div className="border rounded-md p-3 max-h-48 overflow-y-auto bg-background">
+                  {availableVarieties.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-2">
+                      {selectedPlantTypes.length === 0 ? "Select plant types first" : "No varieties available"}
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {availableVarieties.map(variety => (
+                        <div key={variety} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`variety-${variety}`}
+                            checked={selectedVarieties.includes(variety)}
+                            onCheckedChange={() => toggleVariety(variety)}
+                          />
+                          <label
+                            htmlFor={`variety-${variety}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                          >
+                            {variety}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {selectedVarieties.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {selectedVarieties.length} selected
+                  </p>
+                )}
               </div>
             </div>
 
@@ -608,13 +700,13 @@ const CustomerAvailabilityReport: React.FC = () => {
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Showing {availableSeedlings.length} available variety option{availableSeedlings.length !== 1 ? "s" : ""}
               </p>
-              {(selectedPlantType !== "all" || selectedVariety !== "all") && (
+              {(selectedPlantTypes.length > 0 || selectedVarieties.length > 0) && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setSelectedPlantType("all");
-                    setSelectedVariety("all");
+                    setSelectedPlantTypes([]);
+                    setSelectedVarieties([]);
                   }}
                 >
                   Clear Filters
