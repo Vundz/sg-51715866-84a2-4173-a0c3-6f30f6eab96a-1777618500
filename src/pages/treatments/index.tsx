@@ -9,16 +9,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Edit, Trash2, TestTube2, ChevronsRight } from "lucide-react";
+import { Plus, Edit, Trash2, TestTube2, ChevronsRight, X } from "lucide-react";
 import { treatmentService, TreatmentWithPlantings } from "@/services/treatmentService";
 import { plantingService, PlantingWithDetails } from "@/services/plantingService";
 import { locationService } from "@/services/locationService";
 import { useToast } from "@/hooks/use-toast";
-import { group } from "console";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 
-// We need to group the results from the service by treatment
+interface Chemical {
+  id: string;
+  name: string;
+  type: string;
+  dosage: string;
+}
+
 interface GroupedTreatment {
   id: string;
   name: string;
@@ -28,6 +33,7 @@ interface GroupedTreatment {
   application_method: string;
   notes: string | null;
   applied_by: string | null;
+  chemicals?: Chemical[];
   plantings: {
     id: string;
     batch_number: string | null;
@@ -48,6 +54,9 @@ export default function TreatmentsPage() {
   const [applicationMode, setApplicationMode] = useState<"batch" | "location" | "both">("batch");
   const [selectedPlantingIds, setSelectedPlantingIds] = useState<string[]>([]);
   const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+  const [chemicals, setChemicals] = useState<Chemical[]>([
+    { id: crypto.randomUUID(), name: "", type: "fungicide", dosage: "" }
+  ]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
@@ -87,6 +96,30 @@ export default function TreatmentsPage() {
 
       const treatmentId = item.treatments.id;
       if (!treatmentMap.has(treatmentId)) {
+        // Parse chemicals from notes if stored as JSON, otherwise use legacy format
+        let parsedChemicals: Chemical[] = [];
+        try {
+          if (item.treatments.notes?.startsWith('[{')) {
+            parsedChemicals = JSON.parse(item.treatments.notes);
+          } else {
+            // Legacy format: single chemical
+            parsedChemicals = [{
+              id: crypto.randomUUID(),
+              name: item.treatments.name,
+              type: item.treatments.type,
+              dosage: item.treatments.dosage
+            }];
+          }
+        } catch {
+          // Fallback to legacy format
+          parsedChemicals = [{
+            id: crypto.randomUUID(),
+            name: item.treatments.name,
+            type: item.treatments.type,
+            dosage: item.treatments.dosage
+          }];
+        }
+
         treatmentMap.set(treatmentId, {
           id: treatmentId,
           name: item.treatments.name,
@@ -96,6 +129,7 @@ export default function TreatmentsPage() {
           application_method: item.treatments.application_method,
           notes: item.treatments.notes,
           applied_by: item.treatments.applied_by,
+          chemicals: parsedChemicals,
           plantings: [],
         });
       }
@@ -103,8 +137,8 @@ export default function TreatmentsPage() {
       const existingTreatment = treatmentMap.get(treatmentId)!;
       if (item.plantings && !existingTreatment.plantings.some(p => p.id === item.plantings!.id)) {
         existingTreatment.plantings.push({
-            id: item.plantings.id,
-            batch_number: item.plantings.batch_number
+          id: item.plantings.id,
+          batch_number: item.plantings.batch_number
         });
       }
     });
@@ -115,12 +149,12 @@ export default function TreatmentsPage() {
   const filteredTreatments = useMemo(() => 
     treatments.filter(t =>
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.type.toLowerCase().includes(searchQuery.toLowerCase())
+      t.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.chemicals?.some(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
     ), [treatments, searchQuery]);
 
   const activePlantings = plantings.filter(p => p.status === "active");
 
-  // Filter plantings based on selected locations (for location-based application)
   const filteredPlantingsByLocation = useMemo(() => {
     if (applicationMode === "batch") {
       return activePlantings;
@@ -142,6 +176,22 @@ export default function TreatmentsPage() {
     };
   };
 
+  const addChemical = () => {
+    setChemicals([...chemicals, { id: crypto.randomUUID(), name: "", type: "fungicide", dosage: "" }]);
+  };
+
+  const removeChemical = (id: string) => {
+    if (chemicals.length === 1) {
+      toast({ title: "Error", description: "At least one chemical is required.", variant: "destructive" });
+      return;
+    }
+    setChemicals(chemicals.filter(c => c.id !== id));
+  };
+
+  const updateChemical = (id: string, field: keyof Chemical, value: string) => {
+    setChemicals(chemicals.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
   const handleSaveTreatment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -157,13 +207,23 @@ export default function TreatmentsPage() {
       return;
     }
 
+    // Validate chemicals
+    const validChemicals = chemicals.filter(c => c.name.trim() !== "");
+    if (validChemicals.length === 0) {
+      toast({ title: "Error", description: "Please add at least one chemical with a name.", variant: "destructive" });
+      return;
+    }
+
+    // Use first chemical as primary for backward compatibility
+    const primaryChemical = validChemicals[0];
+    
     const treatmentData = {
-      name: formData.get("name") as string,
-      type: formData.get("type") as string,
+      name: primaryChemical.name,
+      type: primaryChemical.type,
       application_date: formData.get("application_date") as string,
-      dosage: formData.get("dosage") as string,
+      dosage: primaryChemical.dosage,
       application_method: formData.get("application_method") as string,
-      notes: formData.get("notes") as string,
+      notes: JSON.stringify(validChemicals), // Store all chemicals as JSON
       applied_by: formData.get("applied_by") as string,
     };
     
@@ -175,9 +235,9 @@ export default function TreatmentsPage() {
         toast({ title: "Success", description: "Treatment updated." });
       } else {
         const treatmentPayload = {
-            ...treatmentData,
-            planting_ids: finalPlantingIds
-        }
+          ...treatmentData,
+          planting_ids: finalPlantingIds
+        };
         await treatmentService.createTreatment(treatmentPayload, finalPlantingIds);
         toast({ title: "Success", description: "Treatment created." });
       }
@@ -209,6 +269,14 @@ export default function TreatmentsPage() {
     setApplicationMode("batch");
     setSelectedPlantingIds(treatment?.plantings.map(p => p.id) || []);
     setSelectedLocationIds([]);
+    
+    // Load chemicals from treatment or start with empty one
+    if (treatment?.chemicals && treatment.chemicals.length > 0) {
+      setChemicals(treatment.chemicals.map(c => ({ ...c, id: crypto.randomUUID() })));
+    } else {
+      setChemicals([{ id: crypto.randomUUID(), name: "", type: "fungicide", dosage: "" }]);
+    }
+    
     setIsDialogOpen(true);
   };
 
@@ -218,7 +286,8 @@ export default function TreatmentsPage() {
     setSelectedPlantingIds([]);
     setSelectedLocationIds([]);
     setApplicationMode("batch");
-  }
+    setChemicals([{ id: crypto.randomUUID(), name: "", type: "fungicide", dosage: "" }]);
+  };
   
   const togglePlantingSelection = (plantingId: string) => {
     setSelectedPlantingIds(prev =>
@@ -232,7 +301,6 @@ export default function TreatmentsPage() {
         ? prev.filter(id => id !== locationId) 
         : [...prev, locationId];
       
-      // When locations change, auto-select all plantings in those locations
       if (applicationMode === "location") {
         const plantingsInLocations = activePlantings
           .filter(p => newSelection.includes(p.location_id))
@@ -278,15 +346,104 @@ export default function TreatmentsPage() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingTreatment ? "Edit Treatment" : "Add New Treatment"}</DialogTitle>
             <DialogDescription>{isViewer ? "Viewing treatment details. No changes can be made." : (isBulkMode ? "Apply the same treatment to multiple plantings at once." : "Log a single treatment application.")}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSaveTreatment} className="space-y-4 pt-4">
+          <form onSubmit={handleSaveTreatment} className="space-y-6 pt-4">
+            {/* Chemicals Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-semibold">Chemicals / Fertilizers</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addChemical}
+                  disabled={isViewer}
+                  className="gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Chemical
+                </Button>
+              </div>
+              
+              <div className="space-y-3">
+                {chemicals.map((chemical, index) => (
+                  <Card key={chemical.id} className="border-2">
+                    <CardContent className="pt-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 space-y-3">
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="col-span-2 space-y-2">
+                              <Label htmlFor={`chemical-name-${chemical.id}`}>
+                                Chemical Name * {index === 0 && <span className="text-xs text-muted-foreground">(Primary)</span>}
+                              </Label>
+                              <Input
+                                id={`chemical-name-${chemical.id}`}
+                                value={chemical.name}
+                                onChange={(e) => updateChemical(chemical.id, "name", e.target.value)}
+                                placeholder="e.g., Mancozeb, NPK 20-20-20"
+                                disabled={isViewer}
+                                required
+                              />
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label htmlFor={`chemical-type-${chemical.id}`}>Type *</Label>
+                              <Select
+                                value={chemical.type}
+                                onValueChange={(value) => updateChemical(chemical.id, "type", value)}
+                                disabled={isViewer}
+                              >
+                                <SelectTrigger id={`chemical-type-${chemical.id}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="fungicide">Fungicide</SelectItem>
+                                  <SelectItem value="insecticide">Insecticide</SelectItem>
+                                  <SelectItem value="fertilizer">Fertilizer</SelectItem>
+                                  <SelectItem value="other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor={`chemical-dosage-${chemical.id}`}>Dosage</Label>
+                            <Input
+                              id={`chemical-dosage-${chemical.id}`}
+                              value={chemical.dosage}
+                              onChange={(e) => updateChemical(chemical.id, "dosage", e.target.value)}
+                              placeholder="e.g., 50ml/L, 2 scoops per 20L"
+                              disabled={isViewer}
+                            />
+                          </div>
+                        </div>
+                        
+                        {chemicals.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeChemical(chemical.id)}
+                            disabled={isViewer}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 mt-8"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {/* Planting Selection */}
             {isBulkMode ? (
               <div className="space-y-4">
-                {/* Application Mode Toggle */}
                 <div className="space-y-2">
                   <Label>Application Method</Label>
                   <div className="grid grid-cols-3 gap-2">
@@ -334,7 +491,6 @@ export default function TreatmentsPage() {
                   </p>
                 </div>
 
-                {/* Location Selection (shown for "location" or "both" modes) */}
                 {(applicationMode === "location" || applicationMode === "both") && (
                   <div className="space-y-2">
                     <Label>Select Locations *</Label>
@@ -375,7 +531,6 @@ export default function TreatmentsPage() {
                   </div>
                 )}
 
-                {/* Planting Selection (shown for "batch" or "both" modes) */}
                 {(applicationMode === "batch" || applicationMode === "both") && (
                   <div className="space-y-2">
                     <Label>
@@ -430,23 +585,53 @@ export default function TreatmentsPage() {
                 </Select>
               </div>
             )}
+
+            {/* Application Details */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label htmlFor="name">Chemical/Fertilizer Name *</Label><Input id="name" name="name" defaultValue={editingTreatment?.name || ""} required disabled={isViewer}/></div>
-              <div className="space-y-2"><Label htmlFor="type">Treatment Type *</Label><Select name="type" required defaultValue={editingTreatment?.type || undefined} disabled={isViewer}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="fungicide">Fungicide</SelectItem><SelectItem value="insecticide">Insecticide</SelectItem><SelectItem value="fertilizer">Fertilizer</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+              <div className="space-y-2">
+                <Label htmlFor="application_method">Application Method</Label>
+                <Select name="application_method" defaultValue={editingTreatment?.application_method || undefined} disabled={isViewer}>
+                  <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="drench">Drench</SelectItem>
+                    <SelectItem value="spray">Spray</SelectItem>
+                    <SelectItem value="granular">Granular</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="application_date">Application Date *</Label>
+                <Input 
+                  id="application_date" 
+                  name="application_date" 
+                  type="date" 
+                  defaultValue={editingTreatment?.application_date ? new Date(editingTreatment.application_date).toISOString().split('T')[0] : new Date().toISOString().split("T")[0]} 
+                  required 
+                  disabled={isViewer}
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label htmlFor="dosage">Dosage</Label><Input id="dosage" name="dosage" defaultValue={editingTreatment?.dosage || ""} disabled={isViewer}/></div>
-              <div className="space-y-2"><Label htmlFor="application_method">Application Method</Label><Select name="application_method" defaultValue={editingTreatment?.application_method || undefined} disabled={isViewer}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="drench">Drench</SelectItem><SelectItem value="spray">Spray</SelectItem><SelectItem value="granular">Granular</SelectItem><SelectItem value="other">Other</SelectItem></SelectContent></Select></div>
+
+            <div className="space-y-2">
+              <Label htmlFor="applied_by">Applied By</Label>
+              <Input 
+                id="applied_by" 
+                name="applied_by" 
+                defaultValue={editingTreatment?.applied_by || ""} 
+                placeholder="Person who applied the treatment"
+                disabled={isViewer}
+              />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label htmlFor="application_date">Application Date *</Label><Input id="application_date" name="application_date" type="date" defaultValue={editingTreatment?.application_date ? new Date(editingTreatment.application_date).toISOString().split('T')[0] : new Date().toISOString().split("T")[0]} required disabled={isViewer}/></div>
-              <div className="space-y-2"><Label htmlFor="applied_by">Applied By</Label><Input id="applied_by" name="applied_by" defaultValue={editingTreatment?.applied_by || ""} disabled={isViewer}/></div>
-            </div>
-            <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" name="notes" defaultValue={editingTreatment?.notes || ""} disabled={isViewer}/></div>
+
             {(permissions.canCreate || permissions.canUpdate) ? (
-              <div className="flex justify-end gap-2 pt-4"><Button type="button" variant="outline" onClick={handleCloseDialog}>Cancel</Button><Button type="submit" className="bg-cyan-600 hover:bg-cyan-700">Save Treatment</Button></div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button type="button" variant="outline" onClick={handleCloseDialog}>Cancel</Button>
+                <Button type="submit" className="bg-cyan-600 hover:bg-cyan-700">Save Treatment</Button>
+              </div>
             ) : (
-              <div className="flex justify-end gap-2 pt-4">
+              <div className="flex justify-end gap-2 pt-4 border-t">
                 <Button type="button" variant="outline" onClick={handleCloseDialog}>Close</Button>
               </div>
             )}
@@ -467,16 +652,38 @@ export default function TreatmentsPage() {
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Name</TableHead><TableHead>Type</TableHead><TableHead>Applied To</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Chemicals Applied</TableHead>
+                <TableHead>Applied To</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={5} className="text-center">Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={4} className="text-center">Loading...</TableCell></TableRow>
               ) : filteredTreatments.map(t => (
                 <TableRow key={t.id}>
                   <TableCell>{new Date(t.application_date).toLocaleDateString()}</TableCell>
-                  <TableCell>{t.name}</TableCell>
-                  <TableCell>{t.type}</TableCell>
-                  <TableCell>{t.plantings.map(p => p.batch_number).join(', ')}</TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      {t.chemicals && t.chemicals.length > 0 ? (
+                        t.chemicals.map((chem, idx) => (
+                          <div key={idx} className="text-sm">
+                            <span className="font-medium">{chem.name}</span>
+                            <span className="text-muted-foreground ml-2">({chem.type})</span>
+                            {chem.dosage && <span className="text-xs text-muted-foreground ml-2">- {chem.dosage}</span>}
+                          </div>
+                        ))
+                      ) : (
+                        <span className="text-sm">{t.name} ({t.type})</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm">{t.plantings.map(p => p.batch_number).join(', ')}</span>
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-1 justify-end">
                       {permissions.canUpdate && (
@@ -496,8 +703,8 @@ export default function TreatmentsPage() {
                   </TableCell>
                 </TableRow>
               ))}
-               {filteredTreatments.length === 0 && (
-                 <TableRow><TableCell colSpan={5} className="text-center h-24">No treatments found.</TableCell></TableRow>
+              {filteredTreatments.length === 0 && (
+                <TableRow><TableCell colSpan={4} className="text-center h-24">No treatments found.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
