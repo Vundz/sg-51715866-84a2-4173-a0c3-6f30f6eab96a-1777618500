@@ -183,7 +183,16 @@ const CustomerAvailabilityReport: React.FC = () => {
     try {
       setExporting(true);
       
-      // Generate the HTML content with the customer-friendly design
+      // Create a temporary container for the PDF content
+      const container = document.createElement('div');
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      container.style.width = '210mm'; // A4 width
+      container.style.padding = '20px';
+      container.style.backgroundColor = '#ffffff';
+      container.style.fontFamily = 'Arial, sans-serif';
+      document.body.appendChild(container);
+
       const today = new Date();
       const formattedDate = today.toLocaleDateString('en-US', { 
         weekday: 'long', 
@@ -197,7 +206,34 @@ const CustomerAvailabilityReport: React.FC = () => {
         day: '2-digit' 
       }).replace(/\//g, '-');
 
-      // Group plantings by plant type
+      // Build the HTML content with inline styles
+      let htmlContent = `
+        <div style="max-width: 1000px; margin: 0 auto;">
+          <h1 style="color: #16a34a; border-bottom: 3px solid #16a34a; padding-bottom: 10px; margin-bottom: 20px;">
+            Seedlings Availability Report
+          </h1>
+          <p style="margin-bottom: 20px;"><strong>Report Date:</strong> ${formattedDate}</p>
+          
+          <div style="background: #f0fdf4; padding: 20px; border-left: 4px solid #16a34a; margin: 20px 0;">
+            <h2 style="margin: 0 0 10px 0; color: #16a34a; font-size: 1.5em;">
+              Total Available: ${formatNumber(totalAvailable)} Seedlings
+            </h2>
+            <p style="margin: 0;">${availableSeedlings.length} variety options available for reservation</p>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+            <thead>
+              <tr>
+                <th style="background: #16a34a; color: white; padding: 12px; text-align: left; font-weight: bold;">Plant Type</th>
+                <th style="background: #16a34a; color: white; padding: 12px; text-align: left; font-weight: bold;">Variety</th>
+                <th style="background: #16a34a; color: white; padding: 12px; text-align: right; font-weight: bold;">Available Quantity</th>
+                <th style="background: #16a34a; color: white; padding: 12px; text-align: right; font-weight: bold;">Ready Date</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      // Group by plant type and build rows
       const groupedByPlantType: Record<string, typeof availableSeedlings> = {};
       availableSeedlings.forEach(p => {
         const typeName = p.plantType;
@@ -207,19 +243,19 @@ const CustomerAvailabilityReport: React.FC = () => {
         groupedByPlantType[typeName].push(p);
       });
 
-      // Sort plant types alphabetically
       const sortedPlantTypes = Object.keys(groupedByPlantType).sort();
+      let rowIndex = 0;
 
-      // Build table rows
-      let tableRows = '';
       sortedPlantTypes.forEach(plantType => {
         const plantings = groupedByPlantType[plantType];
         
         // Plant type header row
-        tableRows += `
-              <tr>
-                <td colspan="4" class="plant-type-header">${plantType}</td>
-              </tr>`;
+        htmlContent += `
+          <tr>
+            <td colspan="4" style="background: #f0fdf4; font-weight: bold; font-size: 1.1em; color: #16a34a; padding: 15px 12px;">
+              ${plantType}
+            </td>
+          </tr>`;
         
         // Variety rows
         plantings.forEach(p => {
@@ -231,146 +267,84 @@ const CustomerAvailabilityReport: React.FC = () => {
             day: 'numeric'
           });
           
-          tableRows += `
-                <tr>
-                  <td></td>
-                  <td>${p.variety || 'N/A'}</td>
-                  <td style="text-align: right; font-weight: bold; color: #16a34a;">
-                    ${formatNumber(p.availableQuantity)} seedlings
-                  </td>
-                  <td style="text-align: right;">
-                    ${formattedReadyDate}
-                    ${isAvailableNow ? " <strong style='color: #16a34a;'>(Available Now!)</strong>" : ""}
-                  </td>
-                </tr>`;
+          const bgColor = rowIndex % 2 === 0 ? '#f9fafb' : '#ffffff';
+          rowIndex++;
+          
+          htmlContent += `
+            <tr>
+              <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor};"></td>
+              <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor};">${p.variety || 'N/A'}</td>
+              <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor}; text-align: right; font-weight: bold; color: #16a34a;">
+                ${formatNumber(p.availableQuantity)} seedlings
+              </td>
+              <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor}; text-align: right;">
+                ${formattedReadyDate}
+                ${isAvailableNow ? " <strong style='color: #16a34a;'>(Available Now!)</strong>" : ""}
+              </td>
+            </tr>`;
         });
       });
 
-      const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Seedlings Availability Report - ${shortDate}</title>
-        <style>
-          @media print {
-            @page { margin: 0.5in; }
-          }
-          body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            max-width: 1000px;
-            margin: 0 auto;
-          }
-          h1 {
-            color: #16a34a;
-            border-bottom: 3px solid #16a34a;
-            padding-bottom: 10px;
-          }
-          .summary {
-            background: #f0fdf4;
-            padding: 20px;
-            border-left: 4px solid #16a34a;
-            margin: 20px 0;
-          }
-          .summary h2 {
-            margin: 0 0 10px 0;
-            color: #16a34a;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-          }
-          th {
-            background: #16a34a;
-            color: white;
-            padding: 12px;
-            text-align: left;
-            font-weight: bold;
-          }
-          td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #e5e7eb;
-          }
-          tr:nth-child(even) {
-            background: #f9fafb;
-          }
-          .plant-type-header {
-            background: #f0fdf4;
-            font-weight: bold;
-            font-size: 1.1em;
-            color: #16a34a;
-            padding: 15px 12px !important;
-          }
-          .footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #e5e7eb;
-            text-align: center;
-            color: #6b7280;
-            font-size: 0.9em;
-          }
-        </style>
-      </head>
-      <body>
-        <h1>Seedlings Availability Report</h1>
-        <p><strong>Report Date:</strong> ${formattedDate}</p>
-        
-        <div class="summary">
-          <h2>Total Available: ${formatNumber(totalAvailable)} Seedlings</h2>
-          <p>${availableSeedlings.length} variety options available for reservation</p>
+      htmlContent += `
+            </tbody>
+          </table>
+
+          <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 0.9em;">
+            <p>Please contact us to place your order and reserve your seedlings.</p>
+            <p>Report generated by Khulisapp Seedlings Management System</p>
+          </div>
         </div>
+      `;
 
-        <table>
-          <thead>
-            <tr>
-              <th>Plant Type</th>
-              <th>Variety</th>
-              <th style="text-align: right;">Available Quantity</th>
-              <th style="text-align: right;">Ready Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${tableRows}
-          </tbody>
-        </table>
+      container.innerHTML = htmlContent;
 
-        <div class="footer">
-          <p>Please contact us to place your order and reserve your seedlings.</p>
-          <p>Report generated by Khulisapp Seedlings Management System</p>
-        </div>
-        
-        <script>
-          // Auto-print when opened
-          window.onload = function() {
-            window.print();
-          };
-        </script>
-      </body>
-      </html>
-    `;
+      // Wait for rendering
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Create a Blob and download
-      const blob = new Blob([htmlContent], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `seedlings-availability-${shortDate}.html`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Convert to canvas
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      // Remove temporary container
+      document.body.removeChild(container);
+
+      // Create PDF
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add additional pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Save the PDF
+      pdf.save(`seedlings-availability-${shortDate}.pdf`);
 
       toast({
         title: "Success",
-        description: "Report downloaded successfully! Open the HTML file to print as PDF.",
+        description: "PDF report generated successfully!",
       });
     } catch (error) {
       console.error("Error generating PDF:", error);
       toast({
         title: "Error",
-        description: "Failed to generate report. Please try again.",
+        description: "Failed to generate PDF. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -426,7 +400,7 @@ const CustomerAvailabilityReport: React.FC = () => {
             ) : (
               <>
                 <Download className="w-4 h-4" />
-                Download Report
+                PDF
               </>
             )}
           </Button>
