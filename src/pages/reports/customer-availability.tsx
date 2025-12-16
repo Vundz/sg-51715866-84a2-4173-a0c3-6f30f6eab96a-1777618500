@@ -36,6 +36,8 @@ const CustomerAvailabilityReport: React.FC = () => {
   const [columns, setColumns] = useState<ColumnConfig[]>([
     { id: "plantType", label: "Plant Type", enabled: true },
     { id: "variety", label: "Variety", enabled: true },
+    { id: "location", label: "Location", enabled: false },
+    { id: "batchNumber", label: "Batch Number", enabled: false },
     { id: "quantity", label: "Available Quantity", enabled: true },
     { id: "readyDate", label: "Ready Date", enabled: true },
   ]);
@@ -120,6 +122,8 @@ const CustomerAvailabilityReport: React.FC = () => {
           id: p.id,
           plantType: p.plant_types?.name || "N/A",
           variety: p.variety || "Standard",
+          location: p.locations?.name || "N/A",
+          batchNumber: p.batch_number || "N/A",
           availableQuantity: availableQty,
           readyDate,
           daysUntilReady,
@@ -165,6 +169,8 @@ const CustomerAvailabilityReport: React.FC = () => {
       enabledColumns.forEach(col => {
         if (col.id === "plantType") row.push(s.plantType);
         if (col.id === "variety") row.push(s.variety);
+        if (col.id === "location") row.push(s.location);
+        if (col.id === "batchNumber") row.push(s.batchNumber);
         if (col.id === "quantity") row.push(s.availableQuantity.toString());
         if (col.id === "readyDate") row.push(s.readyDate.toLocaleDateString());
       });
@@ -188,6 +194,8 @@ const CustomerAvailabilityReport: React.FC = () => {
       enabledColumns.forEach(col => {
         if (col.id === "plantType") row.push(s.plantType);
         if (col.id === "variety") row.push(s.variety);
+        if (col.id === "location") row.push(s.location);
+        if (col.id === "batchNumber") row.push(s.batchNumber);
         if (col.id === "quantity") row.push(s.availableQuantity.toString());
         if (col.id === "readyDate") row.push(s.readyDate.toLocaleDateString());
       });
@@ -256,6 +264,8 @@ const CustomerAvailabilityReport: React.FC = () => {
               <tr>
                 ${enabledColumns.find(c => c.id === "plantType") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: left; font-weight: bold;">Plant Type</th>' : ''}
                 ${enabledColumns.find(c => c.id === "variety") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: left; font-weight: bold;">Variety</th>' : ''}
+                ${enabledColumns.find(c => c.id === "location") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: left; font-weight: bold;">Location</th>' : ''}
+                ${enabledColumns.find(c => c.id === "batchNumber") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: left; font-weight: bold;">Batch Number</th>' : ''}
                 ${enabledColumns.find(c => c.id === "quantity") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: right; font-weight: bold;">Available Quantity</th>' : ''}
                 ${enabledColumns.find(c => c.id === "readyDate") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: right; font-weight: bold;">Ready Date</th>' : ''}
               </tr>
@@ -278,6 +288,8 @@ const CustomerAvailabilityReport: React.FC = () => {
 
       const showPlantType = enabledColumns.find(c => c.id === "plantType");
       const showVariety = enabledColumns.find(c => c.id === "variety");
+      const showLocation = enabledColumns.find(c => c.id === "location");
+      const showBatchNumber = enabledColumns.find(c => c.id === "batchNumber");
       const showQuantity = enabledColumns.find(c => c.id === "quantity");
       const showReadyDate = enabledColumns.find(c => c.id === "readyDate");
       const colSpan = enabledColumns.length;
@@ -316,6 +328,14 @@ const CustomerAvailabilityReport: React.FC = () => {
           
           if (showVariety) {
             htmlContent += `<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor};">${p.variety || 'N/A'}</td>`;
+          }
+          
+          if (showLocation) {
+            htmlContent += `<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor}; color: #6b7280;">${p.location}</td>`;
+          }
+          
+          if (showBatchNumber) {
+            htmlContent += `<td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor}; color: #6b7280; font-family: monospace; font-size: 0.9em;">${p.batchNumber}</td>`;
           }
           
           if (showQuantity) {
@@ -520,7 +540,7 @@ const CustomerAvailabilityReport: React.FC = () => {
             {/* Column Selection */}
             <div className="space-y-3 pt-4 border-t">
               <Label className="text-base font-semibold">Display Columns</Label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {columns.map(col => (
                   <div key={col.id} className="flex items-center space-x-2">
                     <input
@@ -591,6 +611,8 @@ const CustomerAvailabilityReport: React.FC = () => {
                     <TableHeader>
                       <TableRow>
                         {enabledColumns.find(c => c.id === "variety") && <TableHead>Variety</TableHead>}
+                        {enabledColumns.find(c => c.id === "location") && <TableHead>Location</TableHead>}
+                        {enabledColumns.find(c => c.id === "batchNumber") && <TableHead>Batch Number</TableHead>}
                         {enabledColumns.find(c => c.id === "quantity") && <TableHead className="text-right">Available Quantity</TableHead>}
                         {enabledColumns.find(c => c.id === "readyDate") && <TableHead className="text-right">Ready Date</TableHead>}
                       </TableRow>
@@ -600,6 +622,12 @@ const CustomerAvailabilityReport: React.FC = () => {
                         <TableRow key={s.id}>
                           {enabledColumns.find(c => c.id === "variety") && (
                             <TableCell className="font-medium">{s.variety}</TableCell>
+                          )}
+                          {enabledColumns.find(c => c.id === "location") && (
+                            <TableCell className="text-gray-600">{s.location}</TableCell>
+                          )}
+                          {enabledColumns.find(c => c.id === "batchNumber") && (
+                            <TableCell className="text-gray-600 font-mono text-sm">{s.batchNumber}</TableCell>
                           )}
                           {enabledColumns.find(c => c.id === "quantity") && (
                             <TableCell className="text-right">
