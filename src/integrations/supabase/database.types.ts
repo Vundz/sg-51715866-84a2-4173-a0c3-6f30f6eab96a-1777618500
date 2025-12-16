@@ -96,6 +96,8 @@ export type Database = {
           bom_template_id: string
           created_at: string | null
           estimated_unit_cost: number | null
+          formula_quantity: number | null
+          formula_unit: string | null
           id: string
           inventory_item_id: string | null
           item_category: string
@@ -110,6 +112,8 @@ export type Database = {
           bom_template_id: string
           created_at?: string | null
           estimated_unit_cost?: number | null
+          formula_quantity?: number | null
+          formula_unit?: string | null
           id?: string
           inventory_item_id?: string | null
           item_category: string
@@ -124,6 +128,8 @@ export type Database = {
           bom_template_id?: string
           created_at?: string | null
           estimated_unit_cost?: number | null
+          formula_quantity?: number | null
+          formula_unit?: string | null
           id?: string
           inventory_item_id?: string | null
           item_category?: string

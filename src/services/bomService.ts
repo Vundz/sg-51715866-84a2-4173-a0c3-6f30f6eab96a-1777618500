@@ -393,10 +393,17 @@ export const bomService = {
       .eq("plant_type_id", plantTypeId)
       .maybeSingle();
 
-    // Use the safe number conversion helper
-    const seedCostPerUnit = toNumber(seedCostData?.cost_per_seed, 0);
-    const germinationRate = toNumber(seedCostData?.germination_rate, 90) / 100;
-    const seedBuffer = toNumber(seedCostData?.buffer_percent, 10) / 100;
+    // STRICT TYPE CONVERSION to resolve TS2322
+    const rawSeedCost = seedCostData?.cost_per_seed;
+    const seedCostPerUnit = typeof rawSeedCost === 'number' ? rawSeedCost : 0;
+    
+    const rawGermRate = seedCostData?.germination_rate;
+    const dbGermRate = typeof rawGermRate === 'number' ? rawGermRate : 90;
+    const germinationRate = dbGermRate / 100;
+    
+    const rawBuffer = seedCostData?.buffer_percent;
+    const dbBuffer = typeof rawBuffer === 'number' ? rawBuffer : 10;
+    const seedBuffer = dbBuffer / 100;
     
     const seedsNeeded = quantity * (1 + seedBuffer) / germinationRate;
     const seedCost = seedsNeeded * seedCostPerUnit;
