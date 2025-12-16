@@ -11,10 +11,10 @@ type BOMItemUpdate = Database["public"]["Tables"]["bom_items"]["Update"];
 export interface BOMWithItems extends BOMHeader {
   bom_items: (BOMItem & {
     inventory_items?: {
-      item_name: string;
-      unit: string;
-      unit_cost: number;
-    };
+      name: string;
+      unit_of_measure: string;
+      unit_price: number;
+    } | null;
   })[];
 }
 
@@ -30,13 +30,20 @@ export const bomService = {
           quantity,
           unit,
           unit_cost,
-          total_cost
+          total_cost,
+          inventory_items (
+            name,
+            unit_of_measure,
+            unit_price
+          )
         )
       `)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return data as BOMWithItems[];
+    
+    // We need to cast carefully or map the data if structure is complex
+    return data as unknown as BOMWithItems[];
   },
 
   async getBOMById(id: string) {
@@ -47,9 +54,9 @@ export const bomService = {
         bom_items (
           *,
           inventory_items (
-            item_name,
-            unit,
-            unit_cost
+            name,
+            unit_of_measure,
+            unit_price
           )
         )
       `)
@@ -57,7 +64,7 @@ export const bomService = {
       .single();
 
     if (error) throw error;
-    return data as BOMWithItems;
+    return data as unknown as BOMWithItems;
   },
 
   async createBOMHeader(bom: BOMHeaderInsert) {
@@ -132,9 +139,9 @@ export const bomService = {
       .select(`
         *,
         inventory_items (
-          item_name,
-          unit,
-          unit_cost
+          name,
+          unit_of_measure,
+          unit_price
         )
       `)
       .eq("bom_header_id", bomHeaderId)

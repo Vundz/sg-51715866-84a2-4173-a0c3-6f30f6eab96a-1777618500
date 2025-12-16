@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import Layout from "@/components/Layout";
+import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -147,9 +147,9 @@ export default function BOMPage() {
       setItemFormData({
         ...itemFormData,
         inventory_item_id: value,
-        item_name: item.item_name,
-        unit: item.unit,
-        unit_cost: item.unit_cost?.toString() || "0"
+        item_name: item.name,
+        unit: item.unit_of_measure,
+        unit_cost: item.unit_price?.toString() || "0"
       });
     }
   };
@@ -457,7 +457,7 @@ export default function BOMPage() {
                   <SelectContent>
                     {inventoryItems.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
-                        {item.item_name} ({item.unit})
+                        {item.name} ({item.unit_of_measure})
                       </SelectItem>
                     ))}
                   </SelectContent>
