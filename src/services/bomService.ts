@@ -4,6 +4,10 @@ import type { Database } from "@/integrations/supabase/types";
 export type BOMSetting = Database["public"]["Tables"]["bom_settings"]["Row"];
 export type BOMTemplate = Database["public"]["Tables"]["bom_templates"]["Row"];
 
+// Define explicit types for inserts to avoid deep type instantiation issues
+type BOMSettingInsert = Database["public"]["Tables"]["bom_settings"]["Insert"];
+type BOMTemplateInsert = Database["public"]["Tables"]["bom_templates"]["Insert"];
+
 export const bomService = {
   // ============================================
   // BOM SETTINGS (Configuration Parameters)
@@ -53,9 +57,9 @@ export const bomService = {
   /**
    * Create or update a setting (upsert)
    */
-  async upsertSetting(setting: Omit<BOMSetting, "id" | "created_at" | "updated_at">): Promise<BOMSetting> {
+  async upsertSetting(setting: BOMSettingInsert): Promise<BOMSetting> {
     // Check if setting exists
-    const existing = await this.getSetting(setting.setting_key);
+    const existing = await this.getSetting(setting.setting_key || '');
 
     if (existing) {
       // Update existing
@@ -88,7 +92,7 @@ export const bomService = {
   /**
    * Batch upsert multiple settings
    */
-  async batchUpsertSettings(settings: Omit<BOMSetting, "id" | "created_at" | "updated_at">[]): Promise<void> {
+  async batchUpsertSettings(settings: BOMSettingInsert[]): Promise<void> {
     for (const setting of settings) {
       await this.upsertSetting(setting);
     }
@@ -110,7 +114,7 @@ export const bomService = {
    * Initialize default BOM settings
    */
   async initializeDefaultSettings(): Promise<void> {
-    const defaultSettings: Omit<BOMSetting, "id" | "created_at" | "updated_at">[] = [
+    const defaultSettings: BOMSettingInsert[] = [
       // Tray Configuration
       {
         category: "tray",
@@ -259,7 +263,7 @@ export const bomService = {
   /**
    * Create BOM template
    */
-  async createTemplate(template: Omit<BOMTemplate, "id" | "created_at" | "updated_at">): Promise<BOMTemplate> {
+  async createTemplate(template: BOMTemplateInsert): Promise<BOMTemplate> {
     const { data, error } = await supabase
       .from("bom_templates")
       .insert([template])
@@ -273,7 +277,7 @@ export const bomService = {
   /**
    * Update BOM template
    */
-  async updateTemplate(id: string, updates: Partial<Omit<BOMTemplate, "id" | "created_at" | "updated_at">>): Promise<BOMTemplate> {
+  async updateTemplate(id: string, updates: Database["public"]["Tables"]["bom_templates"]["Update"]): Promise<BOMTemplate> {
     const { data, error } = await supabase
       .from("bom_templates")
       .update(updates)
@@ -311,17 +315,19 @@ export const bomService = {
     if (fetchError) throw fetchError;
 
     // Create new template with same values but different plant type
-    const newTemplate: Omit<BOMTemplate, "id" | "created_at" | "updated_at"> = {
+    const newTemplate: BOMTemplateInsert = {
       plant_type_id: newPlantTypeId,
-      seed_cost_per_unit: sourceTemplate.seed_cost_per_unit,
-      germination_rate: sourceTemplate.germination_rate,
-      fertilizer_applications_per_week: sourceTemplate.fertilizer_applications_per_week,
-      fertilizer_ml_per_tray_per_application: sourceTemplate.fertilizer_ml_per_tray_per_application,
-      fungicide_applications_total: sourceTemplate.fungicide_applications_total,
-      fungicide_ml_per_tray_per_application: sourceTemplate.fungicide_ml_per_tray_per_application,
-      insecticide_applications_total: sourceTemplate.insecticide_applications_total,
-      insecticide_ml_per_tray_per_application: sourceTemplate.insecticide_ml_per_tray_per_application,
-      notes: `Cloned from template ${sourceTemplateId}`,
+      name: `Copy of ${sourceTemplate.name}`,
+      description: sourceTemplate.description,
+      // medium_volume_per_tray and labor/utility overrides are optional/nullable in schema
+      // so we only copy if they exist, or we can copy everything that matches the schema
+      medium_volume_per_tray: sourceTemplate.medium_volume_per_tray,
+      planting_hours_per_tray: sourceTemplate.planting_hours_per_tray,
+      maintenance_hours_per_tray_per_week: sourceTemplate.maintenance_hours_per_tray_per_week,
+      harvest_hours_per_tray: sourceTemplate.harvest_hours_per_tray,
+      water_liters_per_tray_per_day: sourceTemplate.water_liters_per_tray_per_day,
+      electricity_kwh_per_tray_per_day: sourceTemplate.electricity_kwh_per_tray_per_day,
+      expected_survival_rate: sourceTemplate.expected_survival_rate,
     };
 
     return await this.createTemplate(newTemplate);
@@ -370,9 +376,22 @@ export const bomService = {
     const traysRequired = Math.ceil(quantity / seedlingsPerTray);
 
     // 1. SEED COST
-    const seedCostPerUnit = template?.seed_cost_per_unit || 0;
-    const germinationRate = template?.germination_rate || 0.95;
-    const seedBuffer = getSetting("seed_buffer_percentage", 0.10);
+    // Note: seed_cost_per_unit is now in a separate table bom_seed_costs, or accessed differently
+    // For now, let's assume we fetch it separately or it's part of the template logic we designed in SQL
+    // But wait, in the SQL schema I defined `bom_seed_costs` table, NOT columns in `bom_templates`.
+    // The previous code assumed columns in `bom_templates`. I need to fix this logic.
+    
+    // Let's fetch seed cost from the new table
+    const { data: seedCostData } = await supabase
+      .from("bom_seed_costs")
+      .select("cost_per_seed, germination_rate, buffer_percent")
+      .eq("plant_type_id", plantTypeId)
+      .maybeSingle();
+
+    const seedCostPerUnit = seedCostData?.cost_per_seed || 0;
+    const germinationRate = seedCostData?.germination_rate || getSetting("default_germination_rate", 90.0) / 100;
+    const seedBuffer = (seedCostData?.buffer_percent || getSetting("default_seed_buffer_percent", 10.0)) / 100;
+    
     const seedsNeeded = quantity * (1 + seedBuffer) / germinationRate;
     const seedCost = seedsNeeded * seedCostPerUnit;
 
@@ -388,26 +407,54 @@ export const bomService = {
     const mediumCost = traysRequired * mediumVolumePerTray * mediumCostPerLiter * (1 + mediumWastageFactor);
 
     // 4. FERTILIZER COST
-    const fertAppPerWeek = template?.fertilizer_applications_per_week || 1;
-    const fertMlPerTray = template?.fertilizer_ml_per_tray_per_application || 50;
+    // In the new schema, these are in `bom_template_items`. 
+    // I need to fetch items linked to the template to calculate this accurately.
+    // For this Sprint 1 "Basic Cost Calculation", I'll use placeholders or simplified logic if I can't fetch items yet.
+    // Or I can update the service to fetch template items.
+    
+    // Let's create a helper to fetch template items
+    const { data: templateItems } = await supabase
+      .from("bom_template_items")
+      .select("*")
+      .eq("bom_template_id", template?.id || '');
+      
+    // Filter items by category
+    const fertilizerItems = templateItems?.filter(i => i.item_category === 'fertilizer') || [];
+    const fungicideItems = templateItems?.filter(i => i.item_category === 'fungicide') || [];
+    const insecticideItems = templateItems?.filter(i => i.item_category === 'insecticide') || [];
+
+    // Calculate Fertilizer Cost
+    // Sum of (qty_per_tray * applications * unit_cost) for all fertilizer items
+    let fertilizerCost = 0;
     const weeksInCycle = Math.ceil(growthDurationDays / 7);
-    const totalFertApplications = fertAppPerWeek * weeksInCycle;
-    const fertilizerCost = traysRequired * fertMlPerTray * totalFertApplications * 0.5; // Assuming 0.5 ZMW per ml
+    
+    for (const item of fertilizerItems) {
+        const apps = item.applications_per_cycle || 1; // Or calculate based on frequency if needed
+        // For simplicity in Sprint 1, assuming applications_per_cycle is correct total
+        // If frequency is 'weekly', we might need to calc: weeksInCycle
+        let totalApps = item.applications_per_cycle || 1;
+        if (item.application_frequency === 'weekly') totalApps = weeksInCycle;
+        
+        fertilizerCost += traysRequired * (item.quantity_per_tray || 0) * totalApps * (item.estimated_unit_cost || 0);
+    }
 
     // 5. TREATMENT COST (Fungicide + Insecticide)
-    const fungicideApps = template?.fungicide_applications_total || 2;
-    const fungicideMlPerTray = template?.fungicide_ml_per_tray_per_application || 30;
-    const insecticideApps = template?.insecticide_applications_total || 1;
-    const insecticideMlPerTray = template?.insecticide_ml_per_tray_per_application || 25;
-    const treatmentCost = 
-      (traysRequired * fungicideApps * fungicideMlPerTray * 0.8) + // Assuming 0.8 ZMW per ml
-      (traysRequired * insecticideApps * insecticideMlPerTray * 0.9); // Assuming 0.9 ZMW per ml
+    let treatmentCost = 0;
+    const treatmentItems = [...fungicideItems, ...insecticideItems];
+    
+    for (const item of treatmentItems) {
+        let totalApps = item.applications_per_cycle || 1;
+        if (item.application_frequency === 'weekly') totalApps = weeksInCycle;
+        
+        treatmentCost += traysRequired * (item.quantity_per_tray || 0) * totalApps * (item.estimated_unit_cost || 0);
+    }
 
     // 6. LABOR COST
     const laborHourlyRate = getSetting("labor_hourly_rate", 25);
-    const plantingMinutesPerTray = getSetting("labor_planting_minutes_per_tray", 15);
-    const maintenanceMinutesPerTrayPerWeek = getSetting("labor_maintenance_minutes_per_tray_per_week", 5);
-    const harvestingMinutesPerTray = getSetting("labor_harvesting_minutes_per_tray", 10);
+    // Use template overrides if available, else defaults
+    const plantingMinutesPerTray = (template?.planting_hours_per_tray || getSetting("planting_hours_per_tray", 0.5)) * 60;
+    const maintenanceMinutesPerTrayPerWeek = (template?.maintenance_hours_per_tray_per_week || getSetting("maintenance_hours_per_tray_per_week", 0.1)) * 60;
+    const harvestingMinutesPerTray = (template?.harvest_hours_per_tray || getSetting("harvest_hours_per_tray", 0.5)) * 60;
     
     const totalLaborMinutes = 
       (traysRequired * plantingMinutesPerTray) + 
@@ -416,18 +463,18 @@ export const bomService = {
     const laborCost = (totalLaborMinutes / 60) * laborHourlyRate;
 
     // 7. UTILITIES COST
-    const waterLitersPerTrayPerDay = getSetting("water_liters_per_tray_per_day", 2);
+    const waterLitersPerTrayPerDay = template?.water_liters_per_tray_per_day || getSetting("water_liters_per_tray_per_day", 2);
     const waterCostPerLiter = getSetting("water_cost_per_liter", 0.05);
     const utilitiesCost = traysRequired * waterLitersPerTrayPerDay * growthDurationDays * waterCostPerLiter;
 
     // 8. OVERHEAD
     const directCosts = seedCost + trayCost + mediumCost + fertilizerCost + treatmentCost + laborCost + utilitiesCost;
-    const overheadPercentage = getSetting("overhead_percentage", 0.10);
+    const overheadPercentage = getSetting("overhead_percentage", 10) / 100; // stored as 10 for 10%
     const overheadCost = directCosts * overheadPercentage;
 
     // TOTAL
     const totalCost = directCosts + overheadCost;
-    const costPerSeedling = totalCost / quantity;
+    const costPerSeedling = quantity > 0 ? totalCost / quantity : 0;
 
     return {
       breakdown: {
