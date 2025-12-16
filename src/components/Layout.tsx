@@ -1,20 +1,26 @@
 import { ReactNode } from "react";
-import { ThemeProvider } from "@/contexts/ThemeProvider";
-import { Toaster } from "@/components/ui/toaster";
-import { Header } from "@/components/Header";
+import { Sidebar } from "./Sidebar";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface LayoutProps {
   children: ReactNode;
 }
 
 export function Layout({ children }: LayoutProps) {
+  const { user } = useAuth();
+
+  if (!user) {
+    return <>{children}</>;
+  }
+
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <div className="min-h-screen bg-background">
-        <Header />
-        <main>{children}</main>
-      </div>
-      <Toaster />
-    </ThemeProvider>
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar />
+      <main className="flex-1 overflow-y-auto md:ml-64">
+        <div className="container mx-auto p-6 pt-20 md:pt-6">
+          {children}
+        </div>
+      </main>
+    </div>
   );
 }
