@@ -384,10 +384,14 @@ export const bomService = {
       .eq("plant_type_id", plantTypeId)
       .maybeSingle();
 
-    // Explicitly cast to unknown first to avoid TS2322
-    const seedCostPerUnit = Number((seedCostData?.cost_per_seed as unknown) || 0);
-    const germinationRate = Number((seedCostData?.germination_rate as unknown) || getSetting("default_germination_rate", 90.0)) / 100;
-    const seedBuffer = Number((seedCostData?.buffer_percent as unknown) || getSetting("default_seed_buffer_percent", 10.0)) / 100;
+    // Safe number conversion with proper type handling
+    const seedCostPerUnit = seedCostData?.cost_per_seed ? Number(seedCostData.cost_per_seed) : 0;
+    const germinationRate = seedCostData?.germination_rate 
+      ? Number(seedCostData.germination_rate) / 100 
+      : getSetting("default_germination_rate", 90.0) / 100;
+    const seedBuffer = seedCostData?.buffer_percent 
+      ? Number(seedCostData.buffer_percent) / 100 
+      : getSetting("default_seed_buffer_percent", 10.0) / 100;
     
     const seedsNeeded = quantity * (1 + seedBuffer) / germinationRate;
     const seedCost = seedsNeeded * seedCostPerUnit;
