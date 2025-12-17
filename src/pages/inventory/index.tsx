@@ -46,6 +46,16 @@ export default function InventoryPage() {
 
   const isViewer = profile?.role === "viewer";
 
+  // Add state for transaction form
+  const [transactionFormData, setTransactionFormData] = useState({
+    item_id: "",
+    transaction_type: "purchase" as "purchase" | "usage" | "adjustment" | "waste",
+    quantity: "",
+    unit_price: "",
+    transaction_date: new Date().toISOString().split("T")[0],
+    notes: "",
+  });
+
   useEffect(() => {
     loadData();
   }, []);
@@ -132,16 +142,10 @@ export default function InventoryPage() {
   const handleSaveTransaction = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    console.log("Form submitted"); // Debug log
-    
-    const formData = new FormData(e.currentTarget);
-    
-    const itemId = formData.get("item_id") as string;
-    
-    console.log("Item ID:", itemId); // Debug log
+    console.log("Form submitted", transactionFormData);
     
     // Validation: Ensure item is selected
-    if (!itemId) {
+    if (!transactionFormData.item_id) {
       toast({ 
         title: "Error", 
         description: "Please select an inventory item.", 
@@ -150,33 +154,41 @@ export default function InventoryPage() {
       return;
     }
     
-    const transactionType = formData.get("transaction_type") as "purchase" | "usage" | "adjustment" | "waste";
-    const quantity = parseFloat(formData.get("quantity") as string);
-    const unitPrice = formData.get("unit_price") ? parseFloat(formData.get("unit_price") as string) : undefined;
+    const quantity = parseFloat(transactionFormData.quantity);
+    const unitPrice = transactionFormData.unit_price ? parseFloat(transactionFormData.unit_price) : undefined;
     
-    console.log("Transaction data:", { transactionType, quantity, unitPrice }); // Debug log
+    if (isNaN(quantity) || quantity <= 0) {
+      toast({ 
+        title: "Error", 
+        description: "Please enter a valid quantity.", 
+        variant: "destructive" 
+      });
+      return;
+    }
     
     // For usage and waste, quantity should be negative
-    const adjustedQuantity = (transactionType === "usage" || transactionType === "waste") ? -Math.abs(quantity) : Math.abs(quantity);
+    const adjustedQuantity = (transactionFormData.transaction_type === "usage" || transactionFormData.transaction_type === "waste") 
+      ? -Math.abs(quantity) 
+      : Math.abs(quantity);
     
     const transactionData = {
-      item_id: itemId,
-      transaction_type: transactionType,
+      item_id: transactionFormData.item_id,
+      transaction_type: transactionFormData.transaction_type,
       quantity: adjustedQuantity,
       unit_price: unitPrice,
       total_cost: unitPrice ? unitPrice * Math.abs(quantity) : undefined,
-      notes: formData.get("notes") as string || undefined,
-      transaction_date: formData.get("transaction_date") as string,
+      notes: transactionFormData.notes || undefined,
+      transaction_date: transactionFormData.transaction_date,
     };
 
     try {
-      console.log("Saving transaction:", transactionData); // Debug log
+      console.log("Saving transaction:", transactionData);
       
       await inventoryService.createStockTransaction(transactionData);
       
       toast({ 
         title: "Success", 
-        description: `Stock ${transactionType} recorded successfully.` 
+        description: `Stock ${transactionFormData.transaction_type} recorded successfully.` 
       });
       
       await loadData();
@@ -199,12 +211,28 @@ export default function InventoryPage() {
 
   const handleOpenTransactionDialog = (item: InventoryItemWithLowStock | null = null) => {
     setSelectedItem(item);
+    setTransactionFormData({
+      item_id: item?.id || "",
+      transaction_type: "purchase",
+      quantity: "",
+      unit_price: "",
+      transaction_date: new Date().toISOString().split("T")[0],
+      notes: "",
+    });
     setIsTransactionDialogOpen(true);
   };
 
   const handleCloseTransactionDialog = () => {
     setIsTransactionDialogOpen(false);
     setSelectedItem(null);
+    setTransactionFormData({
+      item_id: "",
+      transaction_type: "purchase",
+      quantity: "",
+      unit_price: "",
+      transaction_date: new Date().toISOString().split("T")[0],
+      notes: "",
+    });
   };
 
   const getCategoryBadgeColor = (categoryName: string) => {
@@ -694,9 +722,8 @@ export default function InventoryPage() {
             <div className="space-y-2">
               <Label htmlFor="item_id">Select Item *</Label>
               <Select 
-                name="item_id" 
-                defaultValue={selectedItem?.id} 
-                required 
+                value={transactionFormData.item_id}
+                onValueChange={(value) => setTransactionFormData(prev => ({ ...prev, item_id: value }))}
                 disabled={isViewer || !!selectedItem}
               >
                 <SelectTrigger id="item_id">
@@ -714,7 +741,11 @@ export default function InventoryPage() {
 
             <div className="space-y-2">
               <Label htmlFor="transaction_type">Transaction Type *</Label>
-              <Select name="transaction_type" defaultValue="purchase" required disabled={isViewer}>
+              <Select 
+                value={transactionFormData.transaction_type}
+                onValueChange={(value) => setTransactionFormData(prev => ({ ...prev, transaction_type: value as any }))}
+                disabled={isViewer}
+              >
                 <SelectTrigger id="transaction_type">
                   <SelectValue />
                 </SelectTrigger>
@@ -739,13 +770,14 @@ export default function InventoryPage() {
                 <Label htmlFor="quantity">Quantity *</Label>
                 <Input
                   id="quantity"
-                  name="quantity"
                   type="number"
                   step="0.01"
                   min="0.01"
                   placeholder="0.00"
-                  required
+                  value={transactionFormData.quantity}
+                  onChange={(e) => setTransactionFormData(prev => ({ ...prev, quantity: e.target.value }))}
                   disabled={isViewer}
+                  required
                 />
                 <p className="text-xs text-gray-500">
                   Enter positive number (will be adjusted based on type)
@@ -756,11 +788,12 @@ export default function InventoryPage() {
                 <Label htmlFor="unit_price">Unit Price (ZMW) - Optional</Label>
                 <Input
                   id="unit_price"
-                  name="unit_price"
                   type="number"
                   step="0.01"
                   min="0"
                   placeholder="0.00"
+                  value={transactionFormData.unit_price}
+                  onChange={(e) => setTransactionFormData(prev => ({ ...prev, unit_price: e.target.value }))}
                   disabled={isViewer}
                 />
                 <p className="text-xs text-gray-500">
@@ -773,11 +806,11 @@ export default function InventoryPage() {
               <Label htmlFor="transaction_date">Transaction Date *</Label>
               <Input
                 id="transaction_date"
-                name="transaction_date"
                 type="date"
-                defaultValue={new Date().toISOString().split("T")[0]}
-                required
+                value={transactionFormData.transaction_date}
+                onChange={(e) => setTransactionFormData(prev => ({ ...prev, transaction_date: e.target.value }))}
                 disabled={isViewer}
+                required
               />
             </div>
 
@@ -785,9 +818,10 @@ export default function InventoryPage() {
               <Label htmlFor="notes">Notes (Optional)</Label>
               <Textarea
                 id="notes"
-                name="notes"
                 placeholder="Additional details about this transaction..."
                 rows={3}
+                value={transactionFormData.notes}
+                onChange={(e) => setTransactionFormData(prev => ({ ...prev, notes: e.target.value }))}
                 disabled={isViewer}
               />
             </div>
