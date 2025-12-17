@@ -1258,7 +1258,7 @@ export default function PlantingsPage() {
                     </Table>
                   </div>
                   {(csvData.length + invalidRows.length) > 10 && (
-                    <p className="text-sm text-gray-500 text-center">
+                    <p className="text-sm text-gray-500 text-center p-2">
                       Showing first 10 rows. {csvData.length + invalidRows.length - 10} more rows in file.
                     </p>
                   )}
