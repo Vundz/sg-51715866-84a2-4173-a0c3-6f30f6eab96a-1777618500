@@ -10,6 +10,10 @@ export interface InventoryItemWithLowStock extends InventoryItem {
 
 export interface StockTransactionWithItem extends StockTransaction {
   inventory_items: InventoryItem | null;
+  profiles: {
+    full_name: string | null;
+    email: string | null;
+  } | null;
 }
 
 export const inventoryService = {
@@ -96,7 +100,11 @@ export const inventoryService = {
       .from("stock_transactions")
       .select(`
         *,
-        inventory_items (*)
+        inventory_items (*),
+        profiles!stock_transactions_created_by_fkey (
+          full_name,
+          email
+        )
       `)
       .order("transaction_date", { ascending: false });
 
@@ -112,7 +120,11 @@ export const inventoryService = {
       .from("stock_transactions")
       .select(`
         *,
-        inventory_items (*)
+        inventory_items (*),
+        profiles!stock_transactions_created_by_fkey (
+          full_name,
+          email
+        )
       `)
       .eq("item_id", itemId)
       .order("transaction_date", { ascending: false });

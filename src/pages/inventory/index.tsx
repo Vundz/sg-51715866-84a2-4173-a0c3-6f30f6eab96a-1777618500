@@ -541,13 +541,14 @@ export default function InventoryPage() {
                     <TableHead>Item</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
                     <TableHead className="text-right">Cost (ZMW)</TableHead>
+                    <TableHead>Performed By</TableHead>
                     <TableHead>Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {transactions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center h-24 text-gray-500">
+                      <TableCell colSpan={7} className="text-center h-24 text-gray-500">
                         No transactions recorded yet.
                       </TableCell>
                     </TableRow>
@@ -582,6 +583,16 @@ export default function InventoryPage() {
                           </TableCell>
                           <TableCell className="text-right font-mono">
                             {tx.total_cost ? `K${formatNumber(Number(tx.total_cost))}` : "-"}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium">
+                                {tx.profiles?.full_name || "Unknown"}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {tx.profiles?.email || "-"}
+                              </span>
+                            </div>
                           </TableCell>
                           <TableCell className="text-sm text-gray-600">
                             {tx.notes || "-"}
