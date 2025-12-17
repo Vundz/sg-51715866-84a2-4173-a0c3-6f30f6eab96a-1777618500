@@ -14,6 +14,8 @@ import { plantingService } from "@/services/plantingService";
 import { plantTypeService } from "@/services/plantTypeService";
 import { locationService } from "@/services/locationService";
 import { reservationService } from "@/services/reservationService";
+import { inventoryService } from "@/services/inventoryService";
+import type { InventoryItemWithLowStock } from "@/services/inventoryService";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { Database } from "@/integrations/supabase/types";
@@ -77,6 +79,13 @@ export default function PlantingsPage() {
   const [isProcessingCsv, setIsProcessingCsv] = useState(false);
   const [ignoreErrors, setIgnoreErrors] = useState(false);
   const [invalidRows, setInvalidRows] = useState<any[]>([]);
+  
+  // Inventory tracking states
+  const [seedInventory, setSeedInventory] = useState<InventoryItemWithLowStock[]>([]);
+  const [trackInventory, setTrackInventory] = useState(false);
+  const [selectedSeedId, setSelectedSeedId] = useState<string>("");
+  const [seedQuantityUsed, setSeedQuantityUsed] = useState<string>("");
+  const [seedStockWarning, setSeedStockWarning] = useState<string>("");
 
   useEffect(() => {
     loadData();
@@ -87,17 +96,19 @@ export default function PlantingsPage() {
     
     try {
       setLoading(true);
-      const [plantingsData, plantTypesData, locationsData, reservationsData] = await Promise.all([
+      const [plantingsData, plantTypesData, locationsData, reservationsData, inventoryData] = await Promise.all([
         plantingService.getPlantingsWithDetails(),
         plantTypeService.getPlantTypes(),
         locationService.getLocations(),
-        reservationService.getReservations()
+        reservationService.getReservations(),
+        inventoryService.getInventoryItemsByCategory("Seed")
       ]);
       
       setPlantings(plantingsData as Planting[]);
       setPlantTypes(plantTypesData);
       setLocations(locationsData);
       setReservations(reservationsData as Reservation[]);
+      setSeedInventory(inventoryData);
     } catch (error) {
       console.error("Error loading data:", error);
       toast({ title: "Error", description: "Failed to load data. Please try refreshing the page.", variant: "destructive" });
@@ -119,6 +130,39 @@ export default function PlantingsPage() {
 
   const getReservationCount = (plantingId: string): number => {
     return reservations.filter(r => r.planting_id === plantingId && r.status === 'active').length;
+  };
+
+  // Validate seed quantity and show warnings
+  const validateSeedQuantity = (seedId: string, quantity: string) => {
+    if (!seedId || !quantity) {
+      setSeedStockWarning("");
+      return;
+    }
+
+    const seed = seedInventory.find(s => s.id === seedId);
+    if (!seed) {
+      setSeedStockWarning("");
+      return;
+    }
+
+    const qtyUsed = parseFloat(quantity);
+    if (isNaN(qtyUsed) || qtyUsed <= 0) {
+      setSeedStockWarning("Please enter a valid quantity");
+      return;
+    }
+
+    const currentStock = Number(seed.current_stock);
+    if (qtyUsed > currentStock) {
+      setSeedStockWarning(`❌ Insufficient stock! Only ${formatNumber(currentStock)} ${seed.unit_of_measure} available`);
+      return;
+    }
+
+    const remainingStock = currentStock - qtyUsed;
+    if (remainingStock < (seed.minimum_stock || 0)) {
+      setSeedStockWarning(`⚠️ Warning: Stock will be low after this usage (${formatNumber(remainingStock)} ${seed.unit_of_measure} remaining)`);
+    } else {
+      setSeedStockWarning(`✅ ${formatNumber(remainingStock)} ${seed.unit_of_measure} will remain in stock`);
+    }
   };
 
   // Get unique plant type names
@@ -273,6 +317,31 @@ export default function PlantingsPage() {
         return;
     }
 
+    // Validate inventory deduction if enabled
+    if (trackInventory && !editingPlanting) {
+      if (!selectedSeedId) {
+        toast({ title: "Error", description: "Please select a seed from inventory", variant: "destructive" });
+        return;
+      }
+
+      const seed = seedInventory.find(s => s.id === selectedSeedId);
+      const qtyUsed = parseFloat(seedQuantityUsed);
+
+      if (!seed || isNaN(qtyUsed) || qtyUsed <= 0) {
+        toast({ title: "Error", description: "Please enter a valid seed quantity", variant: "destructive" });
+        return;
+      }
+
+      if (qtyUsed > Number(seed.current_stock)) {
+        toast({ 
+          title: "Insufficient Stock", 
+          description: `Only ${formatNumber(Number(seed.current_stock))} ${seed.unit_of_measure} available`, 
+          variant: "destructive" 
+        });
+        return;
+      }
+    }
+
     const datePlanted = new Date(formData.get("date_planted") as string);
     const selectedPlantType = plantTypes.find(pt => pt.id === plantTypeId);
     const expectedHarvestDate = new Date(datePlanted);
@@ -300,19 +369,40 @@ export default function PlantingsPage() {
     }
 
     try {
+      let createdPlanting;
+      
       if (editingPlanting) {
         await plantingService.updatePlanting(editingPlanting.id, finalPlantingData);
         toast({ title: "Success", description: "Planting updated successfully." });
       } else {
-        await plantingService.addPlanting(finalPlantingData);
+        createdPlanting = await plantingService.addPlanting(finalPlantingData);
+        
+        // Create inventory transaction if tracking is enabled
+        if (trackInventory && selectedSeedId && seedQuantityUsed) {
+          const seed = seedInventory.find(s => s.id === selectedSeedId);
+          const qtyUsed = parseFloat(seedQuantityUsed);
+          
+          if (seed && !isNaN(qtyUsed) && qtyUsed > 0) {
+            const location = locations.find(l => l.id === plantingData.location_id);
+            const notes = `Used for planting: ${selectedPlantTypeName} (${selectedVariety}) at ${location?.name || 'Unknown Location'}`;
+            
+            await inventoryService.createStockTransaction({
+              item_id: selectedSeedId,
+              transaction_type: "usage",
+              quantity: -Math.abs(qtyUsed), // Negative for usage
+              reference_id: createdPlanting.id,
+              reference_type: "planting",
+              notes: notes,
+              transaction_date: plantingData.date_planted,
+            });
+          }
+        }
+        
         toast({ title: "Success", description: "Planting created successfully." });
       }
       
       await loadData();
-      setIsDialogOpen(false);
-      setEditingPlanting(null);
-      setSelectedPlantTypeName("");
-      setSelectedVariety("");
+      handleCloseDialog();
     } catch (error) {
       console.error("Error saving planting:", error);
       toast({ title: "Error", description: "Failed to save planting. Please try again.", variant: "destructive" });
@@ -346,7 +436,25 @@ export default function PlantingsPage() {
       setSelectedPlantTypeName("");
       setSelectedVariety("");
     }
+    
+    // Reset inventory tracking states
+    setTrackInventory(false);
+    setSelectedSeedId("");
+    setSeedQuantityUsed("");
+    setSeedStockWarning("");
+    
     setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setEditingPlanting(null);
+    setSelectedPlantTypeName("");
+    setSelectedVariety("");
+    setTrackInventory(false);
+    setSelectedSeedId("");
+    setSeedQuantityUsed("");
+    setSeedStockWarning("");
   };
 
   const handlePlantTypeChange = (value: string) => {
@@ -762,6 +870,118 @@ export default function PlantingsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Inventory Tracking Section - Only show for new plantings */}
+            {!editingPlanting && (
+              <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="trackInventory"
+                    checked={trackInventory}
+                    onCheckedChange={(checked) => {
+                      setTrackInventory(checked as boolean);
+                      if (!checked) {
+                        setSelectedSeedId("");
+                        setSeedQuantityUsed("");
+                        setSeedStockWarning("");
+                      }
+                    }}
+                    disabled={isViewer}
+                  />
+                  <Label
+                    htmlFor="trackInventory"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Track seed usage from inventory
+                  </Label>
+                </div>
+
+                {trackInventory && (
+                  <div className="space-y-4 pl-6 border-l-2 border-green-300 dark:border-green-700">
+                    {seedInventory.length === 0 ? (
+                      <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                        <p className="text-sm text-amber-800 dark:text-amber-200">
+                          ⚠️ No seeds found in inventory. Please add seed items in the{" "}
+                          <Link href="/inventory" className="underline font-medium">
+                            Inventory module
+                          </Link>{" "}
+                          first.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="seedSelect">
+                            Select Seed <span className="text-red-500">*</span>
+                          </Label>
+                          <Select
+                            value={selectedSeedId}
+                            onValueChange={(value) => {
+                              setSelectedSeedId(value);
+                              validateSeedQuantity(value, seedQuantityUsed);
+                            }}
+                            disabled={isViewer}
+                          >
+                            <SelectTrigger id="seedSelect">
+                              <SelectValue placeholder="Choose a seed from inventory" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {seedInventory.map((seed) => (
+                                <SelectItem 
+                                  key={seed.id} 
+                                  value={seed.id}
+                                  disabled={Number(seed.current_stock) <= 0}
+                                >
+                                  <div className="flex items-center justify-between gap-4">
+                                    <span>{seed.name}</span>
+                                    <span className={`text-xs ${Number(seed.current_stock) <= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                      ({formatNumber(Number(seed.current_stock))} {seed.unit_of_measure} available)
+                                    </span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="seedQuantity">
+                            Quantity Used <span className="text-red-500">*</span>
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="seedQuantity"
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              placeholder="0.00"
+                              value={seedQuantityUsed}
+                              onChange={(e) => {
+                                setSeedQuantityUsed(e.target.value);
+                                validateSeedQuantity(selectedSeedId, e.target.value);
+                              }}
+                              disabled={isViewer || !selectedSeedId}
+                            />
+                            <span className="flex items-center text-sm text-gray-600 dark:text-gray-400 min-w-[60px]">
+                              {selectedSeedId && seedInventory.find(s => s.id === selectedSeedId)?.unit_of_measure}
+                            </span>
+                          </div>
+                          {seedStockWarning && (
+                            <p className={`text-xs ${
+                              seedStockWarning.startsWith('❌') ? 'text-red-600 dark:text-red-400' :
+                              seedStockWarning.startsWith('⚠️') ? 'text-amber-600 dark:text-amber-400' :
+                              'text-green-600 dark:text-green-400'
+                            }`}>
+                              {seedStockWarning}
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
