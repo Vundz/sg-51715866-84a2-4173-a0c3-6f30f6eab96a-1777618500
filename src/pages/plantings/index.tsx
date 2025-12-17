@@ -717,7 +717,7 @@ export default function PlantingsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <div className="max-w-[1600px] mx-auto space-y-8 px-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-bold flex items-center gap-3">
@@ -1396,17 +1396,17 @@ export default function PlantingsPage() {
                 <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b shadow-sm">
                   <table className="w-full table-fixed">
                     <colgroup>
+                      <col style={{ width: '140px' }} />
+                      <col style={{ width: '180px' }} />
+                      <col style={{ width: '140px' }} />
+                      <col style={{ width: '110px' }} />
+                      <col style={{ width: '90px' }} />
                       <col style={{ width: '120px' }} />
-                      <col style={{ width: '150px' }} />
-                      <col style={{ width: '130px' }} />
-                      <col style={{ width: '100px' }} />
-                      <col style={{ width: '80px' }} />
-                      <col style={{ width: '100px' }} />
-                      <col style={{ width: '100px' }} />
-                      <col style={{ width: '130px' }} />
-                      <col style={{ width: '150px' }} />
-                      <col style={{ width: '100px' }} />
                       <col style={{ width: '120px' }} />
+                      <col style={{ width: '140px' }} />
+                      <col style={{ width: '160px' }} />
+                      <col style={{ width: '110px' }} />
+                      <col style={{ width: '140px' }} />
                     </colgroup>
                     <thead>
                       <tr className="border-b">
@@ -1430,17 +1430,17 @@ export default function PlantingsPage() {
                 <div className="overflow-y-auto max-h-[600px]">
                   <table className="w-full table-fixed">
                     <colgroup>
+                      <col style={{ width: '140px' }} />
+                      <col style={{ width: '180px' }} />
+                      <col style={{ width: '140px' }} />
+                      <col style={{ width: '110px' }} />
+                      <col style={{ width: '90px' }} />
                       <col style={{ width: '120px' }} />
-                      <col style={{ width: '150px' }} />
-                      <col style={{ width: '130px' }} />
-                      <col style={{ width: '100px' }} />
-                      <col style={{ width: '80px' }} />
-                      <col style={{ width: '100px' }} />
-                      <col style={{ width: '100px' }} />
-                      <col style={{ width: '130px' }} />
-                      <col style={{ width: '150px' }} />
-                      <col style={{ width: '100px' }} />
                       <col style={{ width: '120px' }} />
+                      <col style={{ width: '140px' }} />
+                      <col style={{ width: '160px' }} />
+                      <col style={{ width: '110px' }} />
+                      <col style={{ width: '140px' }} />
                     </colgroup>
                     <tbody>
                       {filteredPlantings.length === 0 ? (
