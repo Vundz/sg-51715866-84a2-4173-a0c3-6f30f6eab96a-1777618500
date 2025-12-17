@@ -690,7 +690,7 @@ export default function InventoryPage() {
               Add, use, adjust, or record waste of inventory items
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSaveTransaction} className="space-y-4" id="transaction-form">
+          <form onSubmit={handleSaveTransaction} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="item_id">Select Item *</Label>
               <Select 
@@ -800,7 +800,6 @@ export default function InventoryPage() {
                 <Button 
                   type="submit" 
                   className="bg-blue-600 hover:bg-blue-700"
-                  form="transaction-form"
                 >
                   Record Transaction
                 </Button>
