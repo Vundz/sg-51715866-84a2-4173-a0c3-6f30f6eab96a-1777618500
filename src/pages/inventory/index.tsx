@@ -131,9 +131,14 @@ export default function InventoryPage() {
 
   const handleSaveTransaction = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    console.log("Form submitted"); // Debug log
+    
     const formData = new FormData(e.currentTarget);
     
     const itemId = formData.get("item_id") as string;
+    
+    console.log("Item ID:", itemId); // Debug log
     
     // Validation: Ensure item is selected
     if (!itemId) {
@@ -149,6 +154,8 @@ export default function InventoryPage() {
     const quantity = parseFloat(formData.get("quantity") as string);
     const unitPrice = formData.get("unit_price") ? parseFloat(formData.get("unit_price") as string) : undefined;
     
+    console.log("Transaction data:", { transactionType, quantity, unitPrice }); // Debug log
+    
     // For usage and waste, quantity should be negative
     const adjustedQuantity = (transactionType === "usage" || transactionType === "waste") ? -Math.abs(quantity) : Math.abs(quantity);
     
@@ -163,7 +170,10 @@ export default function InventoryPage() {
     };
 
     try {
+      console.log("Saving transaction:", transactionData); // Debug log
+      
       await inventoryService.createStockTransaction(transactionData);
+      
       toast({ 
         title: "Success", 
         description: `Stock ${transactionType} recorded successfully.` 
@@ -680,7 +690,7 @@ export default function InventoryPage() {
               Add, use, adjust, or record waste of inventory items
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSaveTransaction} className="space-y-4">
+          <form onSubmit={handleSaveTransaction} className="space-y-4" id="transaction-form">
             <div className="space-y-2">
               <Label htmlFor="item_id">Select Item *</Label>
               <Select 
@@ -689,7 +699,7 @@ export default function InventoryPage() {
                 required 
                 disabled={isViewer || !!selectedItem}
               >
-                <SelectTrigger>
+                <SelectTrigger id="item_id">
                   <SelectValue placeholder="Choose an item" />
                 </SelectTrigger>
                 <SelectContent>
@@ -705,7 +715,7 @@ export default function InventoryPage() {
             <div className="space-y-2">
               <Label htmlFor="transaction_type">Transaction Type *</Label>
               <Select name="transaction_type" defaultValue="purchase" required disabled={isViewer}>
-                <SelectTrigger>
+                <SelectTrigger id="transaction_type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -787,7 +797,11 @@ export default function InventoryPage() {
                 Cancel
               </Button>
               {!isViewer && (
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                <Button 
+                  type="submit" 
+                  className="bg-blue-600 hover:bg-blue-700"
+                  form="transaction-form"
+                >
                   Record Transaction
                 </Button>
               )}
