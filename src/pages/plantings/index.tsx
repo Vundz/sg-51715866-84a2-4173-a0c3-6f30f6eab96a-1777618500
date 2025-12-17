@@ -1464,9 +1464,9 @@ export default function PlantingsPage() {
                                 {p.batch_number || 'N/A'}
                               </td>
                               <td className="p-4 align-middle font-medium">
-                                {p.plant_types?.name || 'N/A'}
+                                {p.plant_types?.variety || 'N/A'}
                                 <br/>
-                                <span className="text-xs text-gray-500">{p.plant_types?.variety}</span>
+                                <span className="text-xs text-gray-500">{p.plant_types?.name}</span>
                               </td>
                               <td className="p-4 align-middle">{p.locations?.name || 'N/A'}</td>
                               <td className="p-4 align-middle">{formatNumber(p.remaining_quantity ?? p.quantity)}</td>
