@@ -1208,55 +1208,53 @@ export default function PlantingsPage() {
               <div className="space-y-2">
                 <h3 className="font-medium">Data Preview</h3>
                 <div className="border rounded-lg overflow-hidden">
-                  <div className="overflow-auto max-h-[600px]">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-white dark:bg-gray-950 z-10 shadow-sm">
-                        <TableRow>
-                          <TableHead className="bg-white dark:bg-gray-950">Row</TableHead>
-                          <TableHead className="bg-white dark:bg-gray-950">Plant Type</TableHead>
-                          <TableHead className="bg-white dark:bg-gray-950">Variety</TableHead>
-                          <TableHead className="bg-white dark:bg-gray-950">Location</TableHead>
-                          <TableHead className="bg-white dark:bg-gray-950">Quantity</TableHead>
-                          <TableHead className="bg-white dark:bg-gray-950">Date Planted</TableHead>
-                          <TableHead className="bg-white dark:bg-gray-950">Status</TableHead>
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-white dark:bg-gray-950 z-10 shadow-sm">
+                      <TableRow>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Row</TableHead>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Plant Type</TableHead>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Variety</TableHead>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Location</TableHead>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Quantity</TableHead>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Date Planted</TableHead>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {/* Valid rows */}
+                      {csvData.slice(0, 5).map((row, index) => (
+                        <TableRow key={`valid-${index}`} className="bg-green-50 dark:bg-green-950">
+                          <TableCell>{row.rowNumber}</TableCell>
+                          <TableCell>{row.plantType?.name}</TableCell>
+                          <TableCell>{row.plantType?.variety}</TableCell>
+                          <TableCell>{row.location?.name}</TableCell>
+                          <TableCell>{formatNumber(row.quantity)}</TableCell>
+                          <TableCell>{new Date(row.datePlanted).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <Badge className="bg-green-600 text-white">Valid</Badge>
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {/* Valid rows */}
-                        {csvData.slice(0, 5).map((row, index) => (
-                          <TableRow key={`valid-${index}`} className="bg-green-50 dark:bg-green-950">
-                            <TableCell>{row.rowNumber}</TableCell>
-                            <TableCell>{row.plantType?.name}</TableCell>
-                            <TableCell>{row.plantType?.variety}</TableCell>
-                            <TableCell>{row.location?.name}</TableCell>
-                            <TableCell>{formatNumber(row.quantity)}</TableCell>
-                            <TableCell>{new Date(row.datePlanted).toLocaleDateString()}</TableCell>
-                            <TableCell>
-                              <Badge className="bg-green-600 text-white">Valid</Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        
-                        {/* Invalid rows */}
-                        {invalidRows.slice(0, 5).map((row, index) => (
-                          <TableRow key={`invalid-${index}`} className="bg-red-50 dark:bg-red-950">
-                            <TableCell>{row.rowNumber}</TableCell>
-                            <TableCell>{row.rawData["Plant Type"]}</TableCell>
-                            <TableCell>{row.rawData["Variety"]}</TableCell>
-                            <TableCell>{row.rawData["Location"]}</TableCell>
-                            <TableCell>{row.rawData["Quantity"]}</TableCell>
-                            <TableCell>{row.rawData["Date Planted"]}</TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <Badge variant="destructive">Error</Badge>
-                                <p className="text-xs text-red-600 dark:text-red-400">{row.errors[0]}</p>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                      ))}
+                      
+                      {/* Invalid rows */}
+                      {invalidRows.slice(0, 5).map((row, index) => (
+                        <TableRow key={`invalid-${index}`} className="bg-red-50 dark:bg-red-950">
+                          <TableCell>{row.rowNumber}</TableCell>
+                          <TableCell>{row.rawData["Plant Type"]}</TableCell>
+                          <TableCell>{row.rawData["Variety"]}</TableCell>
+                          <TableCell>{row.rawData["Location"]}</TableCell>
+                          <TableCell>{row.rawData["Quantity"]}</TableCell>
+                          <TableCell>{row.rawData["Date Planted"]}</TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <Badge variant="destructive">Error</Badge>
+                              <p className="text-xs text-red-600 dark:text-red-400">{row.errors[0]}</p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                   {(csvData.length + invalidRows.length) > 10 && (
                     <p className="text-sm text-gray-500 text-center p-2">
                       Showing first 10 rows. {csvData.length + invalidRows.length - 10} more rows in file.
@@ -1390,24 +1388,32 @@ export default function PlantingsPage() {
             </div>
           </div>
 
+          {/* Fixed Header Table */}
           <div className="border rounded-lg overflow-hidden">
-            <div className="overflow-auto max-h-[600px]">
+            {/* Fixed Header */}
+            <div className="bg-white dark:bg-gray-950 border-b">
               <Table>
                 <TableHeader className="sticky top-0 bg-white dark:bg-gray-950 z-10 shadow-sm">
                   <TableRow>
-                    <TableHead className="bg-white dark:bg-gray-950">Batch #</TableHead>
-                    <TableHead className="bg-white dark:bg-gray-950">Plant</TableHead>
-                    <TableHead className="bg-white dark:bg-gray-950">Location</TableHead>
-                    <TableHead className="bg-white dark:bg-gray-950">Total Qty</TableHead>
-                    <TableHead className="bg-white dark:bg-gray-950">Trays</TableHead>
-                    <TableHead className="bg-white dark:bg-gray-950">Reserved</TableHead>
-                    <TableHead className="bg-white dark:bg-gray-950">Available</TableHead>
-                    <TableHead className="bg-white dark:bg-gray-950">Date Planted</TableHead>
-                    <TableHead className="bg-white dark:bg-gray-950">Expected Harvest</TableHead>
-                    <TableHead className="bg-white dark:bg-gray-950">Status</TableHead>
-                    <TableHead className="text-right bg-white dark:bg-gray-950">Actions</TableHead>
+                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Batch #</TableHead>
+                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Plant</TableHead>
+                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Location</TableHead>
+                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Total Qty</TableHead>
+                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Trays</TableHead>
+                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Reserved</TableHead>
+                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Available</TableHead>
+                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Date Planted</TableHead>
+                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Expected Harvest</TableHead>
+                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Status</TableHead>
+                    <TableHead className="text-right sticky top-0 bg-white dark:bg-gray-950">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
+              </Table>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="overflow-auto max-h-[600px]">
+              <Table>
                 <TableBody>
                   {filteredPlantings.length === 0 ? (
                     <TableRow>
@@ -1425,7 +1431,7 @@ export default function PlantingsPage() {
                       const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
                       
                       return (
-                        <TableRow key={p.id}>
+                        <TableRow key={p.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
                           <TableCell className="font-mono font-semibold text-sm">
                             {p.batch_number || 'N/A'}
                           </TableCell>
