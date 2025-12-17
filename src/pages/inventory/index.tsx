@@ -54,6 +54,7 @@ export default function InventoryPage() {
     unit_price: "",
     transaction_date: new Date().toISOString().split("T")[0],
     notes: "",
+    adjustment_direction: "add" as "add" | "subtract", // For adjustment type
   });
 
   useEffect(() => {
@@ -139,9 +140,7 @@ export default function InventoryPage() {
     }
   };
 
-  const handleSaveTransaction = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
+  const handleSaveTransaction = async () => {
     console.log("Form submitted", transactionFormData);
     
     // Validation: Ensure item is selected
@@ -166,10 +165,21 @@ export default function InventoryPage() {
       return;
     }
     
-    // For usage and waste, quantity should be negative
-    const adjustedQuantity = (transactionFormData.transaction_type === "usage" || transactionFormData.transaction_type === "waste") 
-      ? -Math.abs(quantity) 
-      : Math.abs(quantity);
+    // Determine quantity adjustment based on transaction type and direction
+    let adjustedQuantity = quantity;
+    
+    if (transactionFormData.transaction_type === "usage" || transactionFormData.transaction_type === "waste") {
+      // Usage and waste always reduce stock
+      adjustedQuantity = -Math.abs(quantity);
+    } else if (transactionFormData.transaction_type === "adjustment") {
+      // Adjustment can add or subtract based on direction
+      adjustedQuantity = transactionFormData.adjustment_direction === "subtract" 
+        ? -Math.abs(quantity) 
+        : Math.abs(quantity);
+    } else {
+      // Purchase always adds stock
+      adjustedQuantity = Math.abs(quantity);
+    }
     
     const transactionData = {
       item_id: transactionFormData.item_id,
@@ -218,6 +228,7 @@ export default function InventoryPage() {
       unit_price: "",
       transaction_date: new Date().toISOString().split("T")[0],
       notes: "",
+      adjustment_direction: "add",
     });
     setIsTransactionDialogOpen(true);
   };
@@ -232,6 +243,7 @@ export default function InventoryPage() {
       unit_price: "",
       transaction_date: new Date().toISOString().split("T")[0],
       notes: "",
+      adjustment_direction: "add",
     });
   };
 
@@ -718,7 +730,7 @@ export default function InventoryPage() {
               Add, use, adjust, or record waste of inventory items
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSaveTransaction} className="space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="item_id">Select Item *</Label>
               <Select 
@@ -763,7 +775,41 @@ export default function InventoryPage() {
                   })}
                 </SelectContent>
               </Select>
+              {transactionFormData.transaction_type === "adjustment" && (
+                <p className="text-xs text-muted-foreground">
+                  Use adjustments to correct stock errors or account for discrepancies
+                </p>
+              )}
             </div>
+
+            {/* Show adjustment direction selector only for adjustment type */}
+            {transactionFormData.transaction_type === "adjustment" && (
+              <div className="space-y-2">
+                <Label>Adjustment Direction *</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={transactionFormData.adjustment_direction === "add" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => setTransactionFormData(prev => ({ ...prev, adjustment_direction: "add" }))}
+                    disabled={isViewer}
+                  >
+                    <TrendingUp className="w-4 h-4 mr-2" />
+                    Add Stock
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={transactionFormData.adjustment_direction === "subtract" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => setTransactionFormData(prev => ({ ...prev, adjustment_direction: "subtract" }))}
+                    disabled={isViewer}
+                  >
+                    <TrendingDown className="w-4 h-4 mr-2" />
+                    Subtract Stock
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -780,7 +826,12 @@ export default function InventoryPage() {
                   required
                 />
                 <p className="text-xs text-gray-500">
-                  Enter positive number (will be adjusted based on type)
+                  {transactionFormData.transaction_type === "adjustment" 
+                    ? `Will ${transactionFormData.adjustment_direction === "add" ? "increase" : "decrease"} stock by this amount`
+                    : transactionFormData.transaction_type === "purchase"
+                    ? "Amount to add to stock"
+                    : "Amount to reduce from stock"
+                  }
                 </p>
               </div>
 
@@ -824,6 +875,11 @@ export default function InventoryPage() {
                 onChange={(e) => setTransactionFormData(prev => ({ ...prev, notes: e.target.value }))}
                 disabled={isViewer}
               />
+              {transactionFormData.transaction_type === "adjustment" && (
+                <p className="text-xs text-amber-600">
+                  💡 Tip: Explain the reason for this adjustment in the notes
+                </p>
+              )}
             </div>
 
             <DialogFooter>
@@ -832,14 +888,14 @@ export default function InventoryPage() {
               </Button>
               {!isViewer && (
                 <Button 
-                  type="submit" 
+                  onClick={handleSaveTransaction}
                   className="bg-blue-600 hover:bg-blue-700"
                 >
                   Record Transaction
                 </Button>
               )}
             </DialogFooter>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
