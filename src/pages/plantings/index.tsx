@@ -1208,59 +1208,61 @@ export default function PlantingsPage() {
               <div className="space-y-2">
                 <h3 className="font-medium">Data Preview</h3>
                 <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Row</TableHead>
-                        <TableHead>Plant Type</TableHead>
-                        <TableHead>Variety</TableHead>
-                        <TableHead>Location</TableHead>
-                        <TableHead>Quantity</TableHead>
-                        <TableHead>Date Planted</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {/* Valid rows */}
-                      {csvData.slice(0, 5).map((row, index) => (
-                        <TableRow key={`valid-${index}`} className="bg-green-50 dark:bg-green-950">
-                          <TableCell>{row.rowNumber}</TableCell>
-                          <TableCell>{row.plantType?.name}</TableCell>
-                          <TableCell>{row.plantType?.variety}</TableCell>
-                          <TableCell>{row.location?.name}</TableCell>
-                          <TableCell>{formatNumber(row.quantity)}</TableCell>
-                          <TableCell>{new Date(row.datePlanted).toLocaleDateString()}</TableCell>
-                          <TableCell>
-                            <Badge className="bg-green-600 text-white">Valid</Badge>
-                          </TableCell>
+                  <div className="overflow-auto max-h-[600px]">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-white dark:bg-gray-950 z-10 shadow-sm">
+                        <TableRow>
+                          <TableHead className="bg-white dark:bg-gray-950">Row</TableHead>
+                          <TableHead className="bg-white dark:bg-gray-950">Plant Type</TableHead>
+                          <TableHead className="bg-white dark:bg-gray-950">Variety</TableHead>
+                          <TableHead className="bg-white dark:bg-gray-950">Location</TableHead>
+                          <TableHead className="bg-white dark:bg-gray-950">Quantity</TableHead>
+                          <TableHead className="bg-white dark:bg-gray-950">Date Planted</TableHead>
+                          <TableHead className="bg-white dark:bg-gray-950">Status</TableHead>
                         </TableRow>
-                      ))}
-                      
-                      {/* Invalid rows */}
-                      {invalidRows.slice(0, 5).map((row, index) => (
-                        <TableRow key={`invalid-${index}`} className="bg-red-50 dark:bg-red-950">
-                          <TableCell>{row.rowNumber}</TableCell>
-                          <TableCell>{row.rawData["Plant Type"]}</TableCell>
-                          <TableCell>{row.rawData["Variety"]}</TableCell>
-                          <TableCell>{row.rawData["Location"]}</TableCell>
-                          <TableCell>{row.rawData["Quantity"]}</TableCell>
-                          <TableCell>{row.rawData["Date Planted"]}</TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <Badge variant="destructive">Error</Badge>
-                              <p className="text-xs text-red-600 dark:text-red-400">{row.errors[0]}</p>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {/* Valid rows */}
+                        {csvData.slice(0, 5).map((row, index) => (
+                          <TableRow key={`valid-${index}`} className="bg-green-50 dark:bg-green-950">
+                            <TableCell>{row.rowNumber}</TableCell>
+                            <TableCell>{row.plantType?.name}</TableCell>
+                            <TableCell>{row.plantType?.variety}</TableCell>
+                            <TableCell>{row.location?.name}</TableCell>
+                            <TableCell>{formatNumber(row.quantity)}</TableCell>
+                            <TableCell>{new Date(row.datePlanted).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              <Badge className="bg-green-600 text-white">Valid</Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        
+                        {/* Invalid rows */}
+                        {invalidRows.slice(0, 5).map((row, index) => (
+                          <TableRow key={`invalid-${index}`} className="bg-red-50 dark:bg-red-950">
+                            <TableCell>{row.rowNumber}</TableCell>
+                            <TableCell>{row.rawData["Plant Type"]}</TableCell>
+                            <TableCell>{row.rawData["Variety"]}</TableCell>
+                            <TableCell>{row.rawData["Location"]}</TableCell>
+                            <TableCell>{row.rawData["Quantity"]}</TableCell>
+                            <TableCell>{row.rawData["Date Planted"]}</TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <Badge variant="destructive">Error</Badge>
+                                <p className="text-xs text-red-600 dark:text-red-400">{row.errors[0]}</p>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {(csvData.length + invalidRows.length) > 10 && (
+                    <p className="text-sm text-gray-500 text-center">
+                      Showing first 10 rows. {csvData.length + invalidRows.length - 10} more rows in file.
+                    </p>
+                  )}
                 </div>
-                {(csvData.length + invalidRows.length) > 10 && (
-                  <p className="text-sm text-gray-500 text-center">
-                    Showing first 10 rows. {csvData.length + invalidRows.length - 10} more rows in file.
-                  </p>
-                )}
               </div>
             )}
 
@@ -1388,105 +1390,109 @@ export default function PlantingsPage() {
             </div>
           </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Batch #</TableHead>
-                <TableHead>Plant</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Total Qty</TableHead>
-                <TableHead>Trays</TableHead>
-                <TableHead>Reserved</TableHead>
-                <TableHead>Available</TableHead>
-                <TableHead>Date Planted</TableHead>
-                <TableHead>Expected Harvest</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredPlantings.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={11} className="text-center h-24">
-                    {searchQuery || filterType !== "all" 
-                      ? "No plantings match your search or filter criteria." 
-                      : "No plantings recorded yet."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredPlantings.map(p => {
-                  const reserved = getReservedQuantity(p.id);
-                  const available = getAvailableQuantity(p);
-                  const reservationCount = getReservationCount(p.id);
-                  const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
-                  
-                  return (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-mono font-semibold text-sm">
-                        {p.batch_number || 'N/A'}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {p.plant_types?.name || 'N/A'}
-                        <br/>
-                        <span className="text-xs text-gray-500">{p.plant_types?.variety}</span>
-                      </TableCell>
-                      <TableCell>{p.locations?.name || 'N/A'}</TableCell>
-                      <TableCell>{formatNumber(p.remaining_quantity ?? p.quantity)}</TableCell>
-                      <TableCell>
-                        <span className="font-medium text-blue-600">{trayUsage}</span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className={reserved > 0 ? "font-medium text-blue-600" : ""}>{formatNumber(reserved)}</span>
-                          {reservationCount > 0 && (
-                            <Link 
-                              href={`/reservations?planting=${p.id}`}
-                              className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                              title="View reservations"
-                            >
-                              <ShoppingCart className="w-3 h-3" />
-                              <span className="text-xs">({reservationCount})</span>
-                            </Link>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className={available <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
-                          {formatNumber(available)}
-                        </span>
-                      </TableCell>
-                      <TableCell>{new Date(p.date_planted).toLocaleDateString()}</TableCell>
-                      <TableCell>{getExpectedHarvestDate(p)}</TableCell>
-                      <TableCell>
-                        <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
-                          className={p.status === 'active' ? 'bg-green-100 text-green-800' : p.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
-                        >
-                          {p.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-1 justify-end">
-                          {permissions.canUpdate && (
-                            <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(p)} title="Edit planting">
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                          )}
-                          {permissions.canDelete && (
-                            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(p.id)} title="Delete planting">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                          {!permissions.canUpdate && !permissions.canDelete && (
-                            <span className="text-xs text-gray-400 italic">View only</span>
-                          )}
-                        </div>
+          <div className="border rounded-lg overflow-hidden">
+            <div className="overflow-auto max-h-[600px]">
+              <Table>
+                <TableHeader className="sticky top-0 bg-white dark:bg-gray-950 z-10 shadow-sm">
+                  <TableRow>
+                    <TableHead className="bg-white dark:bg-gray-950">Batch #</TableHead>
+                    <TableHead className="bg-white dark:bg-gray-950">Plant</TableHead>
+                    <TableHead className="bg-white dark:bg-gray-950">Location</TableHead>
+                    <TableHead className="bg-white dark:bg-gray-950">Total Qty</TableHead>
+                    <TableHead className="bg-white dark:bg-gray-950">Trays</TableHead>
+                    <TableHead className="bg-white dark:bg-gray-950">Reserved</TableHead>
+                    <TableHead className="bg-white dark:bg-gray-950">Available</TableHead>
+                    <TableHead className="bg-white dark:bg-gray-950">Date Planted</TableHead>
+                    <TableHead className="bg-white dark:bg-gray-950">Expected Harvest</TableHead>
+                    <TableHead className="bg-white dark:bg-gray-950">Status</TableHead>
+                    <TableHead className="text-right bg-white dark:bg-gray-950">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredPlantings.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={11} className="text-center h-24">
+                        {searchQuery || filterType !== "all" 
+                          ? "No plantings match your search or filter criteria." 
+                          : "No plantings recorded yet."}
                       </TableCell>
                     </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
+                  ) : (
+                    filteredPlantings.map(p => {
+                      const reserved = getReservedQuantity(p.id);
+                      const available = getAvailableQuantity(p);
+                      const reservationCount = getReservationCount(p.id);
+                      const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
+                      
+                      return (
+                        <TableRow key={p.id}>
+                          <TableCell className="font-mono font-semibold text-sm">
+                            {p.batch_number || 'N/A'}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {p.plant_types?.name || 'N/A'}
+                            <br/>
+                            <span className="text-xs text-gray-500">{p.plant_types?.variety}</span>
+                          </TableCell>
+                          <TableCell>{p.locations?.name || 'N/A'}</TableCell>
+                          <TableCell>{formatNumber(p.remaining_quantity ?? p.quantity)}</TableCell>
+                          <TableCell>
+                            <span className="font-medium text-blue-600">{trayUsage}</span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className={reserved > 0 ? "font-medium text-blue-600" : ""}>{formatNumber(reserved)}</span>
+                              {reservationCount > 0 && (
+                                <Link 
+                                  href={`/reservations?planting=${p.id}`}
+                                  className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                  title="View reservations"
+                                >
+                                  <ShoppingCart className="w-3 h-3" />
+                                  <span className="text-xs">({reservationCount})</span>
+                                </Link>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className={available <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
+                              {formatNumber(available)}
+                            </span>
+                          </TableCell>
+                          <TableCell>{new Date(p.date_planted).toLocaleDateString()}</TableCell>
+                          <TableCell>{getExpectedHarvestDate(p)}</TableCell>
+                          <TableCell>
+                            <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
+                              className={p.status === 'active' ? 'bg-green-100 text-green-800' : p.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
+                            >
+                              {p.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex gap-1 justify-end">
+                              {permissions.canUpdate && (
+                                <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(p)} title="Edit planting">
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {permissions.canDelete && (
+                                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(p.id)} title="Delete planting">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {!permissions.canUpdate && !permissions.canDelete && (
+                                <span className="text-xs text-gray-400 italic">View only</span>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
