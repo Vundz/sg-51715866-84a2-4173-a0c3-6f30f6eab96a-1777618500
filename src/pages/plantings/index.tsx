@@ -1388,115 +1388,145 @@ export default function PlantingsPage() {
             </div>
           </div>
 
-          {/* Fixed Header Table */}
-          <div className="border rounded-lg overflow-hidden">
-            {/* Fixed Header */}
-            <div className="bg-white dark:bg-gray-950 border-b">
-              <Table>
-                <TableHeader className="sticky top-0 bg-white dark:bg-gray-950 z-10 shadow-sm">
-                  <TableRow>
-                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Batch #</TableHead>
-                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Plant</TableHead>
-                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Location</TableHead>
-                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Total Qty</TableHead>
-                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Trays</TableHead>
-                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Reserved</TableHead>
-                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Available</TableHead>
-                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Date Planted</TableHead>
-                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Expected Harvest</TableHead>
-                    <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Status</TableHead>
-                    <TableHead className="text-right sticky top-0 bg-white dark:bg-gray-950">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-              </Table>
-            </div>
+          {/* Table with Fixed Layout for Aligned Columns */}
+          <div className="border rounded-lg">
+            <div className="overflow-x-auto">
+              <div className="relative">
+                {/* Fixed Header */}
+                <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 border-b shadow-sm">
+                  <table className="w-full table-fixed">
+                    <colgroup>
+                      <col style={{ width: '120px' }} />
+                      <col style={{ width: '150px' }} />
+                      <col style={{ width: '130px' }} />
+                      <col style={{ width: '100px' }} />
+                      <col style={{ width: '80px' }} />
+                      <col style={{ width: '100px' }} />
+                      <col style={{ width: '100px' }} />
+                      <col style={{ width: '130px' }} />
+                      <col style={{ width: '150px' }} />
+                      <col style={{ width: '100px' }} />
+                      <col style={{ width: '120px' }} />
+                    </colgroup>
+                    <thead>
+                      <tr className="border-b">
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Batch #</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Plant</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Location</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Total Qty</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Trays</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Reserved</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Available</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Date Planted</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Expected Harvest</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Status</th>
+                        <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                  </table>
+                </div>
 
-            {/* Scrollable Body */}
-            <div className="overflow-auto max-h-[600px]">
-              <Table>
-                <TableBody>
-                  {filteredPlantings.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={11} className="text-center h-24">
-                        {searchQuery || filterType !== "all" 
-                          ? "No plantings match your search or filter criteria." 
-                          : "No plantings recorded yet."}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredPlantings.map(p => {
-                      const reserved = getReservedQuantity(p.id);
-                      const available = getAvailableQuantity(p);
-                      const reservationCount = getReservationCount(p.id);
-                      const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
-                      
-                      return (
-                        <TableRow key={p.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
-                          <TableCell className="font-mono font-semibold text-sm">
-                            {p.batch_number || 'N/A'}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {p.plant_types?.name || 'N/A'}
-                            <br/>
-                            <span className="text-xs text-gray-500">{p.plant_types?.variety}</span>
-                          </TableCell>
-                          <TableCell>{p.locations?.name || 'N/A'}</TableCell>
-                          <TableCell>{formatNumber(p.remaining_quantity ?? p.quantity)}</TableCell>
-                          <TableCell>
-                            <span className="font-medium text-blue-600">{trayUsage}</span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span className={reserved > 0 ? "font-medium text-blue-600" : ""}>{formatNumber(reserved)}</span>
-                              {reservationCount > 0 && (
-                                <Link 
-                                  href={`/reservations?planting=${p.id}`}
-                                  className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                                  title="View reservations"
+                {/* Scrollable Body */}
+                <div className="overflow-y-auto max-h-[600px]">
+                  <table className="w-full table-fixed">
+                    <colgroup>
+                      <col style={{ width: '120px' }} />
+                      <col style={{ width: '150px' }} />
+                      <col style={{ width: '130px' }} />
+                      <col style={{ width: '100px' }} />
+                      <col style={{ width: '80px' }} />
+                      <col style={{ width: '100px' }} />
+                      <col style={{ width: '100px' }} />
+                      <col style={{ width: '130px' }} />
+                      <col style={{ width: '150px' }} />
+                      <col style={{ width: '100px' }} />
+                      <col style={{ width: '120px' }} />
+                    </colgroup>
+                    <tbody>
+                      {filteredPlantings.length === 0 ? (
+                        <tr>
+                          <td colSpan={11} className="text-center h-24 px-4 py-2">
+                            {searchQuery || filterType !== "all" 
+                              ? "No plantings match your search or filter criteria." 
+                              : "No plantings recorded yet."}
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredPlantings.map(p => {
+                          const reserved = getReservedQuantity(p.id);
+                          const available = getAvailableQuantity(p);
+                          const reservationCount = getReservationCount(p.id);
+                          const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
+                          
+                          return (
+                            <tr key={p.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
+                              <td className="p-4 align-middle font-mono font-semibold text-sm">
+                                {p.batch_number || 'N/A'}
+                              </td>
+                              <td className="p-4 align-middle font-medium">
+                                {p.plant_types?.name || 'N/A'}
+                                <br/>
+                                <span className="text-xs text-gray-500">{p.plant_types?.variety}</span>
+                              </td>
+                              <td className="p-4 align-middle">{p.locations?.name || 'N/A'}</td>
+                              <td className="p-4 align-middle">{formatNumber(p.remaining_quantity ?? p.quantity)}</td>
+                              <td className="p-4 align-middle">
+                                <span className="font-medium text-blue-600">{trayUsage}</span>
+                              </td>
+                              <td className="p-4 align-middle">
+                                <div className="flex items-center gap-2">
+                                  <span className={reserved > 0 ? "font-medium text-blue-600" : ""}>{formatNumber(reserved)}</span>
+                                  {reservationCount > 0 && (
+                                    <Link 
+                                      href={`/reservations?planting=${p.id}`}
+                                      className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                      title="View reservations"
+                                    >
+                                      <ShoppingCart className="w-3 h-3" />
+                                      <span className="text-xs">({reservationCount})</span>
+                                    </Link>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-4 align-middle">
+                                <span className={available <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
+                                  {formatNumber(available)}
+                                </span>
+                              </td>
+                              <td className="p-4 align-middle">{new Date(p.date_planted).toLocaleDateString()}</td>
+                              <td className="p-4 align-middle">{getExpectedHarvestDate(p)}</td>
+                              <td className="p-4 align-middle">
+                                <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
+                                  className={p.status === 'active' ? 'bg-green-100 text-green-800' : p.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
                                 >
-                                  <ShoppingCart className="w-3 h-3" />
-                                  <span className="text-xs">({reservationCount})</span>
-                                </Link>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <span className={available <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
-                              {formatNumber(available)}
-                            </span>
-                          </TableCell>
-                          <TableCell>{new Date(p.date_planted).toLocaleDateString()}</TableCell>
-                          <TableCell>{getExpectedHarvestDate(p)}</TableCell>
-                          <TableCell>
-                            <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
-                              className={p.status === 'active' ? 'bg-green-100 text-green-800' : p.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
-                            >
-                              {p.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex gap-1 justify-end">
-                              {permissions.canUpdate && (
-                                <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(p)} title="Edit planting">
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                              )}
-                              {permissions.canDelete && (
-                                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(p.id)} title="Delete planting">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              )}
-                              {!permissions.canUpdate && !permissions.canDelete && (
-                                <span className="text-xs text-gray-400 italic">View only</span>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
+                                  {p.status}
+                                </Badge>
+                              </td>
+                              <td className="p-4 align-middle text-right">
+                                <div className="flex gap-1 justify-end">
+                                  {permissions.canUpdate && (
+                                    <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(p)} title="Edit planting">
+                                      <Edit className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                  {permissions.canDelete && (
+                                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(p.id)} title="Delete planting">
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                  {!permissions.canUpdate && !permissions.canDelete && (
+                                    <span className="text-xs text-gray-400 italic">View only</span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
