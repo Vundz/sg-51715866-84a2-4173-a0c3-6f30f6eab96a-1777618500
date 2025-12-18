@@ -313,13 +313,14 @@ export const bomService = {
 
       // Safely evaluate the expression (only allow numbers and basic operators)
       if (!/^[0-9+\-*/().\s]+$/.test(expression)) {
-        throw new Error("Invalid formula: contains invalid characters");
+        console.error("Invalid formula: contains invalid characters:", formula);
+        return 0;
       }
 
        
       return eval(expression);
     } catch (error) {
-      console.error("Formula evaluation error:", error);
+      console.error("Formula evaluation error:", error, "Formula:", formula);
       return 0;
     }
   },

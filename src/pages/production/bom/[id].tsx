@@ -36,6 +36,9 @@ export default function BOMDetailCalculatorPage() {
   const [currentSellingPrice, setCurrentSellingPrice] = useState<number>(0);
   const [currentSuccessRate, setCurrentSuccessRate] = useState<number>(95);
   
+  // Error state for formula validation
+  const [formulaErrors, setFormulaErrors] = useState<Record<string, string>>({});
+  
   const [calculatedCosts, setCalculatedCosts] = useState({
     totalCost: 0,
     costPerSeedling: 0,
@@ -59,14 +62,33 @@ export default function BOMDetailCalculatorPage() {
 
   useEffect(() => {
     if (template) {
-      const results = bomService.calculateTemplateCost(template, currentBatchSize);
-      setItems(results.items);
-      setCalculatedCosts({
-        totalCost: results.totalCost,
-        costPerSeedling: results.costPerSeedling,
-        costPerTray: results.costPerTray,
-        categoryTotals: results.categoryTotals
-      });
+      try {
+        const results = bomService.calculateTemplateCost(template, currentBatchSize);
+        
+        // Check for any items with zero calculated quantity (potential formula errors)
+        const errors: Record<string, string> = {};
+        results.items.forEach(item => {
+          if (item.quantity_type === "formula" && item.calculatedQuantity === 0 && item.quantity_formula) {
+            errors[item.id] = `Formula error: "${item.quantity_formula}" - Check for invalid characters or variables`;
+          }
+        });
+        
+        setFormulaErrors(errors);
+        setItems(results.items);
+        setCalculatedCosts({
+          totalCost: results.totalCost,
+          costPerSeedling: results.costPerSeedling,
+          costPerTray: results.costPerTray,
+          categoryTotals: results.categoryTotals
+        });
+      } catch (error) {
+        console.error("Error calculating costs:", error);
+        toast({
+          title: "Calculation Error",
+          description: "There was an error calculating costs. Please check your formulas.",
+          variant: "destructive"
+        });
+      }
     }
   }, [template, currentBatchSize]);
 
@@ -249,6 +271,27 @@ export default function BOMDetailCalculatorPage() {
         </Button>
       </div>
 
+      {/* Formula Error Alert */}
+      {Object.keys(formulaErrors).length > 0 && (
+        <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-900 dark:text-red-100 mb-1">
+                Formula Errors Detected
+              </h3>
+              <p className="text-sm text-red-700 dark:text-red-300 mb-2">
+                {Object.keys(formulaErrors).length} item(s) have invalid formulas. Cost calculations may be incomplete.
+              </p>
+              <ul className="text-sm text-red-600 dark:text-red-400 space-y-1">
+                <li>• Only use: <code className="bg-red-100 dark:bg-red-900 px-1 rounded">batch_size</code>, <code className="bg-red-100 dark:bg-red-900 px-1 rounded">tray_count</code>, numbers, and operators (+, -, *, /, parentheses)</li>
+                <li>• Example: <code className="bg-red-100 dark:bg-red-900 px-1 rounded">batch_size * 0.02</code> or <code className="bg-red-100 dark:bg-red-900 px-1 rounded">tray_count * 5</code></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Batch Configuration Card */}
       <Card className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 border-blue-200 dark:border-blue-800">
         <CardContent className="pt-6">
@@ -370,6 +413,12 @@ export default function BOMDetailCalculatorPage() {
                             {item.notes && (
                               <span className="text-xs text-gray-400">{item.notes}</span>
                             )}
+                            {formulaErrors[item.id] && (
+                              <span className="text-xs text-red-600 dark:text-red-400 flex items-center gap-1 mt-1">
+                                <AlertTriangle className="w-3 h-3" />
+                                {formulaErrors[item.id]}
+                              </span>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
@@ -384,10 +433,18 @@ export default function BOMDetailCalculatorPage() {
                             : <span title={item.quantity_formula || ""}>Formula</span>}
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatNumber(item.calculatedQuantity)}
+                          {formulaErrors[item.id] ? (
+                            <span className="text-red-600 dark:text-red-400">Error</span>
+                          ) : (
+                            formatNumber(item.calculatedQuantity)
+                          )}
                         </TableCell>
                         <TableCell className="text-right font-bold text-gray-900 dark:text-gray-100">
-                          K{formatNumber(item.subtotal)}
+                          {formulaErrors[item.id] ? (
+                            <span className="text-red-600 dark:text-red-400">K0.00</span>
+                          ) : (
+                            `K${formatNumber(item.subtotal)}`
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex justify-end gap-1">
