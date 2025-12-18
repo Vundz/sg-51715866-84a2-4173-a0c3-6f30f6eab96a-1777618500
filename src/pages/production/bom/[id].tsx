@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Plus, Save, Trash2, Edit, Calculator, Loader2, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { bomService, BOMTemplateWithDetails, BOMItemWithDetails, BOMCategory, FormulaTemplate } from "@/services/bomService";
 import { inventoryService, InventoryItemWithLowStock } from "@/services/inventoryService";
 import { formatNumber } from "@/lib/format";
@@ -21,6 +22,7 @@ export default function BOMDetailCalculatorPage() {
   const router = useRouter();
   const { id } = router.query;
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const [loading, setLoading] = useState(true);
   const [template, setTemplate] = useState<BOMTemplateWithDetails | null>(null);
@@ -45,10 +47,13 @@ export default function BOMDetailCalculatorPage() {
   const [activeTab, setActiveTab] = useState("inventory");
 
   useEffect(() => {
-    if (id && typeof id === 'string') {
+    // Only load data if user is authenticated and id is available
+    if (user && id && typeof id === 'string') {
       loadData(id);
+    } else if (!user) {
+      setLoading(false);
     }
-  }, [id]);
+  }, [id, user]);
 
   useEffect(() => {
     if (template) {
@@ -188,6 +193,18 @@ export default function BOMDetailCalculatorPage() {
 
   if (loading || !template) {
     return <div className="flex items-center justify-center h-screen"><Loader2 className="w-8 h-8 animate-spin text-lime-600" /></div>;
+  }
+
+  // Check authentication
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen space-y-4">
+        <p className="text-gray-600 dark:text-gray-400">Please log in to access this page.</p>
+        <Link href="/">
+          <Button>Go to Login</Button>
+        </Link>
+      </div>
+    );
   }
 
   return (
