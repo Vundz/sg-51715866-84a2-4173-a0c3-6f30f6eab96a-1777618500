@@ -6,17 +6,32 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Calculator, Plus, Settings, Edit, Trash2, ArrowRight, Eye } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Calculator, Plus, Settings, Edit, Trash2, Eye } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { bomService, BOMTemplateWithDetails } from "@/services/bomService";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/format";
+import { useRouter } from "next/router";
 
 export default function BOMCalculatorPage() {
+  const router = useRouter();
   const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const [templates, setTemplates] = useState<BOMTemplateWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Preview dialog state
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState<BOMTemplateWithDetails | null>(null);
+  const [previewBatchSize, setPreviewBatchSize] = useState(0);
+  const [previewCalculation, setPreviewCalculation] = useState({
+    items: [] as any[],
+    totalCost: 0,
+    costPerSeedling: 0,
+    costPerTray: 0,
+    categoryTotals: {} as Record<string, number>
+  });
 
   useEffect(() => {
     if (user) {
@@ -45,6 +60,36 @@ export default function BOMCalculatorPage() {
       toast({ title: "Success", description: "Template deleted" });
     } catch (error) {
       toast({ title: "Error", description: "Failed to delete template", variant: "destructive" });
+    }
+  };
+
+  const handlePreview = async (template: BOMTemplateWithDetails) => {
+    try {
+      // Load full template with items
+      const fullTemplate = await bomService.getTemplate(template.id);
+      setPreviewTemplate(fullTemplate);
+      setPreviewBatchSize(fullTemplate.base_batch_size);
+      
+      // Calculate costs
+      const results = bomService.calculateTemplateCost(fullTemplate, fullTemplate.base_batch_size);
+      setPreviewCalculation(results);
+      setIsPreviewOpen(true);
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to load template details", variant: "destructive" });
+    }
+  };
+
+  const handleRecalculate = () => {
+    if (previewTemplate) {
+      const results = bomService.calculateTemplateCost(previewTemplate, previewBatchSize);
+      setPreviewCalculation(results);
+    }
+  };
+
+  const handleEditFromPreview = () => {
+    if (previewTemplate) {
+      router.push(`/production/bom/${previewTemplate.id}`);
+      setIsPreviewOpen(false);
     }
   };
 
@@ -98,6 +143,7 @@ export default function BOMCalculatorPage() {
             <TemplatesTable 
               templates={activeTemplates} 
               onDelete={handleDelete}
+              onPreview={handlePreview}
               emptyMessage="No active templates. Create one or activate a draft."
             />
           </CardContent>
@@ -114,6 +160,7 @@ export default function BOMCalculatorPage() {
               <TemplatesTable 
                 templates={draftTemplates} 
                 onDelete={handleDelete}
+                onPreview={handlePreview}
                 emptyMessage="No draft templates."
               />
             </CardContent>
@@ -131,12 +178,188 @@ export default function BOMCalculatorPage() {
               <TemplatesTable 
                 templates={archivedTemplates} 
                 onDelete={handleDelete}
+                onPreview={handlePreview}
                 emptyMessage="No archived templates."
               />
             </CardContent>
           </Card>
         )}
       </div>
+
+      {/* Preview Dialog */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-2xl">{previewTemplate?.name}</DialogTitle>
+                <DialogDescription>{previewTemplate?.description || "No description"}</DialogDescription>
+              </div>
+              <div className="flex gap-2">
+                <Badge variant={previewTemplate?.status === 'active' ? 'default' : 'secondary'}>
+                  {previewTemplate?.status}
+                </Badge>
+                <Button onClick={handleEditFromPreview} variant="outline" className="gap-2">
+                  <Edit className="w-4 h-4" />
+                  Edit Template
+                </Button>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-6 pt-4">
+            {/* Batch Size Adjuster */}
+            <div className="flex items-center gap-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+              <Label htmlFor="previewBatchSize" className="text-sm font-medium">Batch Size:</Label>
+              <Input
+                id="previewBatchSize"
+                type="number"
+                value={previewBatchSize}
+                onChange={(e) => setPreviewBatchSize(parseInt(e.target.value) || 0)}
+                className="w-32 text-right font-mono"
+              />
+              <Button onClick={handleRecalculate} variant="outline" size="sm">
+                Recalculate
+              </Button>
+              <div className="ml-auto text-sm text-gray-600 dark:text-gray-400">
+                Trays Needed: <span className="font-semibold">{Math.ceil(previewBatchSize / 220)}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-6">
+              {/* Cost Summary Cards */}
+              <Card className="bg-gradient-to-br from-lime-50 to-green-50 dark:from-lime-950 dark:to-green-950 border-lime-200 dark:border-lime-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm text-lime-700 dark:text-lime-300">Total Batch Cost</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-lime-900 dark:text-lime-100">
+                    K{formatNumber(previewCalculation.totalCost)}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 border-blue-200 dark:border-blue-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm text-blue-700 dark:text-blue-300">Per Seedling</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                    K{previewCalculation.costPerSeedling.toFixed(2)}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950 dark:to-amber-950 border-orange-200 dark:border-orange-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm text-orange-700 dark:text-orange-300">Per Tray (220)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-orange-900 dark:text-orange-100">
+                    K{formatNumber(previewCalculation.costPerTray)}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Items Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Cost Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Item</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Unit Price</TableHead>
+                      <TableHead className="text-right">Subtotal</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewCalculation.items.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-gray-500 py-8">
+                          No items in this template
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      previewCalculation.items.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            <Badge 
+                              variant="outline"
+                              style={{
+                                borderColor: item.bom_categories?.color,
+                                color: item.bom_categories?.color,
+                                backgroundColor: `${item.bom_categories?.color}10`
+                              }}
+                            >
+                              {item.bom_categories?.name || "Uncategorized"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                {item.item_type === 'inventory' 
+                                  ? item.inventory_items?.name 
+                                  : item.custom_name}
+                              </span>
+                              {item.notes && (
+                                <span className="text-xs text-gray-500">{item.notes}</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {formatNumber(item.calculatedQuantity)}
+                            <span className="text-xs text-gray-500 ml-1">
+                              {item.item_type === 'inventory' 
+                                ? item.inventory_items?.unit_of_measure 
+                                : item.custom_unit}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">
+                            K{formatNumber(
+                              item.item_type === 'inventory' 
+                                ? Number(item.inventory_items?.unit_price) 
+                                : Number(item.custom_unit_price)
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-bold">
+                            K{formatNumber(item.subtotal)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Category Breakdown */}
+            <Card>
+              <CardHeader>
+                <CardTitle>By Category</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {Object.entries(previewCalculation.categoryTotals).map(([category, total]) => (
+                    <div key={category} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                      <span className="font-medium">{category}</span>
+                      <span className="text-lg font-bold">K{formatNumber(total)}</span>
+                    </div>
+                  ))}
+                  {Object.keys(previewCalculation.categoryTotals).length === 0 && (
+                    <p className="text-center text-gray-500 py-4">No categories</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -144,10 +367,12 @@ export default function BOMCalculatorPage() {
 function TemplatesTable({ 
   templates, 
   onDelete,
+  onPreview,
   emptyMessage
 }: { 
   templates: BOMTemplateWithDetails[], 
   onDelete: (id: string, name: string) => void,
+  onPreview: (template: BOMTemplateWithDetails) => void,
   emptyMessage: string 
 }) {
   if (templates.length === 0) {
@@ -197,6 +422,15 @@ function TemplatesTable({
               <TableCell>{new Date(template.updated_at || "").toLocaleDateString()}</TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="gap-2 text-blue-600 border-blue-600 hover:bg-blue-50"
+                    onClick={() => onPreview(template)}
+                  >
+                    <Eye className="w-3 h-3" />
+                    View
+                  </Button>
                   <Link href={`/production/bom/${template.id}`}>
                     <Button size="sm" variant="outline" className="gap-2">
                       <Edit className="w-3 h-3" />
