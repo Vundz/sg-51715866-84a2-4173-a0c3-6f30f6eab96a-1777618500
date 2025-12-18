@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Calculator, Plus, Settings, Edit, Trash2, Eye, TrendingUp, DollarSign, Target } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Calculator, Plus, Settings, Edit, Trash2, Eye, Copy } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { bomService, BOMTemplateWithDetails } from "@/services/bomService";
 import { useToast } from "@/hooks/use-toast";
@@ -32,6 +32,11 @@ export default function BOMCalculatorPage() {
     costPerTray: 0,
     categoryTotals: {} as Record<string, number>
   });
+
+  // Clone dialog state
+  const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
+  const [cloneTemplate, setCloneTemplate] = useState<BOMTemplateWithDetails | null>(null);
+  const [cloneName, setCloneName] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -63,14 +68,44 @@ export default function BOMCalculatorPage() {
     }
   };
 
+  const handleOpenCloneDialog = (template: BOMTemplateWithDetails) => {
+    setCloneTemplate(template);
+    setCloneName(`${template.name} (Copy)`);
+    setIsCloneDialogOpen(true);
+  };
+
+  const handleCloneTemplate = async () => {
+    if (!cloneTemplate || !cloneName.trim()) {
+      toast({ title: "Error", description: "Please enter a name for the cloned template", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const newTemplate = await bomService.duplicateTemplate(cloneTemplate.id, cloneName.trim());
+      await loadTemplates();
+      setIsCloneDialogOpen(false);
+      setCloneTemplate(null);
+      setCloneName("");
+      toast({ 
+        title: "Success", 
+        description: `Template "${cloneName}" created successfully`,
+        action: {
+          label: "Edit Now",
+          onClick: () => router.push(`/production/bom/${newTemplate.id}`)
+        }
+      });
+    } catch (error) {
+      console.error("Error cloning template:", error);
+      toast({ title: "Error", description: "Failed to clone template", variant: "destructive" });
+    }
+  };
+
   const handlePreview = async (template: BOMTemplateWithDetails) => {
     try {
-      // Load full template with items
       const fullTemplate = await bomService.getTemplate(template.id);
       setPreviewTemplate(fullTemplate);
       setPreviewBatchSize(fullTemplate.base_batch_size);
       
-      // Calculate costs
       const results = bomService.calculateTemplateCost(fullTemplate, fullTemplate.base_batch_size);
       setPreviewCalculation(results);
       setIsPreviewOpen(true);
@@ -93,34 +128,10 @@ export default function BOMCalculatorPage() {
     }
   };
 
-  const getProfitColor = (margin: number) => {
-    if (margin < 0) return "text-red-600 dark:text-red-400";
-    if (margin < 20) return "text-yellow-600 dark:text-yellow-400";
-    if (margin < 40) return "text-green-600 dark:text-green-400";
-    return "text-emerald-600 dark:text-emerald-400";
-  };
-
-  const getProfitBgColor = (margin: number) => {
-    if (margin < 0) return "bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800";
-    if (margin < 20) return "bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800";
-    if (margin < 40) return "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800";
-    return "bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800";
-  };
-
-  // Calculate profit analysis for preview
-  const previewProfitAnalysis = previewTemplate 
-    ? bomService.calculateProfitAnalysis(
-        previewTemplate, 
-        previewBatchSize, 
-        previewTemplate.target_selling_price
-      )
-    : null;
-
   if (loading) {
     return <div className="p-8 text-center text-gray-500">Loading templates...</div>;
   }
 
-  // Group templates by status
   const activeTemplates = templates.filter(t => t.status === "active");
   const draftTemplates = templates.filter(t => t.status === "draft");
   const archivedTemplates = templates.filter(t => t.status === "archived");
@@ -156,7 +167,6 @@ export default function BOMCalculatorPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-8">
-        {/* Active Templates Section */}
         <Card>
           <CardHeader>
             <CardTitle>Active Templates</CardTitle>
@@ -167,12 +177,12 @@ export default function BOMCalculatorPage() {
               templates={activeTemplates} 
               onDelete={handleDelete}
               onPreview={handlePreview}
+              onClone={handleOpenCloneDialog}
               emptyMessage="No active templates. Create one or activate a draft."
             />
           </CardContent>
         </Card>
 
-        {/* Draft Templates Section */}
         {draftTemplates.length > 0 && (
           <Card>
             <CardHeader>
@@ -184,13 +194,13 @@ export default function BOMCalculatorPage() {
                 templates={draftTemplates} 
                 onDelete={handleDelete}
                 onPreview={handlePreview}
+                onClone={handleOpenCloneDialog}
                 emptyMessage="No draft templates."
               />
             </CardContent>
           </Card>
         )}
 
-        {/* Archived Templates Section */}
         {archivedTemplates.length > 0 && (
           <Card className="opacity-75">
             <CardHeader>
@@ -202,6 +212,7 @@ export default function BOMCalculatorPage() {
                 templates={archivedTemplates} 
                 onDelete={handleDelete}
                 onPreview={handlePreview}
+                onClone={handleOpenCloneDialog}
                 emptyMessage="No archived templates."
               />
             </CardContent>
@@ -209,7 +220,40 @@ export default function BOMCalculatorPage() {
         )}
       </div>
 
-      {/* Preview Dialog with Profit Analysis */}
+      {/* Clone Template Dialog */}
+      <Dialog open={isCloneDialogOpen} onOpenChange={setIsCloneDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clone Template</DialogTitle>
+            <DialogDescription>
+              Create a copy of "{cloneTemplate?.name}" with all its items and settings
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="cloneName">New Template Name *</Label>
+              <Input
+                id="cloneName"
+                value={cloneName}
+                onChange={(e) => setCloneName(e.target.value)}
+                placeholder="Enter name for cloned template"
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCloneDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCloneTemplate} className="gap-2 bg-lime-600 hover:bg-lime-700">
+              <Copy className="w-4 h-4" />
+              Clone Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Preview Dialog */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -231,7 +275,6 @@ export default function BOMCalculatorPage() {
           </DialogHeader>
 
           <div className="space-y-6 pt-4">
-            {/* Batch Size Adjuster */}
             <div className="flex items-center gap-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
               <Label htmlFor="previewBatchSize" className="text-sm font-medium">Batch Size:</Label>
               <Input
@@ -250,7 +293,6 @@ export default function BOMCalculatorPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Cost Summary Cards */}
               <Card className="bg-gradient-to-br from-lime-50 to-green-50 dark:from-lime-950 dark:to-green-950 border-lime-200 dark:border-lime-800">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm text-lime-700 dark:text-lime-300">Total Batch Cost</CardTitle>
@@ -265,73 +307,35 @@ export default function BOMCalculatorPage() {
                 </CardContent>
               </Card>
 
-              {/* Profit Analysis Card */}
-              {previewProfitAnalysis && previewTemplate?.target_selling_price && previewTemplate.target_selling_price > 0 && (
-                <>
-                  <Card className={`${getProfitBgColor(previewProfitAnalysis.profitMargin)}`}>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <DollarSign className="w-4 h-4" />
-                        Profit Analysis
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs">Profit/Seedling</span>
-                        <span className={`text-xl font-bold ${getProfitColor(previewProfitAnalysis.profitMargin)}`}>
-                          K{previewProfitAnalysis.profitPerSeedling.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs">Margin</span>
-                        <span className={`text-xl font-bold ${getProfitColor(previewProfitAnalysis.profitMargin)}`}>
-                          {previewProfitAnalysis.profitMargin.toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="pt-2 border-t text-xs">
-                        <div className="flex justify-between">
-                          <span>Gross Profit</span>
-                          <span className="font-mono font-semibold">K{formatNumber(previewProfitAnalysis.grossProfit)}</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+              <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 border-blue-200 dark:border-blue-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm text-blue-700 dark:text-blue-300">Per Seedling</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                    K{previewCalculation.costPerSeedling.toFixed(2)}
+                  </div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    Unit cost
+                  </p>
+                </CardContent>
+              </Card>
 
-                  <Card className="bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                        <Target className="w-4 h-4" />
-                        Break-Even
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-orange-700 dark:text-orange-300">Price</span>
-                        <span className="text-lg font-bold text-orange-900 dark:text-orange-100">
-                          K{previewProfitAnalysis.breakEvenPrice.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-orange-700 dark:text-orange-300">Quantity</span>
-                        <span className="text-lg font-bold text-orange-900 dark:text-orange-100">
-                          {formatNumber(Math.ceil(previewProfitAnalysis.breakEvenQuantity))}
-                        </span>
-                      </div>
-                      <div className="pt-2 border-t border-orange-200 dark:border-orange-800 text-xs">
-                        <div className="flex justify-between">
-                          <span className="text-orange-700 dark:text-orange-300">Safety</span>
-                          <span className="font-semibold text-orange-900 dark:text-orange-100">
-                            {previewProfitAnalysis.safetyMargin.toFixed(1)}%
-                          </span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </>
-              )}
+              <Card className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 border-purple-200 dark:border-purple-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm text-purple-700 dark:text-purple-300">Per Tray (220)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-purple-900 dark:text-purple-100">
+                    K{formatNumber(previewCalculation.costPerTray)}
+                  </div>
+                  <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                    Tray cost
+                  </p>
+                </CardContent>
+              </Card>
             </div>
 
-            {/* Items Table */}
             <Card>
               <CardHeader>
                 <CardTitle>Cost Breakdown</CardTitle>
@@ -407,7 +411,6 @@ export default function BOMCalculatorPage() {
               </CardContent>
             </Card>
 
-            {/* Category Breakdown */}
             <Card>
               <CardHeader>
                 <CardTitle>By Category</CardTitle>
@@ -445,11 +448,13 @@ function TemplatesTable({
   templates, 
   onDelete,
   onPreview,
+  onClone,
   emptyMessage
 }: { 
   templates: BOMTemplateWithDetails[], 
   onDelete: (id: string, name: string) => void,
   onPreview: (template: BOMTemplateWithDetails) => void,
+  onClone: (template: BOMTemplateWithDetails) => void,
   emptyMessage: string 
 }) {
   if (templates.length === 0) {
@@ -514,6 +519,16 @@ function TemplatesTable({
                       Edit
                     </Button>
                   </Link>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="gap-2 text-purple-600 border-purple-600 hover:bg-purple-50"
+                    onClick={() => onClone(template)}
+                    title="Clone this template"
+                  >
+                    <Copy className="w-3 h-3" />
+                    Clone
+                  </Button>
                   <Button 
                     size="sm" 
                     variant="ghost" 
