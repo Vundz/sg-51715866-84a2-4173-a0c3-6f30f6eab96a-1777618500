@@ -7,12 +7,25 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Calculator, Plus, Settings, Edit, Trash2, Eye } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Calculator, Plus, Settings, Edit, Trash2, Eye, PieChart, BarChart3 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { bomService, BOMTemplateWithDetails } from "@/services/bomService";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/format";
 import { useRouter } from "next/router";
+import { PieChart as RechartsPie, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+
+const CHART_COLORS = [
+  "#10b981", // green
+  "#3b82f6", // blue
+  "#f59e0b", // amber
+  "#ef4444", // red
+  "#8b5cf6", // violet
+  "#ec4899", // pink
+  "#06b6d4", // cyan
+  "#f97316", // orange
+];
 
 export default function BOMCalculatorPage() {
   const router = useRouter();
@@ -337,6 +350,96 @@ export default function BOMCalculatorPage() {
                 </Table>
               </CardContent>
             </Card>
+
+            {/* Interactive Charts Section */}
+            {Object.keys(previewCalculation.categoryTotals).length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Pie Chart */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <PieChart className="w-5 h-5 text-lime-600" />
+                      Cost Distribution
+                    </CardTitle>
+                    <CardDescription>Percentage breakdown by category</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <RechartsPie>
+                        <Pie
+                          data={Object.entries(previewCalculation.categoryTotals).map(([name, value], index) => ({
+                            name,
+                            value: Number(value),
+                            color: CHART_COLORS[index % CHART_COLORS.length]
+                          }))}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                        >
+                          {Object.entries(previewCalculation.categoryTotals).map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          formatter={(value: number) => `K${formatNumber(value)}`}
+                          contentStyle={{ 
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                            border: '1px solid #ccc',
+                            borderRadius: '8px'
+                          }}
+                        />
+                        <Legend />
+                      </RechartsPie>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Bar Chart */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-blue-600" />
+                      Cost Comparison
+                    </CardTitle>
+                    <CardDescription>Cost amount by category (K)</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart
+                        data={Object.entries(previewCalculation.categoryTotals).map(([name, value], index) => ({
+                          name,
+                          cost: Number(value),
+                          fill: CHART_COLORS[index % CHART_COLORS.length]
+                        }))}
+                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip 
+                          formatter={(value: number) => [`K${formatNumber(value)}`, 'Cost']}
+                          contentStyle={{ 
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                            border: '1px solid #ccc',
+                            borderRadius: '8px'
+                          }}
+                        />
+                        <Legend />
+                        <Bar dataKey="cost" fill="#8884d8" radius={[8, 8, 0, 0]}>
+                          {Object.entries(previewCalculation.categoryTotals).map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
             {/* Category Breakdown */}
             <Card>
