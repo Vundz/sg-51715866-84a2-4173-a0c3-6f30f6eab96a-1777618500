@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ToastAction } from "@/components/ui/toast";
-import { Calculator, Plus, Settings, Edit, Trash2, Eye, Copy } from "lucide-react";
+import { Calculator, Plus, Settings, Edit, Trash2, Eye, Copy, DollarSign, Target, Info, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { bomService, BOMTemplateWithDetails } from "@/services/bomService";
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +26,8 @@ export default function BOMCalculatorPage() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<BOMTemplateWithDetails | null>(null);
   const [previewBatchSize, setPreviewBatchSize] = useState(0);
+  const [previewSellingPrice, setPreviewSellingPrice] = useState(0);
+  const [previewSuccessRate, setPreviewSuccessRate] = useState(95);
   const [previewCalculation, setPreviewCalculation] = useState({
     items: [] as any[],
     totalCost: 0,
@@ -33,6 +35,7 @@ export default function BOMCalculatorPage() {
     costPerTray: 0,
     categoryTotals: {} as Record<string, number>
   });
+  const [profitAnalysis, setProfitAnalysis] = useState<any>(null);
 
   // Clone dialog state
   const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
@@ -107,9 +110,24 @@ export default function BOMCalculatorPage() {
       const fullTemplate = await bomService.getTemplate(template.id);
       setPreviewTemplate(fullTemplate);
       setPreviewBatchSize(fullTemplate.base_batch_size);
+      setPreviewSellingPrice(fullTemplate.target_selling_price || 0);
+      setPreviewSuccessRate(fullTemplate.estimated_success_rate || 95);
       
       const results = bomService.calculateTemplateCost(fullTemplate, fullTemplate.base_batch_size);
       setPreviewCalculation(results);
+      
+      // Calculate profit analysis
+      if (fullTemplate.target_selling_price && fullTemplate.target_selling_price > 0) {
+        const analysis = bomService.calculateProfitAnalysis(
+          fullTemplate, 
+          fullTemplate.base_batch_size,
+          fullTemplate.target_selling_price
+        );
+        setProfitAnalysis(analysis);
+      } else {
+        setProfitAnalysis(null);
+      }
+      
       setIsPreviewOpen(true);
     } catch (error) {
       toast({ title: "Error", description: "Failed to load template details", variant: "destructive" });
@@ -120,6 +138,18 @@ export default function BOMCalculatorPage() {
     if (previewTemplate) {
       const results = bomService.calculateTemplateCost(previewTemplate, previewBatchSize);
       setPreviewCalculation(results);
+      
+      // Recalculate profit analysis
+      if (previewSellingPrice > 0) {
+        const analysis = bomService.calculateProfitAnalysis(
+          previewTemplate, 
+          previewBatchSize,
+          previewSellingPrice
+        );
+        setProfitAnalysis(analysis);
+      } else {
+        setProfitAnalysis(null);
+      }
     }
   };
 
@@ -128,6 +158,20 @@ export default function BOMCalculatorPage() {
       router.push(`/production/bom/${previewTemplate.id}`);
       setIsPreviewOpen(false);
     }
+  };
+
+  const getProfitColor = (margin: number) => {
+    if (margin < 0) return "text-red-600 dark:text-red-400";
+    if (margin < 20) return "text-yellow-600 dark:text-yellow-400";
+    if (margin < 40) return "text-green-600 dark:text-green-400";
+    return "text-emerald-600 dark:text-emerald-400";
+  };
+
+  const getProfitBgColor = (margin: number) => {
+    if (margin < 0) return "bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800";
+    if (margin < 20) return "bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800";
+    if (margin < 40) return "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800";
+    return "bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800";
   };
 
   if (loading) {
@@ -278,19 +322,47 @@ export default function BOMCalculatorPage() {
 
           <div className="space-y-6 pt-4">
             <div className="flex items-center gap-4 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-              <Label htmlFor="previewBatchSize" className="text-sm font-medium">Batch Size:</Label>
-              <Input
-                id="previewBatchSize"
-                type="number"
-                value={previewBatchSize}
-                onChange={(e) => setPreviewBatchSize(parseInt(e.target.value) || 0)}
-                className="w-32 text-right font-mono"
-              />
-              <Button onClick={handleRecalculate} variant="outline" size="sm">
-                Recalculate
-              </Button>
-              <div className="ml-auto text-sm text-gray-600 dark:text-gray-400">
-                Trays Needed: <span className="font-semibold">{Math.ceil(previewBatchSize / 220)}</span>
+              <div className="flex-1">
+                <Label htmlFor="previewBatchSize" className="text-sm font-medium">Batch Size:</Label>
+                <Input
+                  id="previewBatchSize"
+                  type="number"
+                  value={previewBatchSize}
+                  onChange={(e) => setPreviewBatchSize(parseInt(e.target.value) || 0)}
+                  className="w-32 text-right font-mono mt-1"
+                />
+              </div>
+              <div className="flex-1">
+                <Label htmlFor="previewSellingPrice" className="text-sm font-medium">Selling Price (ZMW):</Label>
+                <Input
+                  id="previewSellingPrice"
+                  type="number"
+                  step="0.01"
+                  value={previewSellingPrice}
+                  onChange={(e) => setPreviewSellingPrice(parseFloat(e.target.value) || 0)}
+                  className="w-32 text-right font-mono mt-1"
+                />
+              </div>
+              <div className="flex-1">
+                <Label htmlFor="previewSuccessRate" className="text-sm font-medium">Success Rate (%):</Label>
+                <Input
+                  id="previewSuccessRate"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={previewSuccessRate}
+                  onChange={(e) => setPreviewSuccessRate(parseFloat(e.target.value) || 95)}
+                  className="w-32 text-right font-mono mt-1"
+                />
+              </div>
+              <div className="flex flex-col justify-end">
+                <Button onClick={handleRecalculate} variant="outline" size="sm" className="mt-5">
+                  Recalculate
+                </Button>
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Trays: <span className="font-semibold">{Math.ceil(previewBatchSize / 220)}</span>
               </div>
             </div>
 
@@ -337,6 +409,101 @@ export default function BOMCalculatorPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Profit Analysis Section */}
+            {profitAnalysis && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className={getProfitBgColor(profitAnalysis.profitMargin)}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <DollarSign className="w-5 h-5" />
+                      Profit Analysis
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Profit Per Seedling</p>
+                        <p className={`text-2xl font-bold ${getProfitColor(profitAnalysis.profitMargin)}`}>
+                          K{profitAnalysis.profitPerSeedling.toFixed(2)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Profit Margin</p>
+                        <p className={`text-2xl font-bold ${getProfitColor(profitAnalysis.profitMargin)}`}>
+                          {profitAnalysis.profitMargin.toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+                    <div className="pt-3 border-t space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">Saleable Units</span>
+                        <span className="font-mono font-semibold">{formatNumber(profitAnalysis.saleableSeedlings)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">Expected Revenue</span>
+                        <span className="font-mono font-semibold">K{formatNumber(profitAnalysis.expectedRevenue)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-bold">
+                        <span>Gross Profit</span>
+                        <span className={`font-mono ${getProfitColor(profitAnalysis.profitMargin)}`}>
+                          K{formatNumber(profitAnalysis.grossProfit)}
+                        </span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-900">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2 text-orange-800 dark:text-orange-200">
+                      <Target className="w-5 h-5" />
+                      Break-Even Analysis
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-orange-700 dark:text-orange-300">Break-Even Price</span>
+                      <span className="text-lg font-bold text-orange-900 dark:text-orange-100">
+                        K{profitAnalysis.breakEvenPrice.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-orange-700 dark:text-orange-300">Break-Even Quantity</span>
+                      <span className="text-lg font-bold text-orange-900 dark:text-orange-100">
+                        {formatNumber(Math.ceil(profitAnalysis.breakEvenQuantity))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-orange-200 dark:border-orange-800">
+                      <span className="text-sm text-orange-700 dark:text-orange-300">Safety Margin</span>
+                      <span className="text-lg font-bold text-orange-900 dark:text-orange-100">
+                        {profitAnalysis.safetyMargin.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="pt-2 border-t border-orange-200 dark:border-orange-800">
+                      <div className="flex items-start gap-2 text-xs text-orange-700 dark:text-orange-300">
+                        <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <p>
+                          You need to sell at least <strong>K{profitAnalysis.breakEvenPrice.toFixed(2)}</strong> per seedling 
+                          or <strong>{formatNumber(Math.ceil(profitAnalysis.breakEvenQuantity))}</strong> seedlings to break even.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {!profitAnalysis && previewSellingPrice === 0 && (
+              <Card className="bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800">
+                <CardContent className="py-8 text-center">
+                  <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Enter a selling price above to see profit analysis and break-even calculations
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>
