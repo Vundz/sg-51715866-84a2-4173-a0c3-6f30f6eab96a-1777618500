@@ -163,10 +163,12 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           description: string | null
+          estimated_success_rate: number | null
           id: string
           name: string
           plant_type_id: string | null
           status: string
+          target_selling_price: number | null
           updated_at: string | null
           variety: string | null
         }
@@ -175,10 +177,12 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           description?: string | null
+          estimated_success_rate?: number | null
           id?: string
           name: string
           plant_type_id?: string | null
           status?: string
+          target_selling_price?: number | null
           updated_at?: string | null
           variety?: string | null
         }
@@ -187,10 +191,12 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           description?: string | null
+          estimated_success_rate?: number | null
           id?: string
           name?: string
           plant_type_id?: string | null
           status?: string
+          target_selling_price?: number | null
           updated_at?: string | null
           variety?: string | null
         }

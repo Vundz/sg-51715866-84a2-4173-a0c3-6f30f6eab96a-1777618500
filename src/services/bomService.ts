@@ -23,6 +23,31 @@ export interface BOMItemWithDetails extends BOMItem {
   bom_categories?: BOMCategory | null;
 }
 
+export interface ProfitAnalysis {
+  // Cost metrics
+  totalCost: number;
+  costPerSeedling: number;
+  costPerTray: number;
+  
+  // Revenue metrics
+  sellingPrice: number;
+  saleableSeedlings: number;
+  expectedRevenue: number;
+  
+  // Profit metrics
+  profitPerSeedling: number;
+  grossProfit: number;
+  profitMargin: number;
+  
+  // Break-even metrics
+  breakEvenPrice: number;
+  breakEvenQuantity: number;
+  safetyMargin: number;
+  
+  // Success rate
+  successRate: number;
+}
+
 export const bomService = {
   // ============ BOM CATEGORIES ============
   async getCategories(): Promise<BOMCategory[]> {
@@ -192,6 +217,8 @@ export const bomService = {
         base_batch_size: original.base_batch_size,
         plant_type_id: original.plant_type_id,
         variety: original.variety,
+        target_selling_price: original.target_selling_price,
+        estimated_success_rate: original.estimated_success_rate,
         status: "draft",
         created_by: original.created_by,
       }])
@@ -360,5 +387,96 @@ export const bomService = {
       costPerTray: totalCost / trayCount,
       categoryTotals,
     };
+  },
+
+  // ============ PROFIT ANALYSIS ============
+  calculateProfitAnalysis(
+    template: BOMTemplateWithDetails, 
+    batchSize?: number,
+    sellingPrice?: number
+  ): ProfitAnalysis {
+    const actualBatchSize = batchSize || template.base_batch_size;
+    const actualSellingPrice = sellingPrice || template.target_selling_price || 0;
+    const successRate = template.estimated_success_rate || 95;
+
+    // Calculate costs
+    const costs = this.calculateTemplateCost(template, actualBatchSize);
+    
+    // Calculate saleable units (accounting for losses)
+    const saleableSeedlings = Math.floor(actualBatchSize * (successRate / 100));
+    
+    // Revenue calculations
+    const expectedRevenue = saleableSeedlings * actualSellingPrice;
+    
+    // Profit calculations
+    const grossProfit = expectedRevenue - costs.totalCost;
+    const profitPerSeedling = actualSellingPrice - costs.costPerSeedling;
+    const profitMargin = actualSellingPrice > 0 
+      ? ((actualSellingPrice - costs.costPerSeedling) / actualSellingPrice) * 100 
+      : 0;
+    
+    // Break-even calculations
+    const breakEvenPrice = successRate > 0 
+      ? costs.costPerSeedling / (successRate / 100)
+      : costs.costPerSeedling;
+    
+    const breakEvenQuantity = profitPerSeedling > 0
+      ? Math.ceil(costs.totalCost / profitPerSeedling)
+      : 0;
+    
+    const safetyMargin = actualSellingPrice > 0
+      ? ((actualSellingPrice - breakEvenPrice) / actualSellingPrice) * 100
+      : 0;
+
+    return {
+      // Cost metrics
+      totalCost: costs.totalCost,
+      costPerSeedling: costs.costPerSeedling,
+      costPerTray: costs.costPerTray,
+      
+      // Revenue metrics
+      sellingPrice: actualSellingPrice,
+      saleableSeedlings,
+      expectedRevenue,
+      
+      // Profit metrics
+      profitPerSeedling,
+      grossProfit,
+      profitMargin,
+      
+      // Break-even metrics
+      breakEvenPrice,
+      breakEvenQuantity,
+      safetyMargin,
+      
+      // Success rate
+      successRate,
+    };
+  },
+
+  // Calculate scenario comparison for different selling prices
+  calculateScenarios(
+    template: BOMTemplateWithDetails,
+    batchSize?: number,
+    priceRange?: { min: number; max: number; step: number }
+  ): Array<ProfitAnalysis & { sellingPrice: number }> {
+    const actualBatchSize = batchSize || template.base_batch_size;
+    const costs = this.calculateTemplateCost(template, actualBatchSize);
+    
+    // Default price range if not provided
+    const range = priceRange || {
+      min: costs.costPerSeedling * 1.2, // 20% markup minimum
+      max: costs.costPerSeedling * 3,    // 200% markup maximum
+      step: costs.costPerSeedling * 0.2  // 20% increments
+    };
+
+    const scenarios: Array<ProfitAnalysis & { sellingPrice: number }> = [];
+    
+    for (let price = range.min; price <= range.max; price += range.step) {
+      const analysis = this.calculateProfitAnalysis(template, actualBatchSize, price);
+      scenarios.push(analysis);
+    }
+
+    return scenarios;
   },
 };
