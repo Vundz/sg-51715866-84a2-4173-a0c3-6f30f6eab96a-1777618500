@@ -51,6 +51,8 @@ export default function NewBOMTemplatePage() {
         variety: plantType?.variety || null,
         status: "draft",
         created_by: user?.id || null,
+        target_selling_price: parseFloat(formData.get("target_selling_price") as string) || 0,
+        estimated_success_rate: parseFloat(formData.get("estimated_success_rate") as string) || 95,
       });
 
       toast({ title: "Success", description: "Template created successfully" });
@@ -112,6 +114,35 @@ export default function NewBOMTemplatePage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="target_selling_price">Target Selling Price (ZMW)</Label>
+                <Input 
+                  id="target_selling_price" 
+                  name="target_selling_price" 
+                  type="number" 
+                  step="0.01" 
+                  defaultValue="0.00"
+                  min="0"
+                />
+                <p className="text-xs text-gray-500">Expected price per seedling</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="estimated_success_rate">Success Rate (%)</Label>
+                <Input 
+                  id="estimated_success_rate" 
+                  name="estimated_success_rate" 
+                  type="number" 
+                  step="0.1" 
+                  defaultValue="95"
+                  min="0"
+                  max="100"
+                />
+                <p className="text-xs text-gray-500">Estimated survival rate</p>
               </div>
             </div>
 
