@@ -15,6 +15,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      bom_categories: {
+        Row: {
+          color: string
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       bom_headers: {
         Row: {
           created_at: string | null
@@ -110,6 +140,90 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      bom_templates: {
+        Row: {
+          base_batch_size: number
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          plant_type_id: string | null
+          status: string
+          updated_at: string | null
+          variety: string | null
+        }
+        Insert: {
+          base_batch_size: number
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          plant_type_id?: string | null
+          status?: string
+          updated_at?: string | null
+          variety?: string | null
+        }
+        Update: {
+          base_batch_size?: number
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          plant_type_id?: string | null
+          status?: string
+          updated_at?: string | null
+          variety?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bom_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bom_templates_plant_type_id_fkey"
+            columns: ["plant_type_id"]
+            isOneToOne: false
+            referencedRelation: "plant_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      formula_templates: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          formula: string
+          id: string
+          name: string
+          updated_at: string | null
+          variables: string[] | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          formula: string
+          id?: string
+          name: string
+          updated_at?: string | null
+          variables?: string[] | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          formula?: string
+          id?: string
+          name?: string
+          updated_at?: string | null
+          variables?: string[] | null
+        }
+        Relationships: []
       }
       harvests: {
         Row: {
