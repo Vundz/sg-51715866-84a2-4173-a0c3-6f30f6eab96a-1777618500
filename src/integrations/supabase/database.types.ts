@@ -83,53 +83,62 @@ export type Database = {
       }
       bom_items: {
         Row: {
-          bom_header_id: string
+          category_id: string | null
           created_at: string | null
-          formula: string | null
+          custom_name: string | null
+          custom_unit: string | null
+          custom_unit_price: number | null
           id: string
           inventory_item_id: string | null
-          item_name: string
+          item_type: string
           notes: string | null
-          quantity: number
-          total_cost: number | null
-          unit: string
-          unit_cost: number | null
+          quantity_formula: string | null
+          quantity_type: string
+          quantity_value: number | null
+          sort_order: number | null
+          template_id: string
           updated_at: string | null
         }
         Insert: {
-          bom_header_id: string
+          category_id?: string | null
           created_at?: string | null
-          formula?: string | null
+          custom_name?: string | null
+          custom_unit?: string | null
+          custom_unit_price?: number | null
           id?: string
           inventory_item_id?: string | null
-          item_name: string
+          item_type: string
           notes?: string | null
-          quantity: number
-          total_cost?: number | null
-          unit: string
-          unit_cost?: number | null
+          quantity_formula?: string | null
+          quantity_type?: string
+          quantity_value?: number | null
+          sort_order?: number | null
+          template_id: string
           updated_at?: string | null
         }
         Update: {
-          bom_header_id?: string
+          category_id?: string | null
           created_at?: string | null
-          formula?: string | null
+          custom_name?: string | null
+          custom_unit?: string | null
+          custom_unit_price?: number | null
           id?: string
           inventory_item_id?: string | null
-          item_name?: string
+          item_type?: string
           notes?: string | null
-          quantity?: number
-          total_cost?: number | null
-          unit?: string
-          unit_cost?: number | null
+          quantity_formula?: string | null
+          quantity_type?: string
+          quantity_value?: number | null
+          sort_order?: number | null
+          template_id?: string
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "bom_items_bom_header_id_fkey"
-            columns: ["bom_header_id"]
+            foreignKeyName: "bom_items_category_id_fkey"
+            columns: ["category_id"]
             isOneToOne: false
-            referencedRelation: "bom_headers"
+            referencedRelation: "bom_categories"
             referencedColumns: ["id"]
           },
           {
@@ -137,6 +146,13 @@ export type Database = {
             columns: ["inventory_item_id"]
             isOneToOne: false
             referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bom_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "bom_templates"
             referencedColumns: ["id"]
           },
         ]

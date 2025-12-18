@@ -122,7 +122,6 @@ export const bomService = {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    // Cast to unknown first to avoid "neither type sufficiently overlaps" error
     return data as unknown as BOMTemplateWithDetails[];
   },
 
@@ -143,7 +142,6 @@ export const bomService = {
       .single();
 
     if (error) throw error;
-    // Cast to unknown first to avoid "neither type sufficiently overlaps" error
     return data as unknown as BOMTemplateWithDetails;
   },
 
