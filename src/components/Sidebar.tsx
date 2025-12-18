@@ -75,6 +75,7 @@ export function Sidebar() {
       items: [
         { label: "Treatments", href: "/treatments", icon: TestTube2 },
         { label: "Inventory", href: "/inventory", icon: Box },
+        { label: "Production Calculator", href: "/production/bom", icon: Calculator },
       ],
     },
     {
@@ -218,16 +219,6 @@ export function Sidebar() {
           })}
         </nav>
       </ScrollArea>
-
-      {/* Production Management */}
-      {(profile?.role === 'admin' || profile?.role === 'manager') && (
-        <div className="p-3 border-t border-b">
-          <Link href="/production/bom" className="flex items-center space-x-2">
-            <Calculator className="h-5 w-5 text-green-600 dark:text-green-400" />
-            <span className="text-sm font-medium text-green-900 dark:text-green-100">Cost Calculator</span>
-          </Link>
-        </div>
-      )}
 
       {/* User Profile & Actions */}
       <div className="p-4 border-t space-y-3">
