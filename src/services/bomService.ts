@@ -122,7 +122,8 @@ export const bomService = {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return data as BOMTemplateWithDetails[];
+    // Cast to unknown first to avoid "neither type sufficiently overlaps" error
+    return data as unknown as BOMTemplateWithDetails[];
   },
 
   async getTemplate(id: string): Promise<BOMTemplateWithDetails> {
@@ -142,7 +143,8 @@ export const bomService = {
       .single();
 
     if (error) throw error;
-    return data as BOMTemplateWithDetails;
+    // Cast to unknown first to avoid "neither type sufficiently overlaps" error
+    return data as unknown as BOMTemplateWithDetails;
   },
 
   async createTemplate(template: Omit<BOMTemplate, "id" | "created_at" | "updated_at">): Promise<BOMTemplate> {
@@ -240,7 +242,7 @@ export const bomService = {
       .order("sort_order", { ascending: true });
 
     if (error) throw error;
-    return data as BOMItemWithDetails[];
+    return data as unknown as BOMItemWithDetails[];
   },
 
   async createItem(item: Omit<BOMItem, "id" | "created_at" | "updated_at">): Promise<BOMItem> {
