@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Calculator, Plus, Settings, Edit, Trash2, Eye } from "lucide-react";
+import { Calculator, Plus, Settings, Edit, Trash2, Eye, TrendingUp, DollarSign, Target } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { bomService, BOMTemplateWithDetails } from "@/services/bomService";
 import { useToast } from "@/hooks/use-toast";
@@ -93,14 +93,37 @@ export default function BOMCalculatorPage() {
     }
   };
 
+  const getProfitColor = (margin: number) => {
+    if (margin < 0) return "text-red-600 dark:text-red-400";
+    if (margin < 20) return "text-yellow-600 dark:text-yellow-400";
+    if (margin < 40) return "text-green-600 dark:text-green-400";
+    return "text-emerald-600 dark:text-emerald-400";
+  };
+
+  const getProfitBgColor = (margin: number) => {
+    if (margin < 0) return "bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800";
+    if (margin < 20) return "bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800";
+    if (margin < 40) return "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800";
+    return "bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800";
+  };
+
+  // Calculate profit analysis for preview
+  const previewProfitAnalysis = previewTemplate 
+    ? bomService.calculateProfitAnalysis(
+        previewTemplate, 
+        previewBatchSize, 
+        previewTemplate.target_selling_price
+      )
+    : null;
+
   if (loading) {
     return <div className="p-8 text-center text-gray-500">Loading templates...</div>;
   }
 
   // Group templates by status
-  const activeTemplates = templates.filter(t => t.status === 'active');
-  const draftTemplates = templates.filter(t => t.status === 'draft');
-  const archivedTemplates = templates.filter(t => t.status === 'archived');
+  const activeTemplates = templates.filter(t => t.status === "active");
+  const draftTemplates = templates.filter(t => t.status === "draft");
+  const archivedTemplates = templates.filter(t => t.status === "archived");
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8 px-4 pb-12">
@@ -186,9 +209,9 @@ export default function BOMCalculatorPage() {
         )}
       </div>
 
-      {/* Preview Dialog */}
+      {/* Preview Dialog with Profit Analysis */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -196,7 +219,7 @@ export default function BOMCalculatorPage() {
                 <DialogDescription>{previewTemplate?.description || "No description"}</DialogDescription>
               </div>
               <div className="flex gap-2">
-                <Badge variant={previewTemplate?.status === 'active' ? 'default' : 'secondary'}>
+                <Badge variant={previewTemplate?.status === "active" ? "default" : "secondary"}>
                   {previewTemplate?.status}
                 </Badge>
                 <Button onClick={handleEditFromPreview} variant="outline" className="gap-2">
@@ -226,7 +249,7 @@ export default function BOMCalculatorPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Cost Summary Cards */}
               <Card className="bg-gradient-to-br from-lime-50 to-green-50 dark:from-lime-950 dark:to-green-950 border-lime-200 dark:border-lime-800">
                 <CardHeader className="pb-3">
@@ -236,30 +259,76 @@ export default function BOMCalculatorPage() {
                   <div className="text-3xl font-bold text-lime-900 dark:text-lime-100">
                     K{formatNumber(previewCalculation.totalCost)}
                   </div>
+                  <p className="text-xs text-lime-600 dark:text-lime-400 mt-1">
+                    K{previewCalculation.costPerSeedling.toFixed(2)} per seedling
+                  </p>
                 </CardContent>
               </Card>
 
-              <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 border-blue-200 dark:border-blue-800">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm text-blue-700 dark:text-blue-300">Per Seedling</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">
-                    K{previewCalculation.costPerSeedling.toFixed(2)}
-                  </div>
-                </CardContent>
-              </Card>
+              {/* Profit Analysis Card */}
+              {previewProfitAnalysis && previewTemplate?.target_selling_price && previewTemplate.target_selling_price > 0 && (
+                <>
+                  <Card className={`${getProfitBgColor(previewProfitAnalysis.profitMargin)}`}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <DollarSign className="w-4 h-4" />
+                        Profit Analysis
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs">Profit/Seedling</span>
+                        <span className={`text-xl font-bold ${getProfitColor(previewProfitAnalysis.profitMargin)}`}>
+                          K{previewProfitAnalysis.profitPerSeedling.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs">Margin</span>
+                        <span className={`text-xl font-bold ${getProfitColor(previewProfitAnalysis.profitMargin)}`}>
+                          {previewProfitAnalysis.profitMargin.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="pt-2 border-t text-xs">
+                        <div className="flex justify-between">
+                          <span>Gross Profit</span>
+                          <span className="font-mono font-semibold">K{formatNumber(previewProfitAnalysis.grossProfit)}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
-              <Card className="bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950 dark:to-amber-950 border-orange-200 dark:border-orange-800">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm text-orange-700 dark:text-orange-300">Per Tray (220)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-orange-900 dark:text-orange-100">
-                    K{formatNumber(previewCalculation.costPerTray)}
-                  </div>
-                </CardContent>
-              </Card>
+                  <Card className="bg-orange-50 dark:bg-orange-950 border-orange-200 dark:border-orange-800">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                        <Target className="w-4 h-4" />
+                        Break-Even
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-orange-700 dark:text-orange-300">Price</span>
+                        <span className="text-lg font-bold text-orange-900 dark:text-orange-100">
+                          K{previewProfitAnalysis.breakEvenPrice.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-orange-700 dark:text-orange-300">Quantity</span>
+                        <span className="text-lg font-bold text-orange-900 dark:text-orange-100">
+                          {formatNumber(Math.ceil(previewProfitAnalysis.breakEvenQuantity))}
+                        </span>
+                      </div>
+                      <div className="pt-2 border-t border-orange-200 dark:border-orange-800 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-orange-700 dark:text-orange-300">Safety</span>
+                          <span className="font-semibold text-orange-900 dark:text-orange-100">
+                            {previewProfitAnalysis.safetyMargin.toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </div>
 
             {/* Items Table */}
@@ -303,7 +372,7 @@ export default function BOMCalculatorPage() {
                           <TableCell>
                             <div className="flex flex-col">
                               <span className="font-medium">
-                                {item.item_type === 'inventory' 
+                                {item.item_type === "inventory" 
                                   ? item.inventory_items?.name 
                                   : item.custom_name}
                               </span>
@@ -315,14 +384,14 @@ export default function BOMCalculatorPage() {
                           <TableCell className="text-right font-medium">
                             {formatNumber(item.calculatedQuantity)}
                             <span className="text-xs text-gray-500 ml-1">
-                              {item.item_type === 'inventory' 
+                              {item.item_type === "inventory" 
                                 ? item.inventory_items?.unit_of_measure 
                                 : item.custom_unit}
                             </span>
                           </TableCell>
                           <TableCell className="text-right font-mono text-sm">
                             K{formatNumber(
-                              item.item_type === 'inventory' 
+                              item.item_type === "inventory" 
                                 ? Number(item.inventory_items?.unit_price) 
                                 : Number(item.custom_unit_price)
                             )}
@@ -345,12 +414,20 @@ export default function BOMCalculatorPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {Object.entries(previewCalculation.categoryTotals).map(([category, total]) => (
-                    <div key={category} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                      <span className="font-medium">{category}</span>
-                      <span className="text-lg font-bold">K{formatNumber(total)}</span>
-                    </div>
-                  ))}
+                  {Object.entries(previewCalculation.categoryTotals).map(([category, total]) => {
+                    const percentage = previewCalculation.totalCost > 0 ? (total / previewCalculation.totalCost) * 100 : 0;
+                    return (
+                      <div key={category} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                        <div className="flex-1">
+                          <div className="flex justify-between mb-1">
+                            <span className="font-medium">{category}</span>
+                            <span className="text-sm font-semibold">K{formatNumber(total)}</span>
+                          </div>
+                          <div className="text-xs text-gray-500">{percentage.toFixed(1)}% of total</div>
+                        </div>
+                      </div>
+                    );
+                  })}
                   {Object.keys(previewCalculation.categoryTotals).length === 0 && (
                     <p className="text-center text-gray-500 py-4">No categories</p>
                   )}
