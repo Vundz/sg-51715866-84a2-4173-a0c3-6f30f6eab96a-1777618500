@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ToastAction } from "@/components/ui/toast";
 import { Calculator, Plus, Settings, Edit, Trash2, Eye, Copy } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { bomService, BOMTemplateWithDetails } from "@/services/bomService";
@@ -89,10 +90,11 @@ export default function BOMCalculatorPage() {
       toast({ 
         title: "Success", 
         description: `Template "${cloneName}" created successfully`,
-        action: {
-          label: "Edit Now",
-          onClick: () => router.push(`/production/bom/${newTemplate.id}`)
-        }
+        action: (
+          <ToastAction altText="Edit Now" onClick={() => router.push(`/production/bom/${newTemplate.id}`)}>
+            Edit Now
+          </ToastAction>
+        ),
       });
     } catch (error) {
       console.error("Error cloning template:", error);
