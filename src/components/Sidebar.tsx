@@ -25,7 +25,8 @@ import {
   Briefcase,
   Tag,
   Ruler,
-  Building2
+  Building2,
+  Calculator
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ThemeSwitch } from "./ThemeSwitch";
@@ -217,6 +218,16 @@ export function Sidebar() {
           })}
         </nav>
       </ScrollArea>
+
+      {/* Production Management */}
+      {(profile?.role === 'admin' || profile?.role === 'manager') && (
+        <div className="p-3 border-t border-b">
+          <Link href="/production/bom" className="flex items-center space-x-2">
+            <Calculator className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <span className="text-sm font-medium text-green-900 dark:text-green-100">Cost Calculator</span>
+          </Link>
+        </div>
+      )}
 
       {/* User Profile & Actions */}
       <div className="p-4 border-t space-y-3">
