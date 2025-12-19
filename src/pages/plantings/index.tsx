@@ -231,6 +231,27 @@ export default function PlantingsPage() {
     return filtered;
   }, [plantings, searchQuery, filterType, filterValue]);
 
+  // Calculate dashboard metrics based on filtered plantings
+  const dashboardMetrics = useMemo(() => {
+    const totalPlantings = filteredPlantings.length;
+    const totalSeedlings = filteredPlantings.reduce((sum, p) => sum + (p.remaining_quantity ?? p.quantity), 0);
+    const totalReserved = filteredPlantings.reduce((sum, p) => sum + getReservedQuantity(p.id), 0);
+    const totalAvailable = filteredPlantings.reduce((sum, p) => sum + getAvailableQuantity(p), 0);
+    const inventoryValue = filteredPlantings.reduce((sum, p) => {
+      const qty = p.remaining_quantity ?? p.quantity;
+      const price = p.selling_price || 0;
+      return sum + (qty * price);
+    }, 0);
+
+    return {
+      totalPlantings,
+      totalSeedlings,
+      totalReserved,
+      totalAvailable,
+      inventoryValue,
+    };
+  }, [filteredPlantings, reservations]);
+
   // Quick-add Plant Type
   const handleQuickAddPlantType = async () => {
     if (!newPlantTypeName.trim()) {
@@ -743,6 +764,47 @@ export default function PlantingsPage() {
           </div>
         )}
       </div>
+
+      {/* Main Content Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        {/* Dashboard Metrics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Total Plantings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{dashboardMetrics.totalPlantings}</div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Total Seedlings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatNumber(dashboardMetrics.totalSeedlings)}</div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Total Reserved</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatNumber(dashboardMetrics.totalReserved)}</div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Total Available</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatNumber(dashboardMetrics.totalAvailable)}</div>
+            </CardContent>
+          </Card>
+        </div>
 
       {/* Main Planting Dialog with Smart Dropdowns */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
