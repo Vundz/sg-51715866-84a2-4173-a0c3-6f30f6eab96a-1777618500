@@ -217,6 +217,74 @@ export type Database = {
           },
         ]
       }
+      chemical_products: {
+        Row: {
+          application_method: string | null
+          created_at: string | null
+          ec_factor: number | null
+          form: string
+          id: string
+          inventory_item_id: string | null
+          manufacturer: string | null
+          max_concentration: number | null
+          min_concentration: number | null
+          name: string
+          npk_k: number | null
+          npk_n: number | null
+          npk_p: number | null
+          recommended_concentration: number
+          safety_notes: string | null
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          application_method?: string | null
+          created_at?: string | null
+          ec_factor?: number | null
+          form: string
+          id?: string
+          inventory_item_id?: string | null
+          manufacturer?: string | null
+          max_concentration?: number | null
+          min_concentration?: number | null
+          name: string
+          npk_k?: number | null
+          npk_n?: number | null
+          npk_p?: number | null
+          recommended_concentration: number
+          safety_notes?: string | null
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          application_method?: string | null
+          created_at?: string | null
+          ec_factor?: number | null
+          form?: string
+          id?: string
+          inventory_item_id?: string | null
+          manufacturer?: string | null
+          max_concentration?: number | null
+          min_concentration?: number | null
+          name?: string
+          npk_k?: number | null
+          npk_n?: number | null
+          npk_p?: number | null
+          recommended_concentration?: number
+          safety_notes?: string | null
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chemical_products_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       formula_templates: {
         Row: {
           created_at: string | null
@@ -863,6 +931,66 @@ export type Database = {
             columns: ["permission_id"]
             isOneToOne: false
             referencedRelation: "permissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_mixes: {
+        Row: {
+          applied_to_planting_ids: string[] | null
+          calculated_ec: number | null
+          chemical_amount: number | null
+          concentration: number | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          mode: string | null
+          notes: string | null
+          product_id: string | null
+          target_ec: number | null
+          water_volume: number | null
+        }
+        Insert: {
+          applied_to_planting_ids?: string[] | null
+          calculated_ec?: number | null
+          chemical_amount?: number | null
+          concentration?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          mode?: string | null
+          notes?: string | null
+          product_id?: string | null
+          target_ec?: number | null
+          water_volume?: number | null
+        }
+        Update: {
+          applied_to_planting_ids?: string[] | null
+          calculated_ec?: number | null
+          chemical_amount?: number | null
+          concentration?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          mode?: string | null
+          notes?: string | null
+          product_id?: string | null
+          target_ec?: number | null
+          water_volume?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_mixes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_mixes_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "chemical_products"
             referencedColumns: ["id"]
           },
         ]
