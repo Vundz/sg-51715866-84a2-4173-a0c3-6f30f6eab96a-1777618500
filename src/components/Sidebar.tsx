@@ -26,7 +26,8 @@ import {
   Tag,
   Ruler,
   Building2,
-  Calculator
+  Calculator,
+  Beaker
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ThemeSwitch } from "./ThemeSwitch";
@@ -76,6 +77,7 @@ export function Sidebar() {
         { label: "Treatments", href: "/treatments", icon: TestTube2 },
         { label: "Inventory", href: "/inventory", icon: Box },
         { label: "Production Calculator", href: "/production/bom", icon: Calculator },
+        { label: "Chemical Calculator", href: "/production/calculator", icon: Beaker },
       ],
     },
     {
