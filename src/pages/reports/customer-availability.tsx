@@ -42,6 +42,7 @@ const CustomerAvailabilityReport: React.FC = () => {
     { id: "batchNumber", label: "Batch Number", enabled: false },
     { id: "quantity", label: "Available Quantity", enabled: true },
     { id: "readyDate", label: "Ready Date", enabled: true },
+    { id: "sellingPrice", label: "Price per Seedling (ZMW)", enabled: true },
   ]);
   
   const { toast } = useToast();
@@ -191,6 +192,7 @@ const CustomerAvailabilityReport: React.FC = () => {
           readyDate,
           daysUntilReady,
           isReadyNow: daysUntilReady === 0,
+          sellingPrice: p.selling_price || 0,
         };
       })
       .filter(s => s.availableQuantity > 0) // Only show items with available stock
@@ -236,6 +238,7 @@ const CustomerAvailabilityReport: React.FC = () => {
         if (col.id === "batchNumber") row.push(s.batchNumber);
         if (col.id === "quantity") row.push(s.availableQuantity.toString());
         if (col.id === "readyDate") row.push(s.readyDate.toLocaleDateString());
+        if (col.id === "sellingPrice") row.push(s.sellingPrice.toFixed(2));
       });
       return row;
     });
@@ -261,6 +264,7 @@ const CustomerAvailabilityReport: React.FC = () => {
         if (col.id === "batchNumber") row.push(s.batchNumber);
         if (col.id === "quantity") row.push(s.availableQuantity.toString());
         if (col.id === "readyDate") row.push(s.readyDate.toLocaleDateString());
+        if (col.id === "sellingPrice") row.push(s.sellingPrice.toFixed(2));
       });
       return row;
     });
@@ -330,6 +334,7 @@ const CustomerAvailabilityReport: React.FC = () => {
                 ${enabledColumns.find(c => c.id === "location") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: left; font-weight: bold;">Location</th>' : ''}
                 ${enabledColumns.find(c => c.id === "batchNumber") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: left; font-weight: bold;">Batch Number</th>' : ''}
                 ${enabledColumns.find(c => c.id === "quantity") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: right; font-weight: bold;">Available Quantity</th>' : ''}
+                ${enabledColumns.find(c => c.id === "sellingPrice") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: right; font-weight: bold;">Price (ZMW)</th>' : ''}
                 ${enabledColumns.find(c => c.id === "readyDate") ? '<th style="background: #16a34a; color: white; padding: 12px; text-align: right; font-weight: bold;">Ready Date</th>' : ''}
               </tr>
             </thead>
@@ -354,6 +359,7 @@ const CustomerAvailabilityReport: React.FC = () => {
       const showLocation = enabledColumns.find(c => c.id === "location");
       const showBatchNumber = enabledColumns.find(c => c.id === "batchNumber");
       const showQuantity = enabledColumns.find(c => c.id === "quantity");
+      const showSellingPrice = enabledColumns.find(c => c.id === "sellingPrice");
       const showReadyDate = enabledColumns.find(c => c.id === "readyDate");
       const colSpan = enabledColumns.length;
 
@@ -405,6 +411,13 @@ const CustomerAvailabilityReport: React.FC = () => {
             htmlContent += `
               <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor}; text-align: right; font-weight: bold; color: #16a34a;">
                 ${formatNumber(p.availableQuantity)} seedlings
+              </td>`;
+          }
+          
+          if (showSellingPrice) {
+            htmlContent += `
+              <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; background: ${bgColor}; text-align: right; font-family: monospace; color: #1f2937;">
+                K${p.sellingPrice.toFixed(2)}
               </td>`;
           }
           
@@ -752,6 +765,7 @@ const CustomerAvailabilityReport: React.FC = () => {
                         {enabledColumns.find(c => c.id === "location") && <TableHead>Location</TableHead>}
                         {enabledColumns.find(c => c.id === "batchNumber") && <TableHead>Batch Number</TableHead>}
                         {enabledColumns.find(c => c.id === "quantity") && <TableHead className="text-right">Available Quantity</TableHead>}
+                        {enabledColumns.find(c => c.id === "sellingPrice") && <TableHead className="text-right">Price per Seedling</TableHead>}
                         {enabledColumns.find(c => c.id === "readyDate") && <TableHead className="text-right">Ready Date</TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -773,6 +787,14 @@ const CustomerAvailabilityReport: React.FC = () => {
                                 {formatNumber(s.availableQuantity)}
                               </span>
                               <span className="text-xs text-gray-500 ml-1">seedlings</span>
+                            </TableCell>
+                          )}
+                          {enabledColumns.find(c => c.id === "sellingPrice") && (
+                            <TableCell className="text-right">
+                              <span className="font-mono font-semibold text-gray-900 dark:text-gray-100">
+                                K{s.sellingPrice.toFixed(2)}
+                              </span>
+                              <span className="text-xs text-gray-500 ml-1">each</span>
                             </TableCell>
                           )}
                           {enabledColumns.find(c => c.id === "readyDate") && (
