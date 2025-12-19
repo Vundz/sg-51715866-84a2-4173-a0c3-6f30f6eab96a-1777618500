@@ -245,6 +245,7 @@ export default function PlantingsPage() {
         growth_duration: parseInt(newPlantTypeGrowthDuration),
         description: null,
         germination_rate: null,
+        default_selling_price: 0,
       });
 
       // Reload plant types
@@ -286,6 +287,7 @@ export default function PlantingsPage() {
         growth_duration: parseInt(newPlantTypeGrowthDuration),
         description: null,
         germination_rate: null,
+        default_selling_price: 0,
       });
 
       // Reload plant types
@@ -361,6 +363,7 @@ export default function PlantingsPage() {
       status: editingPlanting ? formData.get("status") as string : "active",
       notes: formData.get("notes") as string,
       variety: selectedVariety,
+      selling_price: parseFloat(formData.get("selling_price") as string) || 0,
     };
     
     const finalPlantingData = {
@@ -660,6 +663,7 @@ export default function PlantingsPage() {
             status: "active",
             notes: row.notes,
             variety: row.plantType.variety,
+            selling_price: row.plantType.default_selling_price || 0,
           };
 
           await plantingService.addPlanting(plantingData);
@@ -852,6 +856,31 @@ export default function PlantingsPage() {
                   }}
                 />
               </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="selling_price">Selling Price per Seedling (ZMW)</Label>
+              <Input 
+                id="selling_price" 
+                name="selling_price" 
+                type="number" 
+                step="0.01" 
+                min="0"
+                defaultValue={
+                  editingPlanting?.selling_price || 
+                  plantTypes.find(pt => pt.name === selectedPlantTypeName && pt.variety === selectedVariety)?.default_selling_price || 
+                  0
+                }
+                placeholder="0.00"
+                disabled={isViewer}
+              />
+              <p className="text-xs text-gray-500">
+                {selectedPlantTypeName && selectedVariety ? (
+                  `Default from plant type: K${(plantTypes.find(pt => pt.name === selectedPlantTypeName && pt.variety === selectedVariety)?.default_selling_price || 0).toFixed(2)}`
+                ) : (
+                  "Select a plant type to see default price"
+                )}
+              </p>
             </div>
             
             <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">

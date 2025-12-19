@@ -57,6 +57,7 @@ export default function PlantTypesPage() {
       description: formData.get("description") as string,
       growth_duration: parseInt(formData.get("growth_duration") as string),
       germination_rate: germinationRateValue ? parseInt(germinationRateValue, 10) : null,
+      default_selling_price: parseFloat(formData.get("default_selling_price") as string) || 0,
     };
 
     try {
@@ -161,6 +162,20 @@ export default function PlantTypesPage() {
                 <Input id="germination_rate" name="germination_rate" type="number" min="0" max="100" defaultValue={editingPlantType?.germination_rate ?? ''} disabled={!permissions.canCreate && !permissions.canUpdate}/>
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="default_selling_price">Default Selling Price (ZMW)</Label>
+              <Input 
+                id="default_selling_price" 
+                name="default_selling_price" 
+                type="number" 
+                step="0.01" 
+                min="0" 
+                defaultValue={editingPlantType?.default_selling_price ?? ''} 
+                placeholder="0.00"
+                disabled={!permissions.canCreate && !permissions.canUpdate}
+              />
+              <p className="text-xs text-gray-500">This price will be suggested when creating a new planting.</p>
+            </div>
             {(permissions.canCreate || permissions.canUpdate) ? (
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
@@ -191,13 +206,14 @@ export default function PlantTypesPage() {
                   <TableHead>Variety</TableHead>
                   <TableHead>Growth Duration</TableHead>
                   <TableHead>Germination Rate</TableHead>
+                  <TableHead className="text-right">Default Price</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {plantTypes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center h-24">No plant types created yet.</TableCell>
+                    <TableCell colSpan={6} className="text-center h-24">No plant types created yet.</TableCell>
                   </TableRow>
                 ) : (
                   plantTypes.map(pt => (
@@ -206,6 +222,9 @@ export default function PlantTypesPage() {
                       <TableCell>{pt.variety}</TableCell>
                       <TableCell>{pt.growth_duration} days</TableCell>
                       <TableCell>{pt.germination_rate ? `${pt.germination_rate}%` : 'N/A'}</TableCell>
+                      <TableCell className="text-right">
+                        {pt.default_selling_price ? `K${Number(pt.default_selling_price).toFixed(2)}` : '-'}
+                      </TableCell>
                       <TableCell className="text-right">
                         {permissions.canUpdate || permissions.canDelete ? (
                           <div className="flex gap-1 justify-end">

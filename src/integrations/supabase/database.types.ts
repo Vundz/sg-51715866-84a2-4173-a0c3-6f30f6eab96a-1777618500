@@ -575,6 +575,7 @@ export type Database = {
       plant_types: {
         Row: {
           created_at: string | null
+          default_selling_price: number | null
           description: string | null
           germination_rate: number | null
           growth_duration: number
@@ -585,6 +586,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          default_selling_price?: number | null
           description?: string | null
           germination_rate?: number | null
           growth_duration: number
@@ -595,6 +597,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          default_selling_price?: number | null
           description?: string | null
           germination_rate?: number | null
           growth_duration?: number
@@ -745,6 +748,7 @@ export type Database = {
           plant_type_id: string
           quantity: number
           remaining_quantity: number | null
+          selling_price: number | null
           status: string
           updated_at: string | null
           variety: string | null
@@ -760,6 +764,7 @@ export type Database = {
           plant_type_id: string
           quantity: number
           remaining_quantity?: number | null
+          selling_price?: number | null
           status?: string
           updated_at?: string | null
           variety?: string | null
@@ -775,6 +780,7 @@ export type Database = {
           plant_type_id?: string
           quantity?: number
           remaining_quantity?: number | null
+          selling_price?: number | null
           status?: string
           updated_at?: string | null
           variety?: string | null
