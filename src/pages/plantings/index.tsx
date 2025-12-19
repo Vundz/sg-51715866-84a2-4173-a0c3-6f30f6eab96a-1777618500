@@ -1301,7 +1301,7 @@ export default function PlantingsPage() {
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
                     <TableHeader className="sticky top-0 bg-white dark:bg-gray-950 z-10 shadow-sm">
-                      <TableRow>
+                      <TableRow className="border-b">
                         <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Row</TableHead>
                         <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Plant Type</TableHead>
                         <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Variety</TableHead>
@@ -1492,6 +1492,7 @@ export default function PlantingsPage() {
                     <TableHead className="min-w-[70px]">Trays</TableHead>
                     <TableHead className="min-w-[100px]">Reserved</TableHead>
                     <TableHead className="min-w-[100px]">Available</TableHead>
+                    <TableHead className="min-w-[100px]">Price (ZMW)</TableHead>
                     <TableHead className="min-w-[120px]">Date Planted</TableHead>
                     <TableHead className="min-w-[130px]">Expected Harvest</TableHead>
                     <TableHead className="min-w-[90px]">Status</TableHead>
@@ -1501,7 +1502,7 @@ export default function PlantingsPage() {
                 <TableBody>
                   {filteredPlantings.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center h-24 px-4 py-2">
+                      <TableCell colSpan={12} className="text-center h-24 px-4 py-2">
                         {searchQuery || filterType !== "all" 
                           ? "No plantings match your search or filter criteria." 
                           : "No plantings recorded yet."}
@@ -1548,6 +1549,9 @@ export default function PlantingsPage() {
                             <span className={available <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
                               {formatNumber(available)}
                             </span>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            K{(p.selling_price || 0).toFixed(2)}
                           </TableCell>
                           <TableCell>{new Date(p.date_planted).toLocaleDateString()}</TableCell>
                           <TableCell>{getExpectedHarvestDate(p)}</TableCell>
