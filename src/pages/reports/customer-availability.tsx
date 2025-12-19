@@ -238,7 +238,7 @@ const CustomerAvailabilityReport: React.FC = () => {
         if (col.id === "batchNumber") row.push(s.batchNumber);
         if (col.id === "quantity") row.push(s.availableQuantity.toString());
         if (col.id === "readyDate") row.push(s.readyDate.toLocaleDateString());
-        if (col.id === "sellingPrice") row.push(s.sellingPrice.toFixed(2));
+        if (col.id === "sellingPrice") row.push(`K${s.sellingPrice.toFixed(2)}`);
       });
       return row;
     });
@@ -264,7 +264,7 @@ const CustomerAvailabilityReport: React.FC = () => {
         if (col.id === "batchNumber") row.push(s.batchNumber);
         if (col.id === "quantity") row.push(s.availableQuantity.toString());
         if (col.id === "readyDate") row.push(s.readyDate.toLocaleDateString());
-        if (col.id === "sellingPrice") row.push(s.sellingPrice.toFixed(2));
+        if (col.id === "sellingPrice") row.push(`K${s.sellingPrice.toFixed(2)}`);
       });
       return row;
     });
