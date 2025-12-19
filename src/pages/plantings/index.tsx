@@ -766,45 +766,45 @@ export default function PlantingsPage() {
       </div>
 
       {/* Main Content Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        {/* Dashboard Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Total Plantings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{dashboardMetrics.totalPlantings}</div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Total Seedlings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatNumber(dashboardMetrics.totalSeedlings)}</div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Total Reserved</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatNumber(dashboardMetrics.totalReserved)}</div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Total Available</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatNumber(dashboardMetrics.totalAvailable)}</div>
-            </CardContent>
-          </Card>
-        </div>
+      {/* Dashboard Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <Card className="border-l-4 border-blue-500 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Plantings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{dashboardMetrics.totalPlantings}</div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-l-4 border-green-500 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Seedlings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{formatNumber(dashboardMetrics.totalSeedlings)}</div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-l-4 border-orange-500 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Reserved</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{formatNumber(dashboardMetrics.totalReserved)}</div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-l-4 border-purple-500 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Inventory Value</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">K{formatNumber(dashboardMetrics.inventoryValue)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Based on current selling prices</p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Main Planting Dialog with Smart Dropdowns */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
