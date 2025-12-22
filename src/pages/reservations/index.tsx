@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Plus, Edit, X, ShoppingCart, CheckCircle2, AlertCircle, Filter, Trash2 } from "lucide-react";
+import { Plus, Edit, X, ShoppingCart, CheckCircle2, AlertCircle, Filter, Trash2, LayoutGrid, Table as TableIcon } from "lucide-react";
 import { useRouter } from "next/router";
 import { reservationService } from "@/services/reservationService";
 import { plantingService } from "@/services/plantingService";
@@ -90,6 +90,9 @@ const ReservationsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+
+  // View mode toggle (table vs cards)
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
   // Updated: Batch selections now include varietyFilter
   const [batchSelections, setBatchSelections] = useState<BatchSelection[]>([
@@ -397,7 +400,29 @@ const ReservationsPage: React.FC = () => {
           </p>
         </div>
         {permissions.canCreate && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {/* View Mode Toggle */}
+            <div className="flex border rounded-lg overflow-hidden">
+              <Button
+                onClick={() => setViewMode("table")}
+                variant={viewMode === "table" ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none gap-1"
+              >
+                <TableIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Table</span>
+              </Button>
+              <Button
+                onClick={() => setViewMode("cards")}
+                variant={viewMode === "cards" ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none gap-1"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                <span className="hidden sm:inline">Cards</span>
+              </Button>
+            </div>
+            
             {plantingIdFilter && (
               <Button variant="outline" onClick={() => router.push("/reservations")}>
                 Show All
@@ -1025,10 +1050,10 @@ const ReservationsPage: React.FC = () => {
               placeholder="Search by customer name or plant type..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="max-w-sm"
+              className="flex-1 max-w-sm"
             />
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-full sm:w-[200px]">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
@@ -1039,122 +1064,248 @@ const ReservationsPage: React.FC = () => {
               </SelectContent>
             </Select>
           </div>
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Planting</TableHead>
-                  <TableHead>Quantity</TableHead>
-                  <TableHead>Reservation Date</TableHead>
-                  <TableHead>Collection Date</TableHead>
-                  <TableHead>Payment</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredReservations.length === 0 ? (
+
+          {/* Table View */}
+          {viewMode === "table" ? (
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center h-24">
-                      No reservations found.
-                    </TableCell>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Planting</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Reservation Date</TableHead>
+                    <TableHead>Collection Date</TableHead>
+                    <TableHead>Payment</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ) : (
-                  filteredReservations.map(r => (
-                    <TableRow key={r.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{r.customer_name}</div>
-                          <div className="text-sm text-gray-500">{r.customer_phone}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{r.plantings?.plant_types?.name}</div>
-                          {r.plantings?.variety && (
-                            <div className="text-sm text-gray-500">Variety: {r.plantings.variety}</div>
-                          )}
-                          <div className="text-xs text-gray-400">Batch: {r.plantings?.batch_number}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div>{formatNumber(r.quantity_reserved)}</div>
-                          {r.status === "completed" && r.final_quantity && r.final_quantity !== r.quantity_reserved && (
-                            <div className="text-xs text-green-600">
-                              Delivered: {formatNumber(r.final_quantity)}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>{new Date(r.reserved_date).toLocaleDateString()}</TableCell>
-                      <TableCell>
-                        {r.collection_date ? (
-                          <div className="text-sm">
-                            {new Date(r.collection_date).toLocaleDateString()}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400 italic">Not set</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={r.payment_status === "paid" ? "default" : "outline"}>
-                          {r.payment_status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge {...getStatusBadgeProps(r.status)}>
-                          {r.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-1 justify-end">
-                          {r.status === "pending" && (
-                            <>
-                              {permissions.canUpdate && (
-                                <>
-                                  <Button 
-                                    size="sm" 
-                                    variant="ghost" 
-                                    onClick={() => handleOpenDialog(r)} 
-                                    title="Edit reservation"
-                                  >
-                                    <Edit className="w-4 h-4" />
-                                  </Button>
-                                  <Button 
-                                    size="sm" 
-                                    variant="ghost" 
-                                    className="text-green-600 hover:text-green-700" 
-                                    onClick={() => handleOpenStatusDialog(r, "completed")} 
-                                    title="Complete reservation"
-                                  >
-                                    <CheckCircle2 className="w-4 h-4" />
-                                  </Button>
-                                  <Button 
-                                    size="sm" 
-                                    variant="ghost" 
-                                    className="text-red-600 hover:text-red-700" 
-                                    onClick={() => handleOpenStatusDialog(r, "cancelled")} 
-                                    title="Cancel reservation"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </Button>
-                                </>
-                              )}
-                            </>
-                          )}
-                          {!permissions.canUpdate && (
-                            <span className="text-xs text-gray-400 italic">View only</span>
-                          )}
-                        </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredReservations.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center h-24">
+                        No reservations found.
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : (
+                    filteredReservations.map(r => (
+                      <TableRow key={r.id}>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{r.customer_name}</div>
+                            <div className="text-sm text-gray-500">{r.customer_phone}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{r.plantings?.plant_types?.name}</div>
+                            {r.plantings?.variety && (
+                              <div className="text-sm text-gray-500">Variety: {r.plantings.variety}</div>
+                            )}
+                            <div className="text-xs text-gray-400">Batch: {r.plantings?.batch_number}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div>{formatNumber(r.quantity_reserved)}</div>
+                            {r.status === "completed" && r.final_quantity && r.final_quantity !== r.quantity_reserved && (
+                              <div className="text-xs text-green-600">
+                                Delivered: {formatNumber(r.final_quantity)}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{new Date(r.reserved_date).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          {r.collection_date ? (
+                            <div className="text-sm">
+                              {new Date(r.collection_date).toLocaleDateString()}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">Not set</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={r.payment_status === "paid" ? "default" : "outline"}>
+                            {r.payment_status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge {...getStatusBadgeProps(r.status)}>
+                            {r.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-1 justify-end">
+                            {r.status === "pending" && (
+                              <>
+                                {permissions.canUpdate && (
+                                  <>
+                                    <Button 
+                                      size="sm" 
+                                      variant="ghost" 
+                                      onClick={() => handleOpenDialog(r)} 
+                                      title="Edit reservation"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="ghost" 
+                                      className="text-green-600 hover:text-green-700" 
+                                      onClick={() => handleOpenStatusDialog(r, "completed")} 
+                                      title="Complete reservation"
+                                    >
+                                      <CheckCircle2 className="w-4 h-4" />
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="ghost" 
+                                      className="text-red-600 hover:text-red-700" 
+                                      onClick={() => handleOpenStatusDialog(r, "cancelled")} 
+                                      title="Cancel reservation"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </Button>
+                                  </>
+                                )}
+                              </>
+                            )}
+                            {!permissions.canUpdate && (
+                              <span className="text-xs text-gray-400 italic">View only</span>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            /* Card View */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredReservations.length === 0 ? (
+                <div className="col-span-full text-center py-12">
+                  <ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No reservations found.</p>
+                </div>
+              ) : (
+                filteredReservations.map(r => (
+                  <Card key={r.id} className="border-2 hover:border-blue-500 transition-colors">
+                    <CardContent className="pt-6 space-y-4">
+                      {/* Customer Info */}
+                      <div className="border-b pb-3">
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                          {r.customer_name}
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{r.customer_phone}</p>
+                        {r.customer_email && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{r.customer_email}</p>
+                        )}
+                      </div>
+
+                      {/* Planting Info */}
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Plant Type</p>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100">
+                          {r.plantings?.plant_types?.name}
+                        </p>
+                        {r.plantings?.variety && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Variety: {r.plantings.variety}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-400 font-mono mt-1">
+                          Batch: {r.plantings?.batch_number}
+                        </p>
+                      </div>
+
+                      {/* Quantity - Prominent */}
+                      <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3 text-center">
+                        <div className="text-3xl font-bold text-blue-600">
+                          {formatNumber(r.quantity_reserved)}
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                          seedlings reserved
+                        </div>
+                        {r.status === "completed" && r.final_quantity && r.final_quantity !== r.quantity_reserved && (
+                          <div className="text-sm text-green-600 mt-1">
+                            Delivered: {formatNumber(r.final_quantity)}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Dates */}
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Reserved</p>
+                          <p className="font-medium">{new Date(r.reserved_date).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Collection</p>
+                          <p className="font-medium">
+                            {r.collection_date 
+                              ? new Date(r.collection_date).toLocaleDateString()
+                              : "Not set"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Status & Payment */}
+                      <div className="flex items-center justify-between pt-3 border-t">
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Status</p>
+                          <Badge {...getStatusBadgeProps(r.status)}>
+                            {r.status}
+                          </Badge>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Payment</p>
+                          <Badge variant={r.payment_status === "paid" ? "default" : "outline"}>
+                            {r.payment_status}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      {r.status === "pending" && permissions.canUpdate && (
+                        <div className="flex gap-2 pt-3 border-t">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => handleOpenDialog(r)}
+                          >
+                            <Edit className="w-4 h-4 mr-1" />
+                            Edit
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="flex-1 text-green-600 hover:text-green-700 hover:bg-green-50"
+                            onClick={() => handleOpenStatusDialog(r, "completed")}
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            Complete
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => handleOpenStatusDialog(r, "cancelled")}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
