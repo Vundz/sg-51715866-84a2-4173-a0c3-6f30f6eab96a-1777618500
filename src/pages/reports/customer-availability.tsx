@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Download, FileSpreadsheet, FileText, Sprout, Calendar, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, FileSpreadsheet, FileText, Sprout, Calendar, Loader2, LayoutGrid, Table as TableIcon } from "lucide-react";
 import { plantingService } from "@/services/plantingService";
 import { reservationService } from "@/services/reservationService";
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +44,9 @@ const CustomerAvailabilityReport: React.FC = () => {
     { id: "readyDate", label: "Ready Date", enabled: true },
     { id: "sellingPrice", label: "Price per Seedling (ZMW)", enabled: true },
   ]);
+
+  // View mode toggle (table vs cards)
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   
   const { toast } = useToast();
 
@@ -531,6 +534,28 @@ const CustomerAvailabilityReport: React.FC = () => {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* View Mode Toggle */}
+          <div className="flex border rounded-lg overflow-hidden">
+            <Button
+              onClick={() => setViewMode("table")}
+              variant={viewMode === "table" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none gap-1"
+            >
+              <TableIcon className="w-4 h-4" />
+              <span className="hidden sm:inline">Table</span>
+            </Button>
+            <Button
+              onClick={() => setViewMode("cards")}
+              variant={viewMode === "cards" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none gap-1"
+            >
+              <LayoutGrid className="w-4 h-4" />
+              <span className="hidden sm:inline">Cards</span>
+            </Button>
+          </div>
+          
           <Button onClick={exportToCSV} variant="outline" size="sm" className="gap-2">
             <FileText className="w-4 h-4" />
             CSV
@@ -729,7 +754,7 @@ const CustomerAvailabilityReport: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Availability Table - Grouped by Plant Type */}
+        {/* Availability Display - Table or Card View */}
         {groupedByPlantType.length === 0 ? (
           <Card>
             <CardContent className="py-12">
@@ -744,7 +769,8 @@ const CustomerAvailabilityReport: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-        ) : (
+        ) : viewMode === "table" ? (
+          /* TABLE VIEW */
           groupedByPlantType.map(([plantType, seedlings]) => (
             <Card key={plantType}>
               <CardHeader>
@@ -821,6 +847,105 @@ const CustomerAvailabilityReport: React.FC = () => {
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          /* CARD VIEW */
+          groupedByPlantType.map(([plantType, seedlings]) => (
+            <Card key={plantType}>
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <Sprout className="w-5 h-5 text-green-600" />
+                  {plantType}
+                </CardTitle>
+                <CardDescription>
+                  {seedlings.length} variety option{seedlings.length !== 1 ? "s" : ""} available • {formatNumber(seedlings.reduce((sum, s) => sum + s.availableQuantity, 0))} total seedlings
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {seedlings.map(s => (
+                    <Card key={s.id} className="border-2 hover:border-green-500 transition-colors">
+                      <CardContent className="pt-6">
+                        <div className="space-y-3">
+                          {/* Variety Name - Always Show */}
+                          {enabledColumns.find(c => c.id === "variety") && (
+                            <div>
+                              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                {s.variety}
+                              </h3>
+                            </div>
+                          )}
+
+                          {/* Available Quantity - Prominent */}
+                          {enabledColumns.find(c => c.id === "quantity") && (
+                            <div className="bg-green-50 dark:bg-green-950 rounded-lg p-3 text-center">
+                              <div className="text-3xl font-bold text-green-600">
+                                {formatNumber(s.availableQuantity)}
+                              </div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                seedlings available
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Price */}
+                          {enabledColumns.find(c => c.id === "sellingPrice") && (
+                            <div className="flex items-center justify-between py-2 border-t border-gray-200 dark:border-gray-700">
+                              <span className="text-sm text-gray-600 dark:text-gray-400">Price per seedling:</span>
+                              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                K{s.sellingPrice.toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Ready Date */}
+                          {enabledColumns.find(c => c.id === "readyDate") && (
+                            <div className="flex items-center justify-between py-2 border-t border-gray-200 dark:border-gray-700">
+                              <span className="text-sm text-gray-600 dark:text-gray-400">Ready:</span>
+                              <div className="text-right">
+                                <div className="font-medium text-gray-900 dark:text-gray-100">
+                                  {s.readyDate.toLocaleDateString("en-US", { 
+                                    month: "short", 
+                                    day: "numeric" 
+                                  })}
+                                </div>
+                                {s.isReadyNow ? (
+                                  <div className="text-xs text-green-600 font-semibold">Available Now!</div>
+                                ) : (
+                                  <div className="text-xs text-gray-500">
+                                    {s.daysUntilReady === 1 ? "Tomorrow" : `in ${s.daysUntilReady} days`}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Location */}
+                          {enabledColumns.find(c => c.id === "location") && (
+                            <div className="flex items-center justify-between py-2 border-t border-gray-200 dark:border-gray-700">
+                              <span className="text-sm text-gray-600 dark:text-gray-400">Location:</span>
+                              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {s.location}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Batch Number */}
+                          {enabledColumns.find(c => c.id === "batchNumber") && (
+                            <div className="flex items-center justify-between py-2 border-t border-gray-200 dark:border-gray-700">
+                              <span className="text-sm text-gray-600 dark:text-gray-400">Batch:</span>
+                              <span className="text-xs font-mono text-gray-600 dark:text-gray-400">
+                                {s.batchNumber}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               </CardContent>
             </Card>
