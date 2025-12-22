@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter, Upload, Download, PlusCircle } from "lucide-react";
+import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter, Upload, Download, PlusCircle, LayoutGrid, Table as TableIcon } from "lucide-react";
 import { plantingService } from "@/services/plantingService";
 import { plantTypeService } from "@/services/plantTypeService";
 import { locationService } from "@/services/locationService";
@@ -86,6 +86,9 @@ export default function PlantingsPage() {
   const [selectedSeedId, setSelectedSeedId] = useState<string>("");
   const [seedQuantityUsed, setSeedQuantityUsed] = useState<string>("");
   const [seedStockWarning, setSeedStockWarning] = useState<string>("");
+
+  // Add view mode state here
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
   useEffect(() => {
     loadData();
@@ -753,13 +756,35 @@ export default function PlantingsPage() {
         </div>
         {permissions.canCreate && (
           <div className="flex gap-2">
+            {/* View Mode Toggle */}
+            <div className="flex border rounded-lg overflow-hidden">
+              <Button
+                onClick={() => setViewMode("table")}
+                variant={viewMode === "table" ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none gap-1"
+              >
+                <TableIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Table</span>
+              </Button>
+              <Button
+                onClick={() => setViewMode("cards")}
+                variant={viewMode === "cards" ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none gap-1"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                <span className="hidden sm:inline">Cards</span>
+              </Button>
+            </div>
+            
             <Button onClick={() => setIsImportDialogOpen(true)} variant="outline" className="border-lime-600 text-lime-600 hover:bg-lime-50">
               <Upload className="w-4 h-4 mr-2" />
-              Bulk Import
+              <span className="hidden sm:inline">Bulk Import</span>
             </Button>
             <Button onClick={() => handleOpenDialog()} className="bg-lime-600 hover:bg-lime-700">
               <Plus className="w-4 h-4 mr-2" />
-              Add Planting
+              <span className="hidden sm:inline">Add Planting</span>
             </Button>
           </div>
         )}
@@ -1479,114 +1504,234 @@ export default function PlantingsPage() {
             </div>
           </div>
 
-          {/* Table with Responsive Layout */}
-          <div className="border rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm">
-                  <TableRow className="border-b">
-                    <TableHead className="min-w-[120px]">Batch #</TableHead>
-                    <TableHead className="min-w-[150px]">Plant</TableHead>
-                    <TableHead className="min-w-[120px]">Location</TableHead>
-                    <TableHead className="min-w-[90px]">Total Qty</TableHead>
-                    <TableHead className="min-w-[70px]">Trays</TableHead>
-                    <TableHead className="min-w-[100px]">Reserved</TableHead>
-                    <TableHead className="min-w-[100px]">Available</TableHead>
-                    <TableHead className="min-w-[100px]">Price (ZMW)</TableHead>
-                    <TableHead className="min-w-[120px]">Date Planted</TableHead>
-                    <TableHead className="min-w-[130px]">Expected Harvest</TableHead>
-                    <TableHead className="min-w-[90px]">Status</TableHead>
-                    <TableHead className="min-w-[120px] text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredPlantings.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={12} className="text-center h-24 px-4 py-2">
-                        {searchQuery || filterType !== "all" 
-                          ? "No plantings match your search or filter criteria." 
-                          : "No plantings recorded yet."}
-                      </TableCell>
+          {/* Table or Card View */}
+          {viewMode === "table" ? (
+            /* TABLE VIEW */
+            <div className="border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm">
+                    <TableRow className="border-b">
+                      <TableHead className="min-w-[120px]">Batch #</TableHead>
+                      <TableHead className="min-w-[150px]">Plant</TableHead>
+                      <TableHead className="min-w-[120px]">Location</TableHead>
+                      <TableHead className="min-w-[90px]">Total Qty</TableHead>
+                      <TableHead className="min-w-[70px]">Trays</TableHead>
+                      <TableHead className="min-w-[100px]">Reserved</TableHead>
+                      <TableHead className="min-w-[100px]">Available</TableHead>
+                      <TableHead className="min-w-[100px]">Price (ZMW)</TableHead>
+                      <TableHead className="min-w-[120px]">Date Planted</TableHead>
+                      <TableHead className="min-w-[130px]">Expected Harvest</TableHead>
+                      <TableHead className="min-w-[90px]">Status</TableHead>
+                      <TableHead className="min-w-[120px] text-right">Actions</TableHead>
                     </TableRow>
-                  ) : (
-                    filteredPlantings.map(p => {
-                      const reserved = getReservedQuantity(p.id);
-                      const available = getAvailableQuantity(p);
-                      const reservationCount = getReservationCount(p.id);
-                      const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
-                      
-                      return (
-                        <TableRow key={p.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
-                          <TableCell className="font-mono font-semibold text-sm">
-                            {p.batch_number || 'N/A'}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {p.plant_types?.variety || 'N/A'}
-                            <br/>
-                            <span className="text-xs text-gray-500">{p.plant_types?.name}</span>
-                          </TableCell>
-                          <TableCell>{p.locations?.name || 'N/A'}</TableCell>
-                          <TableCell>{formatNumber(p.remaining_quantity ?? p.quantity)}</TableCell>
-                          <TableCell>
-                            <span className="font-medium text-blue-600">{trayUsage}</span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span className={reserved > 0 ? "font-medium text-blue-600" : ""}>{formatNumber(reserved)}</span>
-                              {reservationCount > 0 && (
-                                <Link 
-                                  href={`/reservations?planting=${p.id}`}
-                                  className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                                  title="View reservations"
-                                >
-                                  <ShoppingCart className="w-3 h-3" />
-                                  <span className="text-xs">({reservationCount})</span>
-                                </Link>
-                              )}
+                  </TableHeader>
+                  <TableBody>
+                    {filteredPlantings.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={12} className="text-center h-24 px-4 py-2">
+                          {searchQuery || filterType !== "all" 
+                            ? "No plantings match your search or filter criteria." 
+                            : "No plantings recorded yet."}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredPlantings.map(p => {
+                        const reserved = getReservedQuantity(p.id);
+                        const available = getAvailableQuantity(p);
+                        const reservationCount = getReservationCount(p.id);
+                        const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
+                        
+                        return (
+                          <TableRow key={p.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
+                            <TableCell className="font-mono font-semibold text-sm">
+                              {p.batch_number || 'N/A'}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {p.plant_types?.variety || 'N/A'}
+                              <br/>
+                              <span className="text-xs text-gray-500">{p.plant_types?.name}</span>
+                            </TableCell>
+                            <TableCell>{p.locations?.name || 'N/A'}</TableCell>
+                            <TableCell>{formatNumber(p.remaining_quantity ?? p.quantity)}</TableCell>
+                            <TableCell>
+                              <span className="font-medium text-blue-600">{trayUsage}</span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span className={reserved > 0 ? "font-medium text-blue-600" : ""}>{formatNumber(reserved)}</span>
+                                {reservationCount > 0 && (
+                                  <Link 
+                                    href={`/reservations?planting=${p.id}`}
+                                    className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                    title="View reservations"
+                                  >
+                                    <ShoppingCart className="w-3 h-3" />
+                                    <span className="text-xs">({reservationCount})</span>
+                                  </Link>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className={available <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
+                                {formatNumber(available)}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              K{(p.selling_price || 0).toFixed(2)}
+                            </TableCell>
+                            <TableCell>{new Date(p.date_planted).toLocaleDateString()}</TableCell>
+                            <TableCell>{getExpectedHarvestDate(p)}</TableCell>
+                            <TableCell>
+                              <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
+                                className={p.status === 'active' ? 'bg-green-100 text-green-800' : p.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
+                              >
+                                {p.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex gap-1 justify-end">
+                                {permissions.canUpdate && (
+                                  <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(p)} title="Edit planting">
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                {permissions.canDelete && (
+                                  <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(p.id)} title="Delete planting">
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                {!permissions.canUpdate && !permissions.canDelete && (
+                                  <span className="text-xs text-gray-400 italic">View only</span>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : (
+            /* CARD VIEW */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredPlantings.length === 0 ? (
+                <div className="col-span-full text-center py-12 text-gray-500">
+                  {searchQuery || filterType !== "all" 
+                    ? "No plantings match your search or filter criteria." 
+                    : "No plantings recorded yet."}
+                </div>
+              ) : (
+                filteredPlantings.map(p => {
+                  const reserved = getReservedQuantity(p.id);
+                  const available = getAvailableQuantity(p);
+                  const reservationCount = getReservationCount(p.id);
+                  const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
+                  
+                  return (
+                    <Card key={p.id} className="border-2 hover:border-lime-500 transition-colors">
+                      <CardContent className="pt-6">
+                        <div className="space-y-3">
+                          {/* Header: Variety + Status */}
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
+                                {p.plant_types?.variety || 'N/A'}
+                              </h3>
+                              <p className="text-sm text-gray-500">{p.plant_types?.name}</p>
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <span className={available <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
-                              {formatNumber(available)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            K{(p.selling_price || 0).toFixed(2)}
-                          </TableCell>
-                          <TableCell>{new Date(p.date_planted).toLocaleDateString()}</TableCell>
-                          <TableCell>{getExpectedHarvestDate(p)}</TableCell>
-                          <TableCell>
                             <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
                               className={p.status === 'active' ? 'bg-green-100 text-green-800' : p.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
                             >
                               {p.status}
                             </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex gap-1 justify-end">
-                              {permissions.canUpdate && (
-                                <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(p)} title="Edit planting">
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                              )}
-                              {permissions.canDelete && (
-                                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(p.id)} title="Delete planting">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              )}
-                              {!permissions.canUpdate && !permissions.canDelete && (
-                                <span className="text-xs text-gray-400 italic">View only</span>
-                              )}
+                          </div>
+
+                          {/* Batch Number */}
+                          <div className="text-xs font-mono text-gray-500">
+                            Batch: {p.batch_number || 'N/A'}
+                          </div>
+
+                          {/* Key Metrics Grid */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3">
+                              <div className="text-xs text-gray-600 dark:text-gray-400">Total Qty</div>
+                              <div className="text-xl font-bold text-blue-600">
+                                {formatNumber(p.remaining_quantity ?? p.quantity)}
+                              </div>
+                              <div className="text-xs text-gray-500">{trayUsage} trays</div>
                             </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
+
+                            <div className="bg-green-50 dark:bg-green-950 rounded-lg p-3">
+                              <div className="text-xs text-gray-600 dark:text-gray-400">Available</div>
+                              <div className={`text-xl font-bold ${available <= 0 ? "text-red-600" : "text-green-600"}`}>
+                                {formatNumber(available)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {reserved > 0 && `${formatNumber(reserved)} reserved`}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Details */}
+                          <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600 dark:text-gray-400">Location:</span>
+                              <span className="font-medium">{p.locations?.name || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600 dark:text-gray-400">Price:</span>
+                              <span className="font-mono font-semibold">K{(p.selling_price || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600 dark:text-gray-400">Planted:</span>
+                              <span>{new Date(p.date_planted).toLocaleDateString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600 dark:text-gray-400">Harvest:</span>
+                              <span>{getExpectedHarvestDate(p)}</span>
+                            </div>
+                            {reservationCount > 0 && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600 dark:text-gray-400">Reservations:</span>
+                                <Link 
+                                  href={`/reservations?planting=${p.id}`}
+                                  className="text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium"
+                                >
+                                  <ShoppingCart className="w-3 h-3" />
+                                  {reservationCount}
+                                </Link>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                            {permissions.canUpdate && (
+                              <Button size="sm" variant="outline" onClick={() => handleOpenDialog(p)} className="flex-1">
+                                <Edit className="w-4 h-4 mr-1" />
+                                Edit
+                              </Button>
+                            )}
+                            {permissions.canDelete && (
+                              <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleDeletePlanting(p.id)}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {!permissions.canUpdate && !permissions.canDelete && (
+                              <span className="text-xs text-gray-400 italic flex-1 text-center py-2">View only</span>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>
