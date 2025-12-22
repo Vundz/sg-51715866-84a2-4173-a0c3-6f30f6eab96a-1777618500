@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Package, Printer } from "lucide-react";
+import { Plus, Edit, Trash2, Package, Printer, LayoutGrid, Table as TableIcon } from "lucide-react";
 import { harvestService, HarvestWithDetails } from "@/services/harvestService";
 import { plantingService, PlantingWithDetails } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
@@ -41,6 +41,9 @@ export default function HarvestsPage() {
   const [harvestQuantity, setHarvestQuantity] = useState<number>(0);
   const [quantityError, setQuantityError] = useState<string>("");
   const { toast } = useToast();
+
+  // Add view mode state
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
   const isViewer = profile?.role === "viewer";
 
@@ -433,6 +436,28 @@ export default function HarvestsPage() {
         </div>
         {permissions.canCreate && (
           <div className="flex items-center gap-2">
+            {/* View Mode Toggle */}
+            <div className="flex border rounded-lg overflow-hidden">
+              <Button
+                onClick={() => setViewMode("table")}
+                variant={viewMode === "table" ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none gap-1"
+              >
+                <TableIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Table</span>
+              </Button>
+              <Button
+                onClick={() => setViewMode("cards")}
+                variant={viewMode === "cards" ? "default" : "ghost"}
+                size="sm"
+                className="rounded-none gap-1"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                <span className="hidden sm:inline">Cards</span>
+              </Button>
+            </div>
+
             <Link href="/harvests/bulk">
               <Button variant="outline">Bulk Harvest</Button>
             </Link>
@@ -661,58 +686,182 @@ export default function HarvestsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Planting</TableHead>
-                <TableHead>Batch Number</TableHead>
-                <TableHead>Qty Harvested</TableHead>
-                <TableHead>Harvest Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          {viewMode === "table" ? (
+            /* TABLE VIEW */
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Planting</TableHead>
+                    <TableHead>Batch Number</TableHead>
+                    <TableHead>Qty Harvested</TableHead>
+                    <TableHead>Harvest Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredHarvests.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center h-24">
+                        No harvests found matching your filters.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredHarvests.map(h => {
+                      const details = h.plantings;
+                      return (
+                        <TableRow key={h.id}>
+                          <TableCell className="font-medium">
+                            {details?.plant_types?.name || "N/A"}
+                            <br/>
+                            <span className="text-xs text-gray-500">{details?.plant_types?.variety}</span>
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">{details?.batch_number || "N/A"}</TableCell>
+                          <TableCell>{formatNumber(h.quantity_harvested)}</TableCell>
+                          <TableCell>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <Badge variant={h.status === 'sold' ? 'default' : 'secondary'}>{h.status}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex gap-1 justify-end">
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                onClick={() => handlePrintDispatchSlip(h)} 
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50" 
+                                title="Print Dispatch Slip"
+                              >
+                                <Printer className="w-4 h-4" />
+                              </Button>
+                              {permissions.canUpdate && (
+                                <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(h)} title="Edit harvest">
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {permissions.canDelete && (
+                                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteHarvest(h.id)} title="Delete harvest">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {!permissions.canUpdate && !permissions.canDelete && (
+                                <span className="text-xs text-gray-400 italic ml-2">View only</span>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            /* CARD VIEW */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredHarvests.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center h-24">No harvests found matching your filters.</TableCell></TableRow>
+                <div className="col-span-full text-center py-12">
+                  <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">No harvests found matching your filters.</p>
+                </div>
               ) : (
                 filteredHarvests.map(h => {
                   const details = h.plantings;
                   return (
-                    <TableRow key={h.id}>
-                      <TableCell className="font-medium">{details?.plant_types?.name || "N/A"}<br/><span className="text-xs text-gray-500">{details?.plant_types?.variety}</span></TableCell>
-                      <TableCell className="font-mono text-sm">{details?.batch_number || "N/A"}</TableCell>
-                      <TableCell>{formatNumber(h.quantity_harvested)}</TableCell>
-                      <TableCell>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
-                      <TableCell>
-                        <Badge variant={h.status === 'sold' ? 'default' : 'secondary'}>{h.status}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-1 justify-end">
-                          <Button size="sm" variant="ghost" onClick={() => handlePrintDispatchSlip(h)} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Print Dispatch Slip">
-                            <Printer className="w-4 h-4" />
-                          </Button>
-                          {permissions.canUpdate && (
-                            <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(h)} title="Edit harvest">
-                              <Edit className="w-4 h-4" />
+                    <Card key={h.id} className="border-2 hover:border-blue-500 transition-colors">
+                      <CardContent className="pt-6">
+                        <div className="space-y-3">
+                          {/* Plant Type & Variety */}
+                          <div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                              {details?.plant_types?.name || "N/A"}
+                            </h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {details?.plant_types?.variety}
+                            </p>
+                          </div>
+
+                          {/* Quantity - Prominent */}
+                          <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3 text-center">
+                            <div className="text-3xl font-bold text-blue-600">
+                              {formatNumber(h.quantity_harvested)}
+                            </div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                              seedlings harvested
+                            </div>
+                          </div>
+
+                          {/* Details Grid */}
+                          <div className="space-y-2 pt-2 border-t">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600 dark:text-gray-400">Batch:</span>
+                              <span className="font-mono font-medium">{details?.batch_number || "N/A"}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600 dark:text-gray-400">Harvest Date:</span>
+                              <span className="font-medium">
+                                {new Date(h.harvest_date).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600 dark:text-gray-400">Status:</span>
+                              <Badge variant={h.status === 'sold' ? 'default' : 'secondary'}>
+                                {h.status}
+                              </Badge>
+                            </div>
+                            {h.quality && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600 dark:text-gray-400">Quality:</span>
+                                <span className="font-medium capitalize">{h.quality}</span>
+                              </div>
+                            )}
+                            {h.notes && (
+                              <div className="pt-2 border-t">
+                                <p className="text-xs text-gray-500 italic">{h.notes}</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex gap-2 pt-3 border-t">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => handlePrintDispatchSlip(h)} 
+                              className="flex-1 gap-1"
+                            >
+                              <Printer className="w-4 h-4" />
+                              Print
                             </Button>
-                          )}
-                          {permissions.canDelete && (
-                            <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteHarvest(h.id)} title="Delete harvest">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                          {!permissions.canUpdate && !permissions.canDelete && (
-                            <span className="text-xs text-gray-400 italic ml-2">View only</span>
-                          )}
+                            {permissions.canUpdate && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => handleOpenDialog(h)}
+                                className="gap-1"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {permissions.canDelete && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                className="text-red-600 hover:bg-red-50"
+                                onClick={() => handleDeleteHarvest(h.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      </TableCell>
-                    </TableRow>
+                      </CardContent>
+                    </Card>
                   );
                 })
               )}
-            </TableBody>
-          </Table>
+            </div>
+          )}
 
           {/* Total Harvested Summary */}
           {filteredHarvests.length > 0 && (

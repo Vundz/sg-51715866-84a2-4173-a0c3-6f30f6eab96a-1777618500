@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Edit, Trash2, Package, AlertCircle, TrendingUp, TrendingDown, DollarSign, History, ShoppingCart, Settings } from "lucide-react";
+import { Plus, Edit, Trash2, Package, AlertCircle, TrendingUp, TrendingDown, DollarSign, History, ShoppingCart, Settings, LayoutGrid, Table as TableIcon } from "lucide-react";
 import { inventoryService, InventoryItemWithLowStock, StockTransactionWithItem } from "@/services/inventoryService";
 import { inventorySettingsService } from "@/services/inventorySettingsService";
 import type { InventoryCategory, InventoryUnit } from "@/services/inventorySettingsService";
@@ -43,6 +43,10 @@ export default function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [activeTab, setActiveTab] = useState("items");
   const { toast } = useToast();
+
+  // Add view mode states
+  const [itemsViewMode, setItemsViewMode] = useState<"table" | "cards">("table");
+  const [transactionsViewMode, setTransactionsViewMode] = useState<"table" | "cards">("table");
 
   const isViewer = profile?.role === "viewer";
 
@@ -397,6 +401,27 @@ export default function InventoryPage() {
                   <CardDescription>Manage your inventory items and stock levels</CardDescription>
                 </div>
                 <div className="flex gap-2">
+                  {/* View Toggle */}
+                  <div className="flex border rounded-lg overflow-hidden">
+                    <Button
+                      onClick={() => setItemsViewMode("table")}
+                      variant={itemsViewMode === "table" ? "default" : "ghost"}
+                      size="sm"
+                      className="rounded-none gap-1"
+                    >
+                      <TableIcon className="w-4 h-4" />
+                      <span className="hidden sm:inline">Table</span>
+                    </Button>
+                    <Button
+                      onClick={() => setItemsViewMode("cards")}
+                      variant={itemsViewMode === "cards" ? "default" : "ghost"}
+                      size="sm"
+                      className="rounded-none gap-1"
+                    >
+                      <LayoutGrid className="w-4 h-4" />
+                      <span className="hidden sm:inline">Cards</span>
+                    </Button>
+                  </div>
                   <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                     <SelectTrigger className="w-[180px]">
                       <SelectValue placeholder="Filter by category" />
@@ -418,109 +443,216 @@ export default function InventoryPage() {
               />
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Item Name</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Current Stock</TableHead>
-                    <TableHead className="text-right">Unit Price (ZMW)</TableHead>
-                    <TableHead className="text-right">Total Value (ZMW)</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredItems.length === 0 ? (
+              {itemsViewMode === "table" ? (
+                /* TABLE VIEW */
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center h-24 text-gray-500">
-                        No items found. Add your first inventory item to get started.
-                      </TableCell>
+                      <TableHead>Item Name</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="text-right">Current Stock</TableHead>
+                      <TableHead className="text-right">Unit Price (ZMW)</TableHead>
+                      <TableHead className="text-right">Total Value (ZMW)</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredItems.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center h-24 text-gray-500">
+                          No items found. Add your first inventory item to get started.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredItems.map(item => {
+                        const category = categories.find(c => c.name === item.category);
+                        return (
+                          <TableRow key={item.id} className={item.isLowStock ? "bg-red-50 dark:bg-red-950/20" : ""}>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{item.name}</span>
+                                {item.description && (
+                                  <span className="text-xs text-gray-500">{item.description}</span>
+                                )}
+                                {item.isLowStock && (
+                                  <Badge variant="destructive" className="mt-1 w-fit text-xs">
+                                    Low Stock
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                className={getCategoryBadgeColor(item.category)}
+                                style={{ backgroundColor: category?.color }}
+                              >
+                                {item.category}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex flex-col items-end">
+                                <span className={`font-semibold ${item.isLowStock ? "text-red-600" : "text-blue-600"}`}>
+                                  {formatNumber(Number(item.current_stock))}
+                                </span>
+                                <span className="text-xs text-gray-500">{item.unit_of_measure}</span>
+                                {item.minimum_stock > 0 && (
+                                  <span className="text-xs text-gray-400">
+                                    Min: {formatNumber(Number(item.minimum_stock))}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              K{formatNumber(Number(item.unit_price))}
+                            </TableCell>
+                            <TableCell className="text-right font-mono font-semibold text-green-600">
+                              K{formatNumber(Number(item.current_stock) * Number(item.unit_price))}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex gap-1 justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleOpenTransactionDialog(item)}
+                                  title="Record transaction"
+                                  className="text-blue-600"
+                                >
+                                  <History className="w-4 h-4" />
+                                </Button>
+                                {permissions.canUpdate && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleOpenItemDialog(item)}
+                                    title="Edit item"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                {permissions.canDelete && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-red-600"
+                                    onClick={() => handleDeleteItem(item.id, item.name)}
+                                    title="Delete item"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              ) : (
+                /* CARD VIEW */
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredItems.length === 0 ? (
+                    <div className="col-span-full text-center py-12">
+                      <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">No items found. Add your first inventory item to get started.</p>
+                    </div>
                   ) : (
                     filteredItems.map(item => {
                       const category = categories.find(c => c.name === item.category);
                       return (
-                        <TableRow key={item.id} className={item.isLowStock ? "bg-red-50 dark:bg-red-950/20" : ""}>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{item.name}</span>
-                              {item.description && (
-                                <span className="text-xs text-gray-500">{item.description}</span>
-                              )}
-                              {item.isLowStock && (
-                                <Badge variant="destructive" className="mt-1 w-fit text-xs">
-                                  Low Stock
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge 
-                              className={getCategoryBadgeColor(item.category)}
-                              style={{ backgroundColor: category?.color }}
-                            >
-                              {item.category}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex flex-col items-end">
-                              <span className={`font-semibold ${item.isLowStock ? "text-red-600" : "text-blue-600"}`}>
-                                {formatNumber(Number(item.current_stock))}
-                              </span>
-                              <span className="text-xs text-gray-500">{item.unit_of_measure}</span>
-                              {item.minimum_stock > 0 && (
-                                <span className="text-xs text-gray-400">
-                                  Min: {formatNumber(Number(item.minimum_stock))}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            K{formatNumber(Number(item.unit_price))}
-                          </TableCell>
-                          <TableCell className="text-right font-mono font-semibold text-green-600">
-                            K{formatNumber(Number(item.current_stock) * Number(item.unit_price))}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex gap-1 justify-end">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleOpenTransactionDialog(item)}
-                                title="Record transaction"
-                                className="text-blue-600"
-                              >
-                                <History className="w-4 h-4" />
-                              </Button>
-                              {permissions.canUpdate && (
+                        <Card key={item.id} className={`border-2 ${item.isLowStock ? "border-red-500 bg-red-50 dark:bg-red-950/20" : "hover:border-blue-500"} transition-colors`}>
+                          <CardContent className="pt-6">
+                            <div className="space-y-3">
+                              {/* Item Name & Description */}
+                              <div>
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                  {item.name}
+                                </h3>
+                                {item.description && (
+                                  <p className="text-xs text-gray-500 mt-1">{item.description}</p>
+                                )}
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Badge 
+                                    className="text-white"
+                                    style={{ backgroundColor: category?.color }}
+                                  >
+                                    {item.category}
+                                  </Badge>
+                                  {item.isLowStock && (
+                                    <Badge variant="destructive" className="text-xs">
+                                      Low Stock
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Current Stock - Prominent */}
+                              <div className={`${item.isLowStock ? "bg-red-100 dark:bg-red-900" : "bg-blue-50 dark:bg-blue-950"} rounded-lg p-3 text-center`}>
+                                <div className={`text-3xl font-bold ${item.isLowStock ? "text-red-600" : "text-blue-600"}`}>
+                                  {formatNumber(Number(item.current_stock))}
+                                </div>
+                                <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                  {item.unit_of_measure}
+                                  {item.minimum_stock > 0 && (
+                                    <span className="ml-2">• Min: {formatNumber(Number(item.minimum_stock))}</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Price Info */}
+                              <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-600 dark:text-gray-400">Unit Price:</span>
+                                  <span className="font-mono font-semibold">K{formatNumber(Number(item.unit_price))}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-600 dark:text-gray-400">Total Value:</span>
+                                  <span className="font-mono font-bold text-green-600">
+                                    K{formatNumber(Number(item.current_stock) * Number(item.unit_price))}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                                 <Button
                                   size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleOpenItemDialog(item)}
-                                  title="Edit item"
+                                  variant="outline"
+                                  onClick={() => handleOpenTransactionDialog(item)}
+                                  className="flex-1 gap-1 text-blue-600 border-blue-600"
                                 >
-                                  <Edit className="w-4 h-4" />
+                                  <History className="w-4 h-4" />
+                                  Record
                                 </Button>
-                              )}
-                              {permissions.canDelete && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-red-600"
-                                  onClick={() => handleDeleteItem(item.id, item.name)}
-                                  title="Delete item"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              )}
+                                {permissions.canUpdate && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleOpenItemDialog(item)}
+                                    className="gap-1"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                {permissions.canDelete && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-red-600 border-red-600"
+                                    onClick={() => handleDeleteItem(item.id, item.name)}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                          </TableCell>
-                        </TableRow>
+                          </CardContent>
+                        </Card>
                       );
                     })
                   )}
-                </TableBody>
-              </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -529,80 +661,186 @@ export default function InventoryPage() {
         <TabsContent value="transactions" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Transaction History</CardTitle>
-              <CardDescription>Complete log of all stock movements</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Transaction History</CardTitle>
+                  <CardDescription>Complete log of all stock movements</CardDescription>
+                </div>
+                {/* View Toggle */}
+                <div className="flex border rounded-lg overflow-hidden">
+                  <Button
+                    onClick={() => setTransactionsViewMode("table")}
+                    variant={transactionsViewMode === "table" ? "default" : "ghost"}
+                    size="sm"
+                    className="rounded-none gap-1"
+                  >
+                    <TableIcon className="w-4 h-4" />
+                    <span className="hidden sm:inline">Table</span>
+                  </Button>
+                  <Button
+                    onClick={() => setTransactionsViewMode("cards")}
+                    variant={transactionsViewMode === "cards" ? "default" : "ghost"}
+                    size="sm"
+                    className="rounded-none gap-1"
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                    <span className="hidden sm:inline">Cards</span>
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Item</TableHead>
-                    <TableHead className="text-right">Quantity</TableHead>
-                    <TableHead className="text-right">Cost (ZMW)</TableHead>
-                    <TableHead>Performed By</TableHead>
-                    <TableHead>Notes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.length === 0 ? (
+              {transactionsViewMode === "table" ? (
+                /* TABLE VIEW */
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center h-24 text-gray-500">
-                        No transactions recorded yet.
-                      </TableCell>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Item</TableHead>
+                      <TableHead className="text-right">Quantity</TableHead>
+                      <TableHead className="text-right">Cost (ZMW)</TableHead>
+                      <TableHead>Performed By</TableHead>
+                      <TableHead>Notes</TableHead>
                     </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {transactions.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center h-24 text-gray-500">
+                          No transactions recorded yet.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      transactions.map(tx => {
+                        const Icon = getTransactionIcon(tx.transaction_type);
+                        const colorClass = getTransactionColor(tx.transaction_type);
+                        
+                        return (
+                          <TableRow key={tx.id}>
+                            <TableCell>
+                              {new Date(tx.transaction_date).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Icon className={`w-4 h-4 ${colorClass}`} />
+                                <span className="capitalize">{tx.transaction_type}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{tx.inventory_items?.name}</span>
+                                <span className="text-xs text-gray-500">
+                                  {tx.inventory_items?.unit_of_measure}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className={`font-semibold ${Number(tx.quantity) >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                {Number(tx.quantity) >= 0 ? "+" : ""}{formatNumber(Number(tx.quantity))}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {tx.total_cost ? `K${formatNumber(Number(tx.total_cost))}` : "-"}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium">
+                                  {tx.profiles?.full_name || "Unknown"}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {tx.profiles?.email || "-"}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm text-gray-600">
+                              {tx.notes || "-"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              ) : (
+                /* CARD VIEW */
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {transactions.length === 0 ? (
+                    <div className="col-span-full text-center py-12">
+                      <History className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">No transactions recorded yet.</p>
+                    </div>
                   ) : (
                     transactions.map(tx => {
                       const Icon = getTransactionIcon(tx.transaction_type);
                       const colorClass = getTransactionColor(tx.transaction_type);
+                      const isPositive = Number(tx.quantity) >= 0;
                       
                       return (
-                        <TableRow key={tx.id}>
-                          <TableCell>
-                            {new Date(tx.transaction_date).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Icon className={`w-4 h-4 ${colorClass}`} />
-                              <span className="capitalize">{tx.transaction_type}</span>
+                        <Card key={tx.id} className="border-2 hover:border-blue-500 transition-colors">
+                          <CardContent className="pt-6">
+                            <div className="space-y-3">
+                              {/* Transaction Type & Date */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <Icon className={`w-5 h-5 ${colorClass}`} />
+                                  <span className="font-semibold capitalize">{tx.transaction_type}</span>
+                                </div>
+                                <span className="text-xs text-gray-500">
+                                  {new Date(tx.transaction_date).toLocaleDateString()}
+                                </span>
+                              </div>
+
+                              {/* Item Name */}
+                              <div>
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                  {tx.inventory_items?.name}
+                                </h3>
+                                <p className="text-xs text-gray-500">
+                                  {tx.inventory_items?.unit_of_measure}
+                                </p>
+                              </div>
+
+                              {/* Quantity - Prominent */}
+                              <div className={`${isPositive ? "bg-green-50 dark:bg-green-950" : "bg-red-50 dark:bg-red-950"} rounded-lg p-3 text-center`}>
+                                <div className={`text-3xl font-bold ${isPositive ? "text-green-600" : "text-red-600"}`}>
+                                  {isPositive ? "+" : ""}{formatNumber(Number(tx.quantity))}
+                                </div>
+                                <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                  quantity change
+                                </div>
+                              </div>
+
+                              {/* Cost & User Info */}
+                              <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                {tx.total_cost && (
+                                  <div className="flex items-center justify-between text-sm">
+                                    <span className="text-gray-600 dark:text-gray-400">Cost:</span>
+                                    <span className="font-mono font-semibold">K{formatNumber(Number(tx.total_cost))}</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-gray-600 dark:text-gray-400">Performed by:</span>
+                                  <span className="font-medium">{tx.profiles?.full_name || "Unknown"}</span>
+                                </div>
+                              </div>
+
+                              {/* Notes */}
+                              {tx.notes && (
+                                <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                                  <p className="text-xs text-gray-600 dark:text-gray-400 italic">
+                                    {tx.notes}
+                                  </p>
+                                </div>
+                              )}
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{tx.inventory_items?.name}</span>
-                              <span className="text-xs text-gray-500">
-                                {tx.inventory_items?.unit_of_measure}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className={`font-semibold ${Number(tx.quantity) >= 0 ? "text-green-600" : "text-red-600"}`}>
-                              {Number(tx.quantity) >= 0 ? "+" : ""}{formatNumber(Number(tx.quantity))}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {tx.total_cost ? `K${formatNumber(Number(tx.total_cost))}` : "-"}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium">
-                                {tx.profiles?.full_name || "Unknown"}
-                              </span>
-                              <span className="text-xs text-gray-500">
-                                {tx.profiles?.email || "-"}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {tx.notes || "-"}
-                          </TableCell>
-                        </TableRow>
+                          </CardContent>
+                        </Card>
                       );
                     })
                   )}
-                </TableBody>
-              </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
