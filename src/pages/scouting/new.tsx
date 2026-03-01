@@ -12,7 +12,8 @@ import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { scoutingService, CreateScoutingReportData } from "@/services/scoutingService";
 import { plantingService } from "@/services/plantingService";
-import { Bug, Leaf, Thermometer, AlertTriangle, ArrowLeft, Save, Trash2 } from "lucide-react";
+import { locationService } from "@/services/locationService";
+import { Bug, Leaf, Thermometer, AlertTriangle, ArrowLeft, Save, Trash2, Search } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -56,6 +57,8 @@ export default function NewScoutingReport() {
   
   const [loading, setLoading] = useState(false);
   const [plantings, setPlantings] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   
   // Form State
   const [formData, setFormData] = useState<CreateScoutingReportData>({
@@ -80,18 +83,42 @@ export default function NewScoutingReport() {
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
 
   useEffect(() => {
-    loadPlantings();
+    loadData();
   }, []);
 
-  const loadPlantings = async () => {
+  const loadData = async () => {
     try {
-      const data = await plantingService.getPlantings();
-      // Filter only active plantings
-      setPlantings(data.filter(p => p.status === 'germination' || p.status === 'growth'));
+      const [plantingsData, locationsData] = await Promise.all([
+        plantingService.getPlantings(),
+        locationService.getLocations()
+      ]);
+      
+      // Filter only active plantings (germination or growth stage)
+      setPlantings(plantingsData.filter(p => p.status === 'germination' || p.status === 'growth'));
+      setLocations(locationsData);
     } catch (error) {
-      console.error("Error loading plantings:", error);
+      console.error("Error loading data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load data. Please refresh the page.",
+        variant: "destructive"
+      });
     }
   };
+
+  // Filter plantings based on search query
+  const filteredPlantings = plantings.filter(p => {
+    if (!searchQuery) return true;
+    
+    const query = searchQuery.toLowerCase();
+    const cropType = p.plant_types?.name?.toLowerCase() || "";
+    const variety = p.plant_types?.variety?.toLowerCase() || "";
+    const batchNumber = p.batch_number?.toLowerCase() || "";
+    
+    return cropType.includes(query) || 
+           variety.includes(query) || 
+           batchNumber.includes(query);
+  });
 
   const handlePlantingChange = (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
@@ -205,24 +232,54 @@ export default function NewScoutingReport() {
             </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <Label>Select Planting (Batch)</Label>
-              <Select onValueChange={handlePlantingChange} value={formData.planting_id}>
+            <div className="space-y-2 col-span-full">
+              <Label>Search Planting (by Crop, Variety, or Batch)</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input 
+                  placeholder="Search for a batch..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2 col-span-full">
+              <Label>Select Planting (Batch) *</Label>
+              <Select onValueChange={handlePlantingChange} value={formData.planting_id} required>
                 <SelectTrigger>
                   <SelectValue placeholder="Select active batch..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {plantings.map(p => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.batch_number} - {p.plant_types?.name} ({p.locations?.name})
-                    </SelectItem>
-                  ))}
+                  {filteredPlantings.length === 0 ? (
+                    <div className="p-2 text-sm text-gray-500 text-center">
+                      {searchQuery ? "No batches match your search" : "No active batches available"}
+                    </div>
+                  ) : (
+                    filteredPlantings.map(p => (
+                      <SelectItem key={p.id} value={p.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{p.batch_number}</span>
+                          <span className="text-xs text-gray-500">
+                            {p.plant_types?.name} {p.plant_types?.variety ? `- ${p.plant_types?.variety}` : ""} 
+                            {" "}({p.locations?.name})
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
+              {searchQuery && filteredPlantings.length > 0 && (
+                <p className="text-xs text-gray-500">
+                  Showing {filteredPlantings.length} of {plantings.length} batches
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label>Scouting Date</Label>
+              <Label>Scouting Date *</Label>
               <Input 
                 type="date" 
                 required
@@ -232,41 +289,34 @@ export default function NewScoutingReport() {
             </div>
 
             <div className="space-y-2">
-              <Label>Greenhouse Location</Label>
+              <Label>Greenhouse Location *</Label>
               <Select 
                 value={formData.greenhouse} 
                 onValueChange={v => setFormData({...formData, greenhouse: v})}
+                required
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select location" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="GH1">GH1</SelectItem>
-                  <SelectItem value="GH2">GH2</SelectItem>
-                  <SelectItem value="GH3">GH3</SelectItem>
-                  <SelectItem value="GH4">GH4</SelectItem>
-                  <SelectItem value="ShadeNet">ShadeNet</SelectItem>
+                  {locations.map(loc => (
+                    <SelectItem key={loc.id} value={loc.name}>
+                      {loc.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <Label>Crop Type</Label>
-              <Select 
-                value={formData.crop_type} 
-                onValueChange={v => setFormData({...formData, crop_type: v})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select crop" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Tomato">Tomato</SelectItem>
-                  <SelectItem value="Cabbage">Cabbage</SelectItem>
-                  <SelectItem value="Rape">Rape</SelectItem>
-                  <SelectItem value="Onion">Onion</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input 
+                value={formData.crop_type}
+                onChange={e => setFormData({...formData, crop_type: e.target.value})}
+                placeholder="Auto-filled from batch"
+                disabled
+                className="bg-gray-50 dark:bg-gray-900"
+              />
             </div>
 
             <div className="space-y-2">
@@ -274,7 +324,9 @@ export default function NewScoutingReport() {
               <Input 
                 value={formData.variety}
                 onChange={e => setFormData({...formData, variety: e.target.value})}
-                placeholder="e.g. Rodade"
+                placeholder="Auto-filled from batch"
+                disabled
+                className="bg-gray-50 dark:bg-gray-900"
               />
             </div>
 
@@ -284,11 +336,13 @@ export default function NewScoutingReport() {
                 type="number"
                 value={formData.seedling_age_days}
                 onChange={e => setFormData({...formData, seedling_age_days: parseInt(e.target.value) || 0})}
+                disabled
+                className="bg-gray-50 dark:bg-gray-900"
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Scout Name</Label>
+              <Label>Scout Name *</Label>
               <Input 
                 required
                 value={formData.scout_name}
@@ -311,6 +365,8 @@ export default function NewScoutingReport() {
                   <SelectItem value="Humid">Humid</SelectItem>
                   <SelectItem value="Cool">Cool</SelectItem>
                   <SelectItem value="Cloudy">Cloudy</SelectItem>
+                  <SelectItem value="Rainy">Rainy</SelectItem>
+                  <SelectItem value="Windy">Windy</SelectItem>
                 </SelectContent>
               </Select>
             </div>
