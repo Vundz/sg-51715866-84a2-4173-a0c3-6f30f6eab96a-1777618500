@@ -497,7 +497,7 @@ export default function NewScoutingReport() {
                     </div>
 
                     {/* Logic-based alerts */}
-                    {disease.disease_type === "Damping Off" && disease.trays_affected_percent > 5 ? (
+                    {disease.disease_type === "Damping Off" && disease.trays_affected_percent > 5 && (
                       <div className="col-span-full">
                         <Alert variant="destructive">
                           <AlertTriangle className="h-4 w-4" />
@@ -507,9 +507,9 @@ export default function NewScoutingReport() {
                           </AlertDescription>
                         </Alert>
                       </div>
-                    ) : null}
+                    )}
 
-                    {disease.disease_type === "Root Rot" && (
+                    {disease.disease_type === "Root Rot" && disease.present && (
                       <div className="col-span-full">
                          <Alert className="bg-orange-50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-800">
                           <AlertDescription className="text-orange-800 dark:text-orange-200">
