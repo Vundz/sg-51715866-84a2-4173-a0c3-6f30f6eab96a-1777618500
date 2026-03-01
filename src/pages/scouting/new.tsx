@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { scoutingService, CreateScoutingReportData } from "@/services/scoutingService";
 import { plantingService } from "@/services/plantingService";
 import { locationService } from "@/services/locationService";
+import { treatmentService } from "@/services/treatmentService";
 import { Bug, Leaf, Thermometer, AlertTriangle, ArrowLeft, Save, Trash2, Search } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
@@ -59,6 +60,7 @@ export default function NewScoutingReport() {
   const [plantings, setPlantings] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [recentTreatments, setRecentTreatments] = useState<any[]>([]);
   
   // Form State
   const [formData, setFormData] = useState<CreateScoutingReportData>({
@@ -70,9 +72,6 @@ export default function NewScoutingReport() {
     seedling_age_days: 0,
     scout_name: "",
     weather_conditions: "",
-    recent_spray: false,
-    spray_chemical_name: "",
-    spray_application_date: "",
     overall_health_rating: 3,
     general_notes: "",
     pests: INITIAL_PESTS,
@@ -120,7 +119,7 @@ export default function NewScoutingReport() {
            batchNumber.includes(query);
   });
 
-  const handlePlantingChange = (plantingId: string) => {
+  const handlePlantingChange = async (plantingId: string) => {
     const planting = plantings.find(p => p.id === plantingId);
     if (planting) {
       // Calculate age
@@ -136,6 +135,15 @@ export default function NewScoutingReport() {
         variety: planting.plant_types?.variety || "",
         seedling_age_days: ageInDays > 0 ? ageInDays : 0
       }));
+
+      // Load recent treatments for this planting
+      try {
+        const treatments = await treatmentService.getRecentTreatmentsForPlanting(plantingId, 7);
+        setRecentTreatments(treatments);
+      } catch (error) {
+        console.error("Error loading recent treatments:", error);
+        setRecentTreatments([]);
+      }
     }
   };
 
@@ -373,31 +381,116 @@ export default function NewScoutingReport() {
 
             <div className="col-span-full border-t pt-4 space-y-4">
               <div className="flex items-center justify-between">
-                <Label className="text-base">Recent Spray Applied (Last 7 Days)?</Label>
-                <Switch 
-                  checked={formData.recent_spray}
-                  onCheckedChange={c => setFormData({...formData, recent_spray: c})}
-                />
+                <div>
+                  <Label className="text-base font-semibold">Recent Treatment History (Last 7 Days)</Label>
+                  <p className="text-sm text-gray-500 mt-1">Automatic history from Treatments module</p>
+                </div>
+                {recentTreatments.length > 0 && (
+                  <span className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm font-medium">
+                    {recentTreatments.length} treatment{recentTreatments.length > 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
 
-              {formData.recent_spray && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-4 border-l-2 border-blue-200">
-                  <div className="space-y-2">
-                    <Label>Chemical Name</Label>
-                    <Input 
-                      value={formData.spray_chemical_name}
-                      onChange={e => setFormData({...formData, spray_chemical_name: e.target.value})}
-                      placeholder="Product used"
-                    />
+              {!formData.planting_id ? (
+                <Alert>
+                  <AlertDescription>
+                    Select a batch above to view recent treatment history
+                  </AlertDescription>
+                </Alert>
+              ) : recentTreatments.length === 0 ? (
+                <Alert>
+                  <AlertDescription className="text-center py-4">
+                    <div className="text-gray-500">No treatments applied in the last 7 days</div>
+                    <div className="text-sm text-gray-400 mt-2">
+                      ℹ️ All observations should be under normal conditions
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50 dark:bg-gray-900">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Chemical
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Target
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Applied By
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Days Ago
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-black divide-y divide-gray-200 dark:divide-gray-800">
+                        {recentTreatments.map((treatment, index) => {
+                          const treatmentDate = new Date(treatment.treatment_date);
+                          const today = new Date();
+                          const daysAgo = Math.floor((today.getTime() - treatmentDate.getTime()) / (1000 * 3600 * 24));
+                          const dateFormatted = treatmentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                          
+                          // Color coding based on recency
+                          const rowClass = daysAgo <= 1 
+                            ? 'bg-red-50 dark:bg-red-950/20' 
+                            : daysAgo <= 4 
+                            ? 'bg-yellow-50 dark:bg-yellow-950/20' 
+                            : 'bg-green-50 dark:bg-green-950/20';
+
+                          return (
+                            <tr key={treatment.id || index} className={rowClass}>
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {treatment.chemical_name || 'N/A'}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                                {dateFormatted}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                                {treatment.target_pest_disease || 'N/A'}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                                {treatment.applied_by || 'N/A'}
+                              </td>
+                              <td className="px-4 py-3 text-sm">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  daysAgo <= 1 
+                                    ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' 
+                                    : daysAgo <= 4 
+                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' 
+                                    : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                }`}>
+                                  {daysAgo === 0 ? 'Today' : daysAgo === 1 ? '1 day' : `${daysAgo} days`}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Application Date</Label>
-                    <Input 
-                      type="date"
-                      value={formData.spray_application_date}
-                      onChange={e => setFormData({...formData, spray_application_date: e.target.value})}
-                    />
-                  </div>
+                  
+                  {recentTreatments.some(t => {
+                    const treatmentDate = new Date(t.treatment_date);
+                    const daysAgo = Math.floor((new Date().getTime() - treatmentDate.getTime()) / (1000 * 3600 * 24));
+                    return daysAgo <= 1;
+                  }) && (
+                    <div className="bg-red-50 dark:bg-red-950/30 border-t border-red-200 dark:border-red-800 px-4 py-3">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                        <p className="text-sm text-red-800 dark:text-red-200">
+                          <strong>Warning:</strong> Treatment applied within 24 hours. Spray residue may affect observation accuracy. 
+                          Document any phytotoxicity symptoms in Disease or Nutrient sections.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

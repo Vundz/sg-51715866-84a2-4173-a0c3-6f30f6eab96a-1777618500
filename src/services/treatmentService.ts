@@ -126,4 +126,31 @@ export const treatmentService = {
     if (error) throw error;
     return data;
   },
+
+  async getRecentTreatmentsForPlanting(plantingId: string, daysBack: number = 7): Promise<Treatment[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysBack);
+    const cutoffDateString = cutoffDate.toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from("planting_treatments")
+      .select(`
+        treatments (*)
+      `)
+      .eq("planting_id", plantingId)
+      .gte("treatments.treatment_date", cutoffDateString)
+      .order("treatments.treatment_date", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching recent treatments:", error);
+      throw error;
+    }
+
+    // Extract treatments from the joined data
+    const treatments = data
+      ?.map(item => item.treatments)
+      .filter((t): t is Treatment => t !== null) || [];
+
+    return treatments;
+  },
 };
