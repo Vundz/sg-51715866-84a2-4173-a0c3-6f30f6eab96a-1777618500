@@ -403,7 +403,7 @@ export default function NewScoutingReport() {
                         <span className="text-gray-500">%</span>
                       </div>
                       {pest.trays_affected_percent > 10 && (
-                        <p className="text-red-500 text-xs font-semibold">⚠️ Action Required (>10%)</p>
+                        <p className="text-red-500 text-xs font-semibold">⚠️ Action Required (over 10%)</p>
                       )}
                     </div>
 
