@@ -87,7 +87,7 @@ export default function NewScoutingReport() {
     try {
       const data = await plantingService.getPlantings();
       // Filter only active plantings
-      setPlantings(data.filter(p => p.current_status === 'germination' || p.current_status === 'growth'));
+      setPlantings(data.filter(p => p.status === 'germination' || p.status === 'growth'));
     } catch (error) {
       console.error("Error loading plantings:", error);
     }
