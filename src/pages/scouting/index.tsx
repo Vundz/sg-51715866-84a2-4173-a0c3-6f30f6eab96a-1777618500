@@ -71,11 +71,11 @@ export default function ScoutingReportsPage() {
   const filteredReports = reports.filter(report => {
     const matchesSearch = 
       report.crop_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      report.variety.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (report.variety && report.variety.toLowerCase().includes(searchQuery.toLowerCase())) ||
       report.scout_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      report.plantings?.batch_number.toLowerCase().includes(searchQuery.toLowerCase());
+      (report.plantings?.batch_number && report.plantings.batch_number.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    const matchesGreenhouse = greenhouseFilter === "all" || report.greenhouse === greenhouseFilter;
+    const matchesGreenhouse = greenhouseFilter === "all" || report.greenhouse_location === greenhouseFilter;
     
     return matchesSearch && matchesGreenhouse;
   });
@@ -261,7 +261,7 @@ export default function ScoutingReportsPage() {
                           <TableRow key={report.id}>
                             <TableCell>{new Date(report.scouting_date).toLocaleDateString()}</TableCell>
                             <TableCell>
-                              <Badge variant="outline">{report.greenhouse}</Badge>
+                              <Badge variant="outline">{report.greenhouse_location}</Badge>
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-col">
@@ -374,7 +374,7 @@ export default function ScoutingReportsPage() {
                         <div className="grid grid-cols-2 gap-2 text-sm">
                           <div>
                             <span className="text-gray-600 dark:text-gray-400">Greenhouse:</span>
-                            <div className="font-medium">{report.greenhouse}</div>
+                            <div className="font-medium">{report.greenhouse_location}</div>
                           </div>
                           <div>
                             <span className="text-gray-600 dark:text-gray-400">Age:</span>

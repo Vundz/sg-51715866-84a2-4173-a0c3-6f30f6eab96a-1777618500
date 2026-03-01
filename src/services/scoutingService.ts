@@ -150,13 +150,13 @@ export const scoutingService = {
       .insert([{
         planting_id: reportData.planting_id,
         scouting_date: reportData.scouting_date,
-        greenhouse: reportData.greenhouse,
+        greenhouse_location: reportData.greenhouse, // Mapped from greenhouse
         crop_type: reportData.crop_type,
         variety: reportData.variety,
         seedling_age_days: reportData.seedling_age_days,
         scout_name: reportData.scout_name,
         weather_conditions: reportData.weather_conditions,
-        recent_spray: reportData.recent_spray,
+        recent_spray_applied: reportData.recent_spray, // Mapped from recent_spray
         spray_chemical_name: reportData.spray_chemical_name || null,
         spray_application_date: reportData.spray_application_date || null,
         overall_health_rating: reportData.overall_health_rating,
@@ -176,11 +176,11 @@ export const scoutingService = {
         .insert(
           presentPests.map(pest => ({
             report_id: report.id,
-            pest_type: pest.pest_type,
+            pest_name: pest.pest_type, // Mapped from pest_type
             present: pest.present,
             severity: pest.severity || null,
-            trays_affected_percent: pest.trays_affected_percent || null,
-            location_pattern: pest.location_pattern || null,
+            percent_trays_affected: pest.trays_affected_percent || null, // Mapped from trays_affected_percent
+            distribution_pattern: pest.location_pattern || null, // Mapped from location_pattern
             action_required: pest.action_required || null,
           }))
         );
@@ -196,10 +196,10 @@ export const scoutingService = {
         .insert(
           presentDiseases.map(disease => ({
             report_id: report.id,
-            disease_type: disease.disease_type,
+            disease_name: disease.disease_type, // Mapped from disease_type
             present: disease.present,
             severity: disease.severity || null,
-            trays_affected_percent: disease.trays_affected_percent || null,
+            percent_trays_affected: disease.trays_affected_percent || null, // Mapped from trays_affected_percent
             notes: disease.notes || null,
             recommended_action: disease.recommended_action || null,
           }))
@@ -219,6 +219,7 @@ export const scoutingService = {
             severity: nutrient.severity,
             suspected_deficiency: nutrient.suspected_deficiency,
             notes: nutrient.notes || null,
+            percent_affected: null // Added missing required field (can be null based on schema)
           }))
         );
 
@@ -237,13 +238,13 @@ export const scoutingService = {
       .from("scouting_reports")
       .update({
         scouting_date: updates.scouting_date,
-        greenhouse: updates.greenhouse,
+        greenhouse_location: updates.greenhouse, // Mapped
         crop_type: updates.crop_type,
         variety: updates.variety,
         seedling_age_days: updates.seedling_age_days,
         scout_name: updates.scout_name,
         weather_conditions: updates.weather_conditions,
-        recent_spray: updates.recent_spray,
+        recent_spray_applied: updates.recent_spray, // Mapped
         spray_chemical_name: updates.spray_chemical_name || null,
         spray_application_date: updates.spray_application_date || null,
         overall_health_rating: updates.overall_health_rating,
@@ -269,11 +270,11 @@ export const scoutingService = {
         await supabase.from("scouting_pests").insert(
           presentPests.map(pest => ({
             report_id: id,
-            pest_type: pest.pest_type,
+            pest_name: pest.pest_type, // Mapped
             present: pest.present,
             severity: pest.severity || null,
-            trays_affected_percent: pest.trays_affected_percent || null,
-            location_pattern: pest.location_pattern || null,
+            percent_trays_affected: pest.trays_affected_percent || null, // Mapped
+            distribution_pattern: pest.location_pattern || null, // Mapped
             action_required: pest.action_required || null,
           }))
         );
@@ -286,10 +287,10 @@ export const scoutingService = {
         await supabase.from("scouting_diseases").insert(
           presentDiseases.map(disease => ({
             report_id: id,
-            disease_type: disease.disease_type,
+            disease_name: disease.disease_type, // Mapped
             present: disease.present,
             severity: disease.severity || null,
-            trays_affected_percent: disease.trays_affected_percent || null,
+            percent_trays_affected: disease.trays_affected_percent || null, // Mapped
             notes: disease.notes || null,
             recommended_action: disease.recommended_action || null,
           }))
@@ -346,14 +347,14 @@ export const scoutingService = {
    */
   hasCriticalIssues(report: ScoutingReportWithDetails): boolean {
     // Check for damping off > 5%
-    const dampingOff = report.scouting_diseases?.find(d => d.disease_type === "Damping Off");
-    if (dampingOff && dampingOff.present && (dampingOff.trays_affected_percent || 0) > 5) {
+    const dampingOff = report.scouting_diseases?.find(d => d.disease_name === "Damping Off"); // Corrected property
+    if (dampingOff && dampingOff.present && (dampingOff.percent_trays_affected || 0) > 5) { // Corrected property
       return true;
     }
 
     // Check for any pest > 10%
     const criticalPest = report.scouting_pests?.some(
-      p => p.present && (p.trays_affected_percent || 0) > 10
+      p => p.present && (p.percent_trays_affected || 0) > 10 // Corrected property
     );
     if (criticalPest) return true;
 
@@ -373,28 +374,28 @@ export const scoutingService = {
     const alerts: string[] = [];
 
     // Damping off alert
-    const dampingOff = report.scouting_diseases?.find(d => d.disease_type === "Damping Off");
-    if (dampingOff && dampingOff.present && (dampingOff.trays_affected_percent || 0) > 5) {
+    const dampingOff = report.scouting_diseases?.find(d => d.disease_name === "Damping Off"); // Corrected property
+    if (dampingOff && dampingOff.present && (dampingOff.percent_trays_affected || 0) > 5) { // Corrected property
       alerts.push("🚨 CRITICAL: Damping Off detected in >5% of trays - Immediate intervention required!");
     }
 
     // Root rot drainage check
-    const rootRot = report.scouting_diseases?.find(d => d.disease_type === "Root Rot");
+    const rootRot = report.scouting_diseases?.find(d => d.disease_name === "Root Rot"); // Corrected property
     if (rootRot && rootRot.present) {
       alerts.push("⚠️ Root Rot detected - Check drainage system immediately");
     }
 
     // High pest pressure
     report.scouting_pests?.forEach(pest => {
-      if (pest.present && (pest.trays_affected_percent || 0) > 10) {
-        alerts.push(`⚠️ ${pest.pest_type} affecting >10% of trays - Action required`);
+      if (pest.present && (pest.percent_trays_affected || 0) > 10) { // Corrected property
+        alerts.push(`⚠️ ${pest.pest_name} affecting >10% of trays - Action required`); // Corrected property
       }
     });
 
     // Severe diseases
     report.scouting_diseases?.forEach(disease => {
       if (disease.present && disease.severity === 3) {
-        alerts.push(`⚠️ HIGH severity ${disease.disease_type} detected`);
+        alerts.push(`⚠️ HIGH severity ${disease.disease_name} detected`); // Corrected property
       }
     });
 
