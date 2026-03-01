@@ -27,7 +27,8 @@ import {
   Ruler,
   Building2,
   Calculator,
-  Beaker
+  Beaker,
+  Search
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ThemeSwitch } from "./ThemeSwitch";
@@ -75,6 +76,7 @@ export function Sidebar() {
       icon: Briefcase,
       items: [
         { label: "Treatments", href: "/treatments", icon: TestTube2 },
+        { label: "Scouting", href: "/scouting", icon: Search },
         { label: "Inventory", href: "/inventory", icon: Box },
         { label: "Production Calculator", href: "/production/bom", icon: Calculator },
         { label: "Chemical Calculator", href: "/production/calculator", icon: Beaker },
