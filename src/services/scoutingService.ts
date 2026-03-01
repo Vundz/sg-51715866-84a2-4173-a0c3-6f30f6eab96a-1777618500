@@ -34,7 +34,7 @@ export interface CreateScoutingReportData {
   seedling_age_days: number;
   scout_name: string;
   weather_conditions: string;
-  recent_spray: boolean;
+  recent_spray?: boolean;
   spray_chemical_name?: string;
   spray_application_date?: string;
   overall_health_rating: number;

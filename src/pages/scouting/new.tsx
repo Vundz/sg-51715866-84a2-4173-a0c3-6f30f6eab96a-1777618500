@@ -200,7 +200,32 @@ export default function NewScoutingReport() {
     setLoading(true);
 
     try {
-      await scoutingService.createReport(formData);
+      // Determine if there was a recent spray (within last 7 days)
+      const hasRecentSpray = recentTreatments.length > 0;
+      
+      // Get the most recent treatment details if available
+      let sprayData = {};
+      if (hasRecentSpray) {
+        // recentTreatments is already sorted by date desc from the service
+        const latestTreatment = recentTreatments[0];
+        sprayData = {
+          recent_spray: true,
+          spray_chemical_name: latestTreatment.chemical_name,
+          spray_application_date: latestTreatment.treatment_date
+        };
+      } else {
+        sprayData = {
+          recent_spray: false,
+          spray_chemical_name: null,
+          spray_application_date: null
+        };
+      }
+
+      await scoutingService.createReport({
+        ...formData,
+        ...sprayData
+      });
+      
       toast({
         title: "Success",
         description: "Scouting report submitted successfully",
