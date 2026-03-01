@@ -497,17 +497,17 @@ export default function NewScoutingReport() {
                     </div>
 
                     {/* Logic-based alerts */}
-                    {disease.disease_type === "Damping Off" && (disease.trays_affected_percent > 5) && (
+                    {disease.disease_type === "Damping Off" && disease.trays_affected_percent > 5 ? (
                       <div className="col-span-full">
                         <Alert variant="destructive">
                           <AlertTriangle className="h-4 w-4" />
                           <AlertTitle>Critical Alert</AlertTitle>
                           <AlertDescription>
-                            Damping Off exceeds 5% - Immediate Intervention Required!
+                            Damping Off exceeds 5 percent - Immediate Intervention Required!
                           </AlertDescription>
                         </Alert>
                       </div>
-                    )}
+                    ) : null}
 
                     {disease.disease_type === "Root Rot" && (
                       <div className="col-span-full">
