@@ -503,7 +503,7 @@ export default function NewScoutingReport() {
                           <AlertTriangle className="h-4 w-4" />
                           <AlertTitle>Critical Alert</AlertTitle>
                           <AlertDescription>
-                            Damping Off &gt; 5% - Immediate Intervention Required!
+                            Damping Off {'>'} 5% - Immediate Intervention Required!
                           </AlertDescription>
                         </Alert>
                       </div>
