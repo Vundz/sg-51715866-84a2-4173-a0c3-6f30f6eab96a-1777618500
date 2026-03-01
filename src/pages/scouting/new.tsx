@@ -89,12 +89,12 @@ export default function NewScoutingReport() {
   const loadData = async () => {
     try {
       const [plantingsData, locationsData] = await Promise.all([
-        plantingService.getPlantings(),
+        plantingService.getPlantingsWithDetails(),
         locationService.getLocations()
       ]);
       
-      // Filter only active plantings (germination or growth stage)
-      setPlantings(plantingsData.filter(p => p.status === 'germination' || p.status === 'growth'));
+      // Filter only active plantings (status = 'active')
+      setPlantings(plantingsData.filter(p => p.status === 'active'));
       setLocations(locationsData);
     } catch (error) {
       console.error("Error loading data:", error);
@@ -124,7 +124,7 @@ export default function NewScoutingReport() {
     const planting = plantings.find(p => p.id === plantingId);
     if (planting) {
       // Calculate age
-      const plantedDate = new Date(planting.planting_date);
+      const plantedDate = new Date(planting.date_planted);
       const today = new Date();
       const ageInDays = Math.floor((today.getTime() - plantedDate.getTime()) / (1000 * 3600 * 24));
 
