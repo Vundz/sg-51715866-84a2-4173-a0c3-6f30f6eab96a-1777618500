@@ -1001,6 +1001,213 @@ export type Database = {
           },
         ]
       }
+      scouting_diseases: {
+        Row: {
+          created_at: string | null
+          disease_name: string
+          id: string
+          notes: string | null
+          percent_trays_affected: number | null
+          present: boolean | null
+          recommended_action: string | null
+          report_id: string | null
+          severity: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          disease_name: string
+          id?: string
+          notes?: string | null
+          percent_trays_affected?: number | null
+          present?: boolean | null
+          recommended_action?: string | null
+          report_id?: string | null
+          severity?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          disease_name?: string
+          id?: string
+          notes?: string | null
+          percent_trays_affected?: number | null
+          present?: boolean | null
+          recommended_action?: string | null
+          report_id?: string | null
+          severity?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scouting_diseases_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "scouting_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scouting_nutrients: {
+        Row: {
+          created_at: string | null
+          id: string
+          notes: string | null
+          percent_affected: number | null
+          report_id: string | null
+          severity: number | null
+          suspected_deficiency: string | null
+          symptom: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          percent_affected?: number | null
+          report_id?: string | null
+          severity?: number | null
+          suspected_deficiency?: string | null
+          symptom: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          percent_affected?: number | null
+          report_id?: string | null
+          severity?: number | null
+          suspected_deficiency?: string | null
+          symptom?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scouting_nutrients_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "scouting_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scouting_pests: {
+        Row: {
+          action_required: string | null
+          created_at: string | null
+          distribution_pattern: string | null
+          id: string
+          percent_trays_affected: number | null
+          pest_name: string
+          present: boolean | null
+          report_id: string | null
+          severity: number | null
+        }
+        Insert: {
+          action_required?: string | null
+          created_at?: string | null
+          distribution_pattern?: string | null
+          id?: string
+          percent_trays_affected?: number | null
+          pest_name: string
+          present?: boolean | null
+          report_id?: string | null
+          severity?: number | null
+        }
+        Update: {
+          action_required?: string | null
+          created_at?: string | null
+          distribution_pattern?: string | null
+          id?: string
+          percent_trays_affected?: number | null
+          pest_name?: string
+          present?: boolean | null
+          report_id?: string | null
+          severity?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scouting_pests_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "scouting_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scouting_reports: {
+        Row: {
+          batch_number: string | null
+          created_at: string | null
+          created_by: string | null
+          crop_type: string
+          general_notes: string | null
+          greenhouse_location: string
+          id: string
+          overall_health_rating: number | null
+          planting_id: string | null
+          recent_spray_applied: boolean | null
+          scout_name: string
+          scouting_date: string
+          seedling_age_days: number | null
+          spray_application_date: string | null
+          spray_chemical_name: string | null
+          updated_at: string | null
+          variety: string | null
+          weather_conditions: string | null
+        }
+        Insert: {
+          batch_number?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          crop_type: string
+          general_notes?: string | null
+          greenhouse_location: string
+          id?: string
+          overall_health_rating?: number | null
+          planting_id?: string | null
+          recent_spray_applied?: boolean | null
+          scout_name: string
+          scouting_date: string
+          seedling_age_days?: number | null
+          spray_application_date?: string | null
+          spray_chemical_name?: string | null
+          updated_at?: string | null
+          variety?: string | null
+          weather_conditions?: string | null
+        }
+        Update: {
+          batch_number?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          crop_type?: string
+          general_notes?: string | null
+          greenhouse_location?: string
+          id?: string
+          overall_health_rating?: number | null
+          planting_id?: string | null
+          recent_spray_applied?: boolean | null
+          scout_name?: string
+          scouting_date?: string
+          seedling_age_days?: number | null
+          spray_application_date?: string | null
+          spray_chemical_name?: string | null
+          updated_at?: string | null
+          variety?: string | null
+          weather_conditions?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scouting_reports_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scouting_reports_planting_id_fkey"
+            columns: ["planting_id"]
+            isOneToOne: false
+            referencedRelation: "plantings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_transactions: {
         Row: {
           created_at: string | null
