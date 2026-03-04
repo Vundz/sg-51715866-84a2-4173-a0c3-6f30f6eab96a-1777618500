@@ -89,8 +89,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${serviceRoleKey}`,
-        "apikey": serviceRoleKey
+        "Authorization": `Bearer ${serviceRoleKey}`
       },
       body: JSON.stringify({
         password: newPassword,
