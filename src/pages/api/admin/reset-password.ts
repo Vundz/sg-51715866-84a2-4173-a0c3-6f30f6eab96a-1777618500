@@ -8,52 +8,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const { userId, newPassword } = req.body;
+    const token = req.headers.authorization?.replace("Bearer ", "");
 
-    // Validate input
+    // Validation
     if (!userId || !newPassword) {
-      return res.status(400).json({ error: "Missing userId or newPassword" });
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
-    if (newPassword.length < 8) {
-      return res.status(400).json({ error: "Password must be at least 8 characters" });
-    }
-
-    // Check environment variables
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      console.error("Missing environment variables:", { 
-        hasUrl: !!supabaseUrl, 
-        hasKey: !!serviceRoleKey,
-        keyLength: serviceRoleKey?.length 
-      });
-      return res.status(500).json({ 
-        error: "Server configuration error",
-        details: "Missing Supabase credentials"
-      });
-    }
-
-    // Get admin token from header
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
+    if (!token) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const token = authHeader.substring(7);
+    // Get environment variables
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // Verify admin user
-    const supabase = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-      auth: { persistSession: false },
+    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+
+    // Verify user is admin
+    const supabase = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: `Bearer ${token}` } }
     });
 
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
     if (userError || !user) {
-      return res.status(401).json({ error: "Invalid session" });
+      return res.status(401).json({ error: "Invalid token" });
     }
 
-    // Check admin role
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("role")
@@ -61,18 +46,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .single();
 
     if (profileError || profile?.role !== "admin") {
-      return res.status(403).json({ error: "Admin access required" });
+      return res.status(403).json({ error: "Forbidden: Admin access required" });
     }
 
     // Extract project ref from URL
-    const projectRef = supabaseUrl.split("//")[1]?.split(".")[0];
-    if (!projectRef) {
-      return res.status(500).json({ error: "Invalid Supabase URL" });
-    }
+    const projectRef = supabaseUrl.split("//")[1].split(".")[0];
 
-    // Update password using Management API directly
-    console.log("Updating password for user:", userId);
-    
+    // Use Management API directly to update password
     const response = await fetch(
       `https://${projectRef}.supabase.co/auth/v1/admin/users/${userId}`,
       {
@@ -82,31 +62,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           "Authorization": `Bearer ${serviceRoleKey}`,
           "apikey": serviceRoleKey
         },
-        body: JSON.stringify({ password: newPassword })
+        body: JSON.stringify({
+          password: newPassword,
+          email_confirm: true
+        })
       }
     );
 
-    const responseData = await response.json();
-    console.log("Password update response:", { status: response.status, data: responseData });
-
     if (!response.ok) {
-      console.error("Password update failed:", responseData);
-      return res.status(response.status).json({ 
-        error: responseData.msg || responseData.message || "Failed to update password",
-        details: responseData
+      const errorData = await response.json();
+      console.error("Password reset failed:", errorData);
+      return res.status(response.status).json({
+        error: "Failed to update password",
+        details: errorData
       });
     }
 
-    return res.status(200).json({ 
-      success: true, 
-      message: "Password updated successfully" 
+    const userData = await response.json();
+    return res.status(200).json({
+      success: true,
+      message: "Password updated successfully",
+      user: userData
     });
 
   } catch (error: any) {
-    console.error("Reset password error:", error);
-    return res.status(500).json({ 
-      error: error.message || "Internal server error",
-      details: error.toString()
+    console.error("Password reset error:", error);
+    return res.status(500).json({
+      error: error.message || "Internal server error"
     });
   }
 }
