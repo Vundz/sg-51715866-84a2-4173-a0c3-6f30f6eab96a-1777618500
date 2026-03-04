@@ -23,6 +23,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: "Server configuration error: Missing Service Role Key. Please add SUPABASE_SERVICE_ROLE_KEY to your .env.local file and restart the server." });
     }
 
+    if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      console.error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY");
+      return res.status(500).json({ error: "Server configuration error: Missing Anon Key" });
+    }
+
     // Get the user's session token to verify they're authenticated
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -31,20 +36,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const token = authHeader.split(" ")[1];
 
-    // Create admin client with SERVICE ROLE key for all operations
-    const supabaseAdmin = createClient(
+    // Create regular client to verify user token (NOT admin client)
+    const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         auth: {
-          autoRefreshToken: false,
           persistSession: false,
+        },
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
       }
     );
 
     // Verify the user's token and get their user ID
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
       console.error("Auth verification failed:", authError);
@@ -52,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Check if the authenticated user is an admin
-    const { data: profile, error: profileError } = await supabaseAdmin
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
@@ -81,6 +90,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     console.log("Updating password for user:", userId);
+
+    // NOW use admin client for the password update operation
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
 
     // Update the user's password using admin privileges
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
