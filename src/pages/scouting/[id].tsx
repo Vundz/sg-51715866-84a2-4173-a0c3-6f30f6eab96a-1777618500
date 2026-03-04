@@ -56,7 +56,7 @@ export default function ScoutingReportDetailPage() {
   const loadReport = async () => {
     try {
       setLoading(true);
-      const data = await scoutingService.getReportById(id as string);
+      const data = await scoutingService.getReport(id as string);
       setReport(data);
     } catch (error) {
       console.error("Error loading report:", error);
@@ -224,7 +224,7 @@ export default function ScoutingReportDetailPage() {
           </div>
 
           {/* Recent Spray Information */}
-          {report.recent_spray && (
+          {report.recent_spray_applied && (
             <div className="mt-6 pt-6 border-t">
               <h3 className="font-semibold mb-3 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-orange-600" />
@@ -271,7 +271,7 @@ export default function ScoutingReportDetailPage() {
               {report.scouting_pests
                 .filter(pest => pest.present)
                 .map((pest, idx) => {
-                  const isArchived = archivedItems.pests.includes(pest.pest_type);
+                  const isArchived = archivedItems.pests.includes(pest.pest_name);
                   const severityBadge = getSeverityBadge(pest.severity);
                   const isActionArchived = pest.action_required && archivedItems.actions.includes(pest.action_required);
 
@@ -279,7 +279,7 @@ export default function ScoutingReportDetailPage() {
                     <div key={idx} className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-900/50">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-lg">{pest.pest_type}</h3>
+                          <h3 className="font-semibold text-lg">{pest.pest_name}</h3>
                           {isArchived && (
                             <Badge variant="outline" className="gap-1 text-xs">
                               <Archive className="w-3 h-3" />
@@ -295,11 +295,11 @@ export default function ScoutingReportDetailPage() {
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
                           <span className="text-gray-600 dark:text-gray-400">Trays Affected:</span>
-                          <div className="font-medium">{pest.trays_affected_percent}%</div>
+                          <div className="font-medium">{pest.percent_trays_affected}%</div>
                         </div>
                         <div>
                           <span className="text-gray-600 dark:text-gray-400">Pattern:</span>
-                          <div className="font-medium">{pest.location_pattern}</div>
+                          <div className="font-medium">{pest.distribution_pattern}</div>
                         </div>
                         <div className="col-span-2">
                           <span className="text-gray-600 dark:text-gray-400">Action Required:</span>
@@ -315,7 +315,7 @@ export default function ScoutingReportDetailPage() {
                         </div>
                       </div>
 
-                      {pest.trays_affected_percent > 10 && (
+                      {(pest.percent_trays_affected || 0) > 10 && (
                         <Alert className="mt-3 bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800">
                           <AlertDescription className="text-red-800 dark:text-red-200">
                             ⚠️ Exceeds 10% threshold - Immediate action required
@@ -359,7 +359,7 @@ export default function ScoutingReportDetailPage() {
               {report.scouting_diseases
                 .filter(disease => disease.present)
                 .map((disease, idx) => {
-                  const isArchived = archivedItems.diseases.includes(disease.disease_type);
+                  const isArchived = archivedItems.diseases.includes(disease.disease_name);
                   const severityBadge = getSeverityBadge(disease.severity);
                   const isActionArchived = disease.recommended_action && archivedItems.actions.includes(disease.recommended_action);
 
@@ -367,7 +367,7 @@ export default function ScoutingReportDetailPage() {
                     <div key={idx} className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-900/50">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-lg">{disease.disease_type}</h3>
+                          <h3 className="font-semibold text-lg">{disease.disease_name}</h3>
                           {isArchived && (
                             <Badge variant="outline" className="gap-1 text-xs">
                               <Archive className="w-3 h-3" />
@@ -383,7 +383,7 @@ export default function ScoutingReportDetailPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-3">
                         <div>
                           <span className="text-gray-600 dark:text-gray-400">Trays Affected:</span>
-                          <div className="font-medium">{disease.trays_affected_percent}%</div>
+                          <div className="font-medium">{disease.percent_trays_affected}%</div>
                         </div>
                         <div>
                           <span className="text-gray-600 dark:text-gray-400">Recommended Action:</span>
@@ -406,7 +406,7 @@ export default function ScoutingReportDetailPage() {
                         </div>
                       )}
 
-                      {disease.disease_type === "Damping Off" && disease.trays_affected_percent > 5 && (
+                      {disease.disease_name === "Damping Off" && (disease.percent_trays_affected || 0) > 5 && (
                         <Alert variant="destructive" className="mt-3">
                           <AlertTriangle className="h-4 w-4" />
                           <AlertTitle>Critical Alert</AlertTitle>
