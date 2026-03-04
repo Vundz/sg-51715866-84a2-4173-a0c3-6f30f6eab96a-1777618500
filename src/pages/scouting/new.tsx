@@ -615,11 +615,22 @@ export default function NewScoutingReport() {
 
                     <div className="space-y-2">
                       <Label>Action Required</Label>
-                      <Input 
+                      <Select
                         value={pest.action_required}
-                        onChange={e => updatePest(index, "action_required", e.target.value)}
-                        placeholder="Recommended treatment..."
-                      />
+                        onValueChange={v => updatePest(index, "action_required", v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select action..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {actions.map(action => (
+                            <SelectItem key={action.id} value={action.name}>
+                              {action.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 )}
@@ -709,11 +720,30 @@ export default function NewScoutingReport() {
 
                     <div className="space-y-2 col-span-full">
                       <Label>Notes / Recommended Action</Label>
-                      <Textarea 
-                        value={disease.notes}
-                        onChange={e => updateDisease(index, "notes", e.target.value)}
-                        placeholder="Describe symptoms and treatment..."
-                      />
+                      <div className="space-y-2">
+                        <Select
+                          value={disease.recommended_action}
+                          onValueChange={v => updateDisease(index, "recommended_action", v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select recommended action..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">None</SelectItem>
+                            {actions.map(action => (
+                              <SelectItem key={action.id} value={action.name}>
+                                {action.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Textarea 
+                          value={disease.notes}
+                          onChange={e => updateDisease(index, "notes", e.target.value)}
+                          placeholder="Additional notes or details..."
+                          className="min-h-[80px]"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
