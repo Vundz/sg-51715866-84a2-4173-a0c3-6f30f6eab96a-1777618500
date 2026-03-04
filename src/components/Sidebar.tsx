@@ -103,6 +103,7 @@ export function Sidebar() {
         { label: "User Management", href: "/admin/user-management", icon: Users },
         { label: "Roles & Permissions", href: "/admin/roles-permissions", icon: Shield },
         { label: "Inventory Settings", href: "/settings/inventory", icon: Box },
+        { label: "Scouting Settings", href: "/settings/scouting", icon: Search },
       ],
     },
   ];

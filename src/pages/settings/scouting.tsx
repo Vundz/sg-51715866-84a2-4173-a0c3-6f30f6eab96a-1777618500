@@ -15,6 +15,23 @@ import { useToast } from "@/hooks/use-toast";
 import { scoutingSettingsService } from "@/services/scoutingSettingsService";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Plus, Edit, Trash2, Download, Archive, ArchiveRestore, GripVertical, Bug, Biohazard, Leaf, Zap, Search } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 type PestType = {
   id: string;
@@ -30,6 +47,82 @@ type NutrientType = PestType;
 type ActionType = PestType & { category: string };
 
 type ItemType = "pest" | "disease" | "nutrient" | "action";
+
+// Sortable Row Component
+function SortableRow({ 
+  item, 
+  type, 
+  onEdit, 
+  onArchive, 
+  onDelete 
+}: { 
+  item: any; 
+  type: ItemType; 
+  onEdit: () => void; 
+  onArchive: () => void; 
+  onDelete: () => void; 
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <TableRow ref={setNodeRef} style={style}>
+      <TableCell>
+        <div {...attributes} {...listeners} className="cursor-move">
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </TableCell>
+      <TableCell className="font-medium">{item.name}</TableCell>
+      <TableCell className="text-sm text-muted-foreground">
+        {item.description || "—"}
+      </TableCell>
+      {type === "action" && (
+        <TableCell>
+          <Badge variant="outline">
+            {item.category}
+          </Badge>
+        </TableCell>
+      )}
+      <TableCell className="text-right">
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onEdit}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onArchive}
+          >
+            <Archive className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
 
 export default function ScoutingSettings() {
   const router = useRouter();
@@ -68,6 +161,14 @@ export default function ScoutingSettings() {
 
   // Active tab
   const [activeTab, setActiveTab] = useState("pests");
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Check admin permissions
   useEffect(() => {
@@ -130,6 +231,79 @@ export default function ScoutingSettings() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle drag end
+  const handleDragEnd = async (event: DragEndEvent, type: ItemType) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    let items: any[];
+    let setItems: (items: any[]) => void;
+
+    switch (type) {
+      case "pest":
+        items = getActiveItems(pestTypes);
+        setItems = (newItems) => setPestTypes([...newItems, ...getArchivedItems(pestTypes)]);
+        break;
+      case "disease":
+        items = getActiveItems(diseaseTypes);
+        setItems = (newItems) => setDiseaseTypes([...newItems, ...getArchivedItems(diseaseTypes)]);
+        break;
+      case "nutrient":
+        items = getActiveItems(nutrientTypes);
+        setItems = (newItems) => setNutrientTypes([...newItems, ...getArchivedItems(nutrientTypes)]);
+        break;
+      case "action":
+        items = getActiveItems(actionTypes);
+        setItems = (newItems) => setActionTypes([...newItems, ...getArchivedItems(actionTypes)]);
+        break;
+      default:
+        return;
+    }
+
+    const oldIndex = items.findIndex((item) => item.id === active.id);
+    const newIndex = items.findIndex((item) => item.id === over.id);
+
+    const newItems = arrayMove(items, oldIndex, newIndex);
+    setItems(newItems);
+
+    // Save new order to database
+    try {
+      const orderedIds = newItems.map((item) => item.id);
+      
+      switch (type) {
+        case "pest":
+          await scoutingSettingsService.reorderPestTypes(orderedIds);
+          break;
+        case "disease":
+          await scoutingSettingsService.reorderDiseaseTypes(orderedIds);
+          break;
+        case "nutrient":
+          await scoutingSettingsService.reorderNutrientTypes(orderedIds);
+          break;
+        case "action":
+          await scoutingSettingsService.reorderActions(orderedIds);
+          break;
+      }
+
+      toast({
+        title: "Order Updated",
+        description: `${capitalize(type)} types reordered successfully.`,
+      });
+    } catch (error) {
+      console.error("Reorder error:", error);
+      toast({
+        title: "Error",
+        description: `Failed to save new order.`,
+        variant: "destructive",
+      });
+      // Reload to restore correct order
+      loadAllData();
     }
   };
 
@@ -488,14 +662,14 @@ export default function ScoutingSettings() {
           </div>
         </div>
 
-        {/* Active Items */}
+        {/* Active Items with Drag and Drop */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
               Active {capitalize(type)}s ({activeItems.length})
             </CardTitle>
             <CardDescription>
-              These items appear in the scouting form dropdowns
+              Drag items to reorder. These items appear in the scouting form dropdowns.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -504,62 +678,40 @@ export default function ScoutingSettings() {
                 No active {type}s found
               </p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12"></TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Description</TableHead>
-                    {type === "action" && <TableHead>Category</TableHead>}
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activeItems.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>
-                        <GripVertical className="h-4 w-4 text-muted-foreground cursor-move" />
-                      </TableCell>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {item.description || "—"}
-                      </TableCell>
-                      {type === "action" && (
-                        <TableCell>
-                          <Badge variant="outline">
-                            {item.category}
-                          </Badge>
-                        </TableCell>
-                      )}
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditModal(type, item)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleArchiveToggle(type, item)}
-                          >
-                            <Archive className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openDeleteModal(type, item)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event) => handleDragEnd(event, type)}
+              >
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12"></TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Description</TableHead>
+                      {type === "action" && <TableHead>Category</TableHead>}
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    <SortableContext
+                      items={activeItems.map((item) => item.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {activeItems.map((item) => (
+                        <SortableRow
+                          key={item.id}
+                          item={item}
+                          type={type}
+                          onEdit={() => openEditModal(type, item)}
+                          onArchive={() => handleArchiveToggle(type, item)}
+                          onDelete={() => openDeleteModal(type, item)}
+                        />
+                      ))}
+                    </SortableContext>
+                  </TableBody>
+                </Table>
+              </DndContext>
             )}
           </CardContent>
         </Card>
