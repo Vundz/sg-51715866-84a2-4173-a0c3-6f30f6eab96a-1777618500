@@ -11,45 +11,13 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { scoutingService, CreateScoutingReportData } from "@/services/scoutingService";
+import { scoutingSettingsService } from "@/services/scoutingSettingsService";
 import { plantingService } from "@/services/plantingService";
 import { locationService } from "@/services/locationService";
 import { treatmentService } from "@/services/treatmentService";
 import { Bug, Leaf, Thermometer, AlertTriangle, ArrowLeft, Save, Trash2, Search } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
-
-// Define initial empty state structure
-const INITIAL_PESTS = [
-  "Aphids", "Whiteflies", "Thrips", "Cutworms", "Fungus Gnats", "Leaf Miners"
-].map(pest => ({
-  pest_type: pest,
-  present: false,
-  severity: 1,
-  trays_affected_percent: 0,
-  location_pattern: "Random",
-  action_required: ""
-}));
-
-const INITIAL_DISEASES = [
-  "Damping Off", "Powdery Mildew", "Downy Mildew", "Botrytis", "Root Rot"
-].map(disease => ({
-  disease_type: disease,
-  present: false,
-  severity: 1,
-  trays_affected_percent: 0,
-  notes: "",
-  recommended_action: ""
-}));
-
-const SYMPTOMS = [
-  "Yellow older leaves",
-  "Interveinal yellowing",
-  "Purple leaves",
-  "Burnt leaf edges",
-  "Deformed new leaves",
-  "Stunted growth",
-  "Uneven growth"
-];
 
 export default function NewScoutingReport() {
   const router = useRouter();
@@ -61,6 +29,12 @@ export default function NewScoutingReport() {
   const [locations, setLocations] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [recentTreatments, setRecentTreatments] = useState<any[]>([]);
+  
+  // Dynamic data from settings
+  const [pestTypes, setPestTypes] = useState<any[]>([]);
+  const [diseaseTypes, setDiseaseTypes] = useState<any[]>([]);
+  const [nutrientTypes, setNutrientTypes] = useState<any[]>([]);
+  const [actions, setActions] = useState<any[]>([]);
   
   // Form State
   const [formData, setFormData] = useState<CreateScoutingReportData>({
@@ -74,8 +48,8 @@ export default function NewScoutingReport() {
     weather_conditions: "",
     overall_health_rating: 3,
     general_notes: "",
-    pests: INITIAL_PESTS,
-    diseases: INITIAL_DISEASES,
+    pests: [],
+    diseases: [],
     nutrients: []
   });
 
@@ -87,14 +61,45 @@ export default function NewScoutingReport() {
 
   const loadData = async () => {
     try {
-      const [plantingsData, locationsData] = await Promise.all([
+      const [plantingsData, locationsData, pestsData, diseasesData, nutrientsData, actionsData] = await Promise.all([
         plantingService.getPlantingsWithDetails(),
-        locationService.getLocations()
+        locationService.getLocations(),
+        scoutingSettingsService.getActivePestTypes(),
+        scoutingSettingsService.getActiveDiseaseTypes(),
+        scoutingSettingsService.getActiveNutrientTypes(),
+        scoutingSettingsService.getActiveActions()
       ]);
       
       // Filter only active plantings (status = 'active')
       setPlantings(plantingsData.filter(p => p.status === 'active'));
       setLocations(locationsData);
+      
+      // Set dynamic data from database
+      setPestTypes(pestsData);
+      setDiseaseTypes(diseasesData);
+      setNutrientTypes(nutrientsData);
+      setActions(actionsData);
+      
+      // Initialize form pests array with dynamic data
+      setFormData(prev => ({
+        ...prev,
+        pests: pestsData.map(pest => ({
+          pest_type: pest.name,
+          present: false,
+          severity: 1,
+          trays_affected_percent: 0,
+          location_pattern: "Random",
+          action_required: ""
+        })),
+        diseases: diseasesData.map(disease => ({
+          disease_type: disease.name,
+          present: false,
+          severity: 1,
+          trays_affected_percent: 0,
+          notes: "",
+          recommended_action: ""
+        }))
+      }));
     } catch (error) {
       console.error("Error loading data:", error);
       toast({
@@ -172,6 +177,10 @@ export default function NewScoutingReport() {
       }));
     } else {
       setSelectedSymptoms(prev => [...prev, symptom]);
+      
+      // Find the matching nutrient type from database
+      const matchingNutrient = nutrientTypes.find(nt => nt.name === symptom);
+      
       setFormData(prev => ({
         ...prev,
         nutrients: [
@@ -179,7 +188,7 @@ export default function NewScoutingReport() {
           {
             symptom,
             severity: 1,
-            suspected_deficiency: scoutingService.getNutrientSuggestion(symptom),
+            suspected_deficiency: matchingNutrient?.description || scoutingService.getNutrientSuggestion(symptom),
             notes: ""
           }
         ]
@@ -720,71 +729,86 @@ export default function NewScoutingReport() {
           <CardContent className="space-y-6">
             <div className="space-y-4">
               <Label>Observed Symptoms (Select all that apply)</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {SYMPTOMS.map(symptom => (
-                  <div key={symptom} className="flex items-center space-x-2 border p-3 rounded-md hover:bg-slate-50 dark:hover:bg-slate-900 cursor-pointer" onClick={() => handleSymptomToggle(symptom)}>
-                    <Checkbox 
-                      id={`symptom-${symptom}`} 
-                      checked={selectedSymptoms.includes(symptom)}
-                      onCheckedChange={() => handleSymptomToggle(symptom)}
-                    />
-                    <label 
-                      htmlFor={`symptom-${symptom}`} 
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+              {nutrientTypes.length === 0 ? (
+                <Alert>
+                  <AlertDescription>
+                    No nutrient types configured. Please contact your administrator to add nutrient deficiency types in the settings.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {nutrientTypes.map(nutrient => (
+                    <div 
+                      key={nutrient.id} 
+                      className="flex items-center space-x-2 border p-3 rounded-md hover:bg-slate-50 dark:hover:bg-slate-900 cursor-pointer" 
+                      onClick={() => handleSymptomToggle(nutrient.name)}
                     >
-                      {symptom}
-                    </label>
-                  </div>
-                ))}
-              </div>
+                      <Checkbox 
+                        id={`symptom-${nutrient.id}`} 
+                        checked={selectedSymptoms.includes(nutrient.name)}
+                        onCheckedChange={() => handleSymptomToggle(nutrient.name)}
+                      />
+                      <label 
+                        htmlFor={`symptom-${nutrient.id}`} 
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {nutrient.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {formData.nutrients.length > 0 && (
               <div className="space-y-4 mt-6 border-t pt-6">
                 <h3 className="font-semibold text-lg">Deficiency Analysis</h3>
-                {formData.nutrients.map((nutrient, index) => (
-                  <div key={nutrient.symptom} className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-lg">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h4 className="font-bold text-yellow-800 dark:text-yellow-200">{nutrient.symptom}</h4>
-                        <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                          Suspected Deficiency: <span className="font-bold">{nutrient.suspected_deficiency}</span>
-                        </p>
+                {formData.nutrients.map((nutrient, index) => {
+                  const matchingType = nutrientTypes.find(nt => nt.name === nutrient.symptom);
+                  return (
+                    <div key={nutrient.symptom} className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-lg">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h4 className="font-bold text-yellow-800 dark:text-yellow-200">{nutrient.symptom}</h4>
+                          <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                            {matchingType?.description || nutrient.suspected_deficiency}
+                          </p>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => handleSymptomToggle(nutrient.symptom)}>
+                          <Trash2 className="w-4 h-4 text-gray-500" />
+                        </Button>
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => handleSymptomToggle(nutrient.symptom)}>
-                        <Trash2 className="w-4 h-4 text-gray-500" />
-                      </Button>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Severity</Label>
+                          <Select 
+                            value={nutrient.severity.toString()} 
+                            onValueChange={v => updateNutrient(index, "severity", parseInt(v))}
+                          >
+                            <SelectTrigger className="bg-white dark:bg-black">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">Low (1)</SelectItem>
+                              <SelectItem value="2">Medium (2)</SelectItem>
+                              <SelectItem value="3">High (3)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Notes</Label>
+                          <Input 
+                            value={nutrient.notes}
+                            onChange={e => updateNutrient(index, "notes", e.target.value)}
+                            placeholder="Corrective action..."
+                            className="bg-white dark:bg-black"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Severity</Label>
-                        <Select 
-                          value={nutrient.severity.toString()} 
-                          onValueChange={v => updateNutrient(index, "severity", parseInt(v))}
-                        >
-                          <SelectTrigger className="bg-white dark:bg-black">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="1">Low (1)</SelectItem>
-                            <SelectItem value="2">Medium (2)</SelectItem>
-                            <SelectItem value="3">High (3)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Notes</Label>
-                        <Input 
-                          value={nutrient.notes}
-                          onChange={e => updateNutrient(index, "notes", e.target.value)}
-                          placeholder="Corrective action..."
-                          className="bg-white dark:bg-black"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>

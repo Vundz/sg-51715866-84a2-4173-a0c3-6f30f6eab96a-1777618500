@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import Layout from "@/components/Layout";
+import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { scoutingSettingsService } from "@/services/scoutingSettingsService";
-import { Loader2, Plus, Edit, Trash2, Download, Archive, ArchiveRestore, GripVertical, Bug, Virus, Leaf, Zap, Search } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2, Plus, Edit, Trash2, Download, Archive, ArchiveRestore, GripVertical, Bug, Biohazard, Leaf, Zap, Search } from "lucide-react";
 
 type PestType = {
   id: string;
@@ -672,7 +673,7 @@ export default function ScoutingSettings() {
               Pest Types
             </TabsTrigger>
             <TabsTrigger value="diseases">
-              <Virus className="h-4 w-4 mr-2" />
+              <Biohazard className="h-4 w-4 mr-2" />
               Disease Types
             </TabsTrigger>
             <TabsTrigger value="nutrients">
@@ -690,7 +691,7 @@ export default function ScoutingSettings() {
           </TabsContent>
 
           <TabsContent value="diseases">
-            {renderCategoryTable("disease", diseaseTypes, <Virus className="h-5 w-5 text-primary" />)}
+            {renderCategoryTable("disease", diseaseTypes, <Biohazard className="h-5 w-5 text-primary" />)}
           </TabsContent>
 
           <TabsContent value="nutrients">
