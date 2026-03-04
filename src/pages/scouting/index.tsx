@@ -18,12 +18,14 @@ import {
   CheckCircle2,
   Calendar,
   LayoutGrid,
-  Table as TableIcon
+  Table as TableIcon,
+  Archive
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { scoutingService, ScoutingReportWithDetails } from "@/services/scoutingService";
+import { scoutingSettingsService } from "@/services/scoutingSettingsService";
 import { formatNumber } from "@/lib/format";
 
 export default function ScoutingReportsPage() {
@@ -36,10 +38,22 @@ export default function ScoutingReportsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [greenhouseFilter, setGreenhouseFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  const [archivedItems, setArchivedItems] = useState<{
+    pests: string[];
+    diseases: string[];
+    nutrients: string[];
+    actions: string[];
+  }>({
+    pests: [],
+    diseases: [],
+    nutrients: [],
+    actions: []
+  });
 
   useEffect(() => {
     if (user) {
       loadReports();
+      loadArchivedStatus();
     }
   }, [user]);
 
@@ -53,6 +67,27 @@ export default function ScoutingReportsPage() {
       toast({ title: "Error", description: "Failed to load scouting reports", variant: "destructive" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadArchivedStatus = async () => {
+    try {
+      // Load all items including inactive ones to check archived status
+      const [allPests, allDiseases, allNutrients, allActions] = await Promise.all([
+        scoutingSettingsService.getAllPestTypes(),
+        scoutingSettingsService.getAllDiseaseTypes(),
+        scoutingSettingsService.getAllNutrientTypes(),
+        scoutingSettingsService.getAllActions()
+      ]);
+
+      setArchivedItems({
+        pests: allPests.filter(p => !p.is_active).map(p => p.name),
+        diseases: allDiseases.filter(d => !d.is_active).map(d => d.name),
+        nutrients: allNutrients.filter(n => !n.is_active).map(n => n.name),
+        actions: allActions.filter(a => !a.is_active).map(a => a.name)
+      });
+    } catch (error) {
+      console.error("Error loading archived status:", error);
     }
   };
 
@@ -287,13 +322,34 @@ export default function ScoutingReportsPage() {
                                   </Badge>
                                 )}
                                 {pestCount > 0 && (
-                                  <Badge variant="secondary">{pestCount} Pests</Badge>
+                                  <div className="flex items-center gap-1">
+                                    <Badge variant="secondary">{pestCount} Pests</Badge>
+                                    {report.scouting_pests?.some(p => p.present && archivedItems.pests.includes(p.pest_name)) && (
+                                      <Badge variant="outline" className="gap-1 text-xs">
+                                        <Archive className="w-3 h-3" />
+                                      </Badge>
+                                    )}
+                                  </div>
                                 )}
                                 {diseaseCount > 0 && (
-                                  <Badge variant="secondary">{diseaseCount} Diseases</Badge>
+                                  <div className="flex items-center gap-1">
+                                    <Badge variant="secondary">{diseaseCount} Diseases</Badge>
+                                    {report.scouting_diseases?.some(d => d.present && archivedItems.diseases.includes(d.disease_name)) && (
+                                      <Badge variant="outline" className="gap-1 text-xs">
+                                        <Archive className="w-3 h-3" />
+                                      </Badge>
+                                    )}
+                                  </div>
                                 )}
                                 {nutrientCount > 0 && (
-                                  <Badge variant="secondary">{nutrientCount} Deficiencies</Badge>
+                                  <div className="flex items-center gap-1">
+                                    <Badge variant="secondary">{nutrientCount} Deficiencies</Badge>
+                                    {report.scouting_nutrients?.some(n => archivedItems.nutrients.includes(n.symptom)) && (
+                                      <Badge variant="outline" className="gap-1 text-xs">
+                                        <Archive className="w-3 h-3" />
+                                      </Badge>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </TableCell>
@@ -303,6 +359,7 @@ export default function ScoutingReportsPage() {
                                 <Link href={`/scouting/${report.id}`}>
                                   <Button size="sm" variant="outline" className="gap-1">
                                     <Eye className="w-3 h-3" />
+                                    View
                                   </Button>
                                 </Link>
                                 {permissions.canDelete && (
@@ -394,21 +451,42 @@ export default function ScoutingReportsPage() {
                         <div className="pt-2 border-t">
                           <div className="flex flex-wrap gap-2">
                             {pestCount > 0 && (
-                              <Badge variant="secondary" className="gap-1">
-                                <Bug className="w-3 h-3" />
-                                {pestCount} Pest{pestCount > 1 ? "s" : ""}
-                              </Badge>
+                              <div className="flex items-center gap-1">
+                                <Badge variant="secondary" className="gap-1">
+                                  <Bug className="w-3 h-3" />
+                                  {pestCount} Pest{pestCount > 1 ? "s" : ""}
+                                </Badge>
+                                {report.scouting_pests?.some(p => p.present && archivedItems.pests.includes(p.pest_name)) && (
+                                  <Badge variant="outline" className="gap-1 text-xs">
+                                    <Archive className="w-3 h-3" />
+                                  </Badge>
+                                )}
+                              </div>
                             )}
                             {diseaseCount > 0 && (
-                              <Badge variant="secondary" className="gap-1">
-                                <Leaf className="w-3 h-3" />
-                                {diseaseCount} Disease{diseaseCount > 1 ? "s" : ""}
-                              </Badge>
+                              <div className="flex items-center gap-1">
+                                <Badge variant="secondary" className="gap-1">
+                                  <Leaf className="w-3 h-3" />
+                                  {diseaseCount} Disease{diseaseCount > 1 ? "s" : ""}
+                                </Badge>
+                                {report.scouting_diseases?.some(d => d.present && archivedItems.diseases.includes(d.disease_name)) && (
+                                  <Badge variant="outline" className="gap-1 text-xs">
+                                    <Archive className="w-3 h-3" />
+                                  </Badge>
+                                )}
+                              </div>
                             )}
                             {nutrientCount > 0 && (
-                              <Badge variant="secondary">
-                                {nutrientCount} Deficienc{nutrientCount > 1 ? "ies" : "y"}
-                              </Badge>
+                              <div className="flex items-center gap-1">
+                                <Badge variant="secondary">
+                                  {nutrientCount} Deficienc{nutrientCount > 1 ? "ies" : "y"}
+                                </Badge>
+                                {report.scouting_nutrients?.some(n => archivedItems.nutrients.includes(n.symptom)) && (
+                                  <Badge variant="outline" className="gap-1 text-xs">
+                                    <Archive className="w-3 h-3" />
+                                  </Badge>
+                                )}
+                              </div>
                             )}
                             {pestCount === 0 && diseaseCount === 0 && nutrientCount === 0 && (
                               <Badge variant="outline" className="gap-1">
