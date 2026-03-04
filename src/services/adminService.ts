@@ -242,9 +242,6 @@ export const adminService = {
       if (!username || !password || !fullName) {
         throw new Error("Username, password, and full name are required.");
       }
-      
-      // Generate a valid system email if no real email provided
-      const authEmail = email || `${username}@khulisapp.internal`;
 
       // Validate password strength first
       const strengthResult = this.validatePasswordStrength(password);
@@ -269,104 +266,42 @@ export const adminService = {
         }
       }
 
-      // Check auth.users table for the email to avoid "User already registered" error
-      console.log("🔍 Checking if auth user exists with email:", authEmail);
-      const { data: existingProfile, error: profileCheckError } = await supabase
-        .from("profiles")
-        .select("id, username")
-        .eq("email", authEmail)
-        .maybeSingle();
-      
-      if (existingProfile) {
-        throw new Error(`User with email "${authEmail}" already exists in the system.`);
-      }
-
       console.log("✅ Pre-flight checks passed - creating user:", username);
 
-      // Step 1: Create the auth user using REGULAR signUp (NOT admin API)
-      console.log("👤 Creating auth user with regular signUp - email:", authEmail);
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: authEmail,
-        password: password,
-        options: {
-          data: {
-            full_name: fullName,
-            username: username,
-            role: role,
-          },
-          emailRedirectTo: undefined, // Prevent email confirmation emails
+      // Get current user session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error("You must be logged in to perform this action");
+      }
+
+      // Call server-side API endpoint (uses Admin API - doesn't affect current session)
+      const response = await fetch("/api/admin/create-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
         },
+        body: JSON.stringify({
+          username,
+          password,
+          fullName,
+          role,
+          email: email || undefined,
+        }),
       });
 
-      if (authError) {
-        console.error("❌ Supabase auth error:", authError);
-        
-        // Handle specific "User already registered" error
-        if (authError.message.includes("User already registered") || authError.message.includes("already exists")) {
-          // Try to find the user in profiles
-          const existingProfile = await this.getUserByUsername(username);
-          if (existingProfile) {
-            throw new Error(`User "${username}" already exists. Please try logging in or use a different username.`);
-          } else {
-            throw new Error(`The email "${email || 'system email'}" is already registered in the authentication system. Please try a different ${email ? 'email' : 'username'}.`);
-          }
-        }
-        
-        throw new Error(`Failed to create user account: ${authError.message}`);
-      }
-      
-      if (!authData.user) {
-        throw new Error("Failed to create user - no user data returned from Supabase");
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to create user");
       }
 
-      console.log("✅ Auth user created successfully:", authData.user.id);
-
-      // Step 2: MANUALLY create the profile record (bypass trigger if needed)
-      const profileData = {
-        id: authData.user.id,
-        username: username,
-        full_name: fullName,
-        email: email || null,
-        role: role,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        avatar_url: null,
-      };
-
-      console.log("📝 Creating profile record:", profileData);
-
-      const { data: createdProfile, error: profileError } = await supabase
-        .from("profiles")
-        .insert([profileData])
-        .select()
-        .single();
-
-      if (profileError) {
-        console.error("❌ Profile creation error:", profileError);
-        
-        // If profile already exists, that's actually okay - just fetch it
-        if (profileError.message?.includes("duplicate key") || profileError.code === "23505") {
-          console.log("⚠️ Profile already exists, fetching existing profile...");
-          const existingProfile = await this.getUser(authData.user.id);
-          if (existingProfile) {
-            console.log("✅ Found existing profile, returning it");
-            return existingProfile;
-          }
-        }
-        
-        throw new Error(`Profile creation failed: ${profileError.message}. Please try refreshing the page.`);
-      }
-
-      if (!createdProfile) {
-        throw new Error("Profile creation failed - no profile data returned");
-      }
-
-      console.log("✅ Profile created successfully:", createdProfile);
+      console.log("✅ User created successfully via Admin API:", result.user);
       
       // Force a small delay to ensure database consistency
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      return createdProfile as Profile;
+      return result.user as Profile;
 
     } catch (error: any) {
       console.error("❌ Create user error:", error);
