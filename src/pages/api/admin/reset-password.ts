@@ -9,21 +9,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const { userId, newPassword } = req.body;
 
+    // Validate input
     if (!userId || !newPassword) {
-      return res.status(400).json({ error: "Missing required fields: userId and newPassword" });
+      return res.status(400).json({ error: "Missing userId or newPassword" });
     }
 
     if (newPassword.length < 8) {
-      return res.status(400).json({ error: "Password must be at least 8 characters long" });
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
     }
 
-    // Get admin's token from Authorization header
+    // Get admin token from header
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized - No valid session" });
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const token = authHeader.split(" ")[1];
+    const token = authHeader.substring(7);
 
     // Verify admin user with regular client
     const supabase = createClient(
@@ -35,10 +36,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      return res.status(401).json({ error: "Unauthorized - Invalid session" });
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) {
+      return res.status(401).json({ error: "Invalid session" });
     }
 
     // Check admin role
@@ -48,11 +48,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .eq("id", user.id)
       .single();
 
-    if (!profile || profile.role !== "admin") {
-      return res.status(403).json({ error: "Forbidden - Admin access required" });
+    if (profile?.role !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
     }
 
-    // Use admin client to update password
+    // Update password with admin client
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -71,16 +71,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (updateError) {
       console.error("Password update error:", updateError);
-      return res.status(500).json({ error: `Failed to update password: ${updateError.message}` });
+      return res.status(500).json({ error: updateError.message });
     }
 
-    return res.status(200).json({ 
-      success: true, 
-      message: "Password updated successfully" 
-    });
+    return res.status(200).json({ success: true, message: "Password updated" });
 
   } catch (error: any) {
-    console.error("Reset password API error:", error);
-    return res.status(500).json({ error: error.message || "Internal server error" });
+    console.error("Reset password error:", error);
+    return res.status(500).json({ error: error.message || "Server error" });
   }
 }
