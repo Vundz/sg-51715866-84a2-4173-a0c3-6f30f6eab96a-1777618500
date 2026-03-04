@@ -25,6 +25,7 @@ export default function NewScoutingReport() {
   const { user } = useAuth();
   
   const [loading, setLoading] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [plantings, setPlantings] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,8 +57,10 @@ export default function NewScoutingReport() {
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!dataLoaded) {
+      loadData();
+    }
+  }, [dataLoaded]);
 
   const loadData = async () => {
     try {
@@ -100,6 +103,8 @@ export default function NewScoutingReport() {
           recommended_action: ""
         }))
       }));
+
+      setDataLoaded(true);
     } catch (error) {
       console.error("Error loading data:", error);
       toast({
@@ -303,7 +308,7 @@ export default function NewScoutingReport() {
                       <SelectItem key={p.id} value={p.id}>
                         <div className="flex flex-col">
                           <span className="font-medium">{p.batch_number}</span>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-gray-500 mt-1">
                             {p.plant_types?.name} {p.plant_types?.variety ? `- ${p.plant_types?.variety}` : ""} 
                             {" "}({p.locations?.name})
                           </span>
