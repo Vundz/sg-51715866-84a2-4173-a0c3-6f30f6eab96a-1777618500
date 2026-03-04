@@ -362,6 +362,11 @@ export const adminService = {
         throw new Error("You must be logged in to perform this action");
       }
 
+      console.log("🔐 Calling password reset API...");
+      console.log("- User ID:", userId);
+      console.log("- Has password:", !!newPassword);
+      console.log("- Password length:", newPassword?.length);
+
       // Call secure server-side API endpoint
       const response = await fetch("/api/admin/reset-password", {
         method: "POST",
@@ -375,15 +380,25 @@ export const adminService = {
         }),
       });
 
+      console.log("📡 API Response:", response.status, response.statusText);
+
       const result = await response.json();
+      console.log("📦 API Result:", result);
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to update password");
+        // Extract the most detailed error message available
+        const errorMessage = result.details?.message || result.error || "Failed to update password";
+        const errorHint = result.details?.hint || "";
+        
+        console.error("❌ Password reset failed:", errorMessage, errorHint);
+        
+        throw new Error(`${errorMessage}${errorHint ? ` (${errorHint})` : ""}`);
       }
 
+      console.log("✅ Password reset successful!");
       return true;
     } catch (error: any) {
-      console.error("Set user password error:", error);
+      console.error("❌ Set user password error:", error);
       throw error;
     }
   },
