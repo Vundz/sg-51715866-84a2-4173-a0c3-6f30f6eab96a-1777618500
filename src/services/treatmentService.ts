@@ -138,7 +138,7 @@ export const treatmentService = {
         treatments (*)
       `)
       .eq("planting_id", plantingId)
-      .gte("treatments.treatment_date", cutoffDateString);
+      .gte("treatments.application_date", cutoffDateString);
 
     if (error) {
       console.error("Error fetching recent treatments:", error);
@@ -150,10 +150,10 @@ export const treatmentService = {
       ?.map(item => item.treatments)
       .filter((t): t is Treatment => t !== null) || [];
 
-    // Sort client-side by treatment_date descending
+    // Sort client-side by application_date descending
     return treatments.sort((a, b) => {
-      const dateA = new Date(a.treatment_date || 0).getTime();
-      const dateB = new Date(b.treatment_date || 0).getTime();
+      const dateA = new Date(a.application_date || 0).getTime();
+      const dateB = new Date(b.application_date || 0).getTime();
       return dateB - dateA; // Descending order
     });
   },
