@@ -35,15 +35,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log("- Has Supabase URL:", !!supabaseUrl);
     console.log("- Has anon key:", !!anonKey);
     console.log("- Has service role key:", !!serviceRoleKey);
-    console.log("- Service role key length:", serviceRoleKey?.length);
-    console.log("- Service role key starts with:", serviceRoleKey?.substring(0, 20));
 
     if (!supabaseUrl || !anonKey || !serviceRoleKey) {
       console.log("ERROR: Missing environment variables");
       return res.status(500).json({ error: "Server configuration error" });
     }
 
-    // Verify user is admin
+    // Verify user is admin using regular client
     console.log("Creating Supabase client for admin verification...");
     const supabase = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: `Bearer ${token}` } }
@@ -76,53 +74,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log("Admin verified. Proceeding with password reset...");
 
-    // Extract project ref from URL
-    const projectRef = supabaseUrl.split("//")[1].split(".")[0];
-    const managementUrl = `https://${projectRef}.supabase.co/auth/v1/admin/users/${userId}`;
-
-    console.log("Management API URL:", managementUrl);
-    console.log("Using service role key:", serviceRoleKey.substring(0, 20) + "...");
-
-    // Use Management API directly to update password
-    console.log("Making API call to Supabase Management API...");
-    const response = await fetch(managementUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${serviceRoleKey}`,
-        "apikey": serviceRoleKey
-      },
-      body: JSON.stringify({
-        password: newPassword,
-        email_confirm: true
-      })
+    // Create admin client with service role key
+    console.log("Creating Supabase Admin client...");
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
     });
 
-    console.log("Response status:", response.status);
-    console.log("Response ok:", response.ok);
+    // Use admin client to update user password
+    console.log("Updating password via Supabase Admin SDK...");
+    const { data: updateData, error: updateError } = await adminClient.auth.admin.updateUserById(
+      userId,
+      { password: newPassword }
+    );
 
-    const responseText = await response.text();
-    console.log("Response body:", responseText);
-
-    let responseData;
-    try {
-      responseData = JSON.parse(responseText);
-    } catch (e) {
-      console.log("Failed to parse response as JSON");
-      responseData = { raw: responseText };
-    }
-
-    if (!response.ok) {
-      console.error("Password reset failed. Full response:", responseData);
-      return res.status(response.status).json({
+    if (updateError) {
+      console.error("Password update failed:", updateError);
+      return res.status(400).json({
         error: "Failed to update password",
-        details: responseData,
-        debug: {
-          status: response.status,
-          hasServiceKey: !!serviceRoleKey,
-          keyLength: serviceRoleKey?.length,
-          url: managementUrl
-        }
+        details: updateError
       });
     }
 
@@ -130,7 +102,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       success: true,
       message: "Password updated successfully",
-      user: responseData
+      user: updateData.user
     });
 
   } catch (error: any) {
