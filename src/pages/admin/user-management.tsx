@@ -12,8 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
-import { adminService, PasswordStrength } from "@/services/adminService";
+import { adminService } from "@/services/adminService";
 import { Plus, Pencil, Trash2, AlertCircle, CheckCircle2, Loader2, Users, Key, KeyRound, Mail, Lock, RefreshCw, UserCircle } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -39,13 +38,12 @@ export default function UserManagementPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordStrength, setPasswordStrength] = useState<{ strength: PasswordStrength; score: number; feedback: string[] } | null>(null);
   const [resetMethod, setResetMethod] = useState<"manual" | "email">("email");
   const [bulkResults, setBulkResults] = useState<{ success: any[]; failed: any[] } | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [creatingUser, setCreatingUser] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0); // Add refresh key to force re-renders
+  const [refreshKey, setRefreshKey] = useState(0); 
   
   const [formData, setFormData] = useState({
     username: "",
@@ -66,15 +64,6 @@ export default function UserManagementPage() {
       loadUsers();
     }
   }, [isAdmin]);
-
-  useEffect(() => {
-    if (newPassword) {
-      const result = adminService.validatePasswordStrength(newPassword);
-      setPasswordStrength(result);
-    } else {
-      setPasswordStrength(null);
-    }
-  }, [newPassword]);
 
   // Check username availability as user types
   useEffect(() => {
@@ -103,14 +92,10 @@ export default function UserManagementPage() {
       setLoading(true);
       setError(null);
       
-      // AGGRESSIVE CACHE BUSTING: Add timestamp to force fresh query
       const timestamp = Date.now();
       console.log(`🔄 [${timestamp}] Loading users from database...`);
       
-      // Clear any existing users to force re-render
       setUsers([]);
-      
-      // Force a small delay to ensure state is cleared
       await new Promise(resolve => setTimeout(resolve, 100));
       
       const usersData = await adminService.getAllUsers();
@@ -152,7 +137,6 @@ export default function UserManagementPage() {
     setSuccess(null);
     setCreatingUser(true);
 
-    // Validate username
     if (!editingUser && !formData.username) {
       setError("Username is required.");
       setCreatingUser(false);
@@ -204,10 +188,8 @@ export default function UserManagementPage() {
         console.log("✅ User created successfully:", newUser.id);
         setSuccess(`✅ User "${formData.username}" created successfully! Refreshing...`);
         
-        // Reload the user list
         await loadUsers();
         
-        // Close the dialog after showing success message
         setTimeout(() => {
           setDialogOpen(false);
           setSuccess(null);
@@ -216,24 +198,8 @@ export default function UserManagementPage() {
       }
     } catch (err: any) {
       console.error("❌ User creation/update error:", err);
-      
       const errorMessage = err.message || "Failed to save user.";
-      
-      // Handle "User already registered" error
-      if (errorMessage.includes("already registered") || errorMessage.includes("already taken") || errorMessage.includes("already exists")) {
-        setError(
-          `⚠️ ${errorMessage}\n\n` +
-          `This username or email is already in use. Please:\n` +
-          `1. Choose a different username\n` +
-          `2. Use a different email address (if provided)\n` +
-          `3. Click "Refresh" to see if the user already exists in the list`
-        );
-      } else if (errorMessage.includes("Password is too weak")) {
-        setError(errorMessage);
-      } else {
-        setError(`Failed to ${editingUser ? "update" : "create"} user: ${errorMessage}`);
-      }
-      
+      setError(`Failed to ${editingUser ? "update" : "create"} user: ${errorMessage}`);
       setCreatingUser(false);
     }
   };
@@ -246,13 +212,8 @@ export default function UserManagementPage() {
     try {
       await adminService.deleteUser(userId);
       setSuccess("User deleted successfully!");
-      
-      // Add a small delay to ensure database has processed the deletion
       await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Force a complete refresh
       await loadUsers();
-      
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
       setError(err.message || "Failed to delete user.");
@@ -265,7 +226,6 @@ export default function UserManagementPage() {
     setSelectedUserForReset(user);
     setNewPassword("");
     setConfirmPassword("");
-    setPasswordStrength(null);
     setResetMethod(user.email ? "email" : "manual");
     setError(null);
     setSuccess(null);
@@ -300,11 +260,8 @@ export default function UserManagementPage() {
           setResettingPassword(false);
           return;
         }
-        if (passwordStrength && passwordStrength.strength === "weak") {
-          setError("Password is too weak. Please use a stronger password.");
-          setResettingPassword(false);
-          return;
-        }
+        // No strength check anymore!
+        
         await adminService.setUserPassword(selectedUserForReset.id, newPassword);
         setSuccess("Password updated successfully!");
       }
@@ -377,24 +334,6 @@ export default function UserManagementPage() {
     }
   };
 
-  const getPasswordStrengthColor = (strength: PasswordStrength) => {
-    switch (strength) {
-      case "weak": return "bg-red-500";
-      case "fair": return "bg-orange-500";
-      case "good": return "bg-yellow-500";
-      case "strong": return "bg-green-500";
-    }
-  };
-
-  const getPasswordStrengthValue = (strength: PasswordStrength) => {
-    switch (strength) {
-      case "weak": return 25;
-      case "fair": return 50;
-      case "good": return 75;
-      case "strong": return 100;
-    }
-  };
-
   const getRoleBadgeColor = (role: UserRole | null) => {
     switch (role) {
       case "admin":
@@ -444,7 +383,7 @@ export default function UserManagementPage() {
             User Management
           </h1>
           <p className="text-muted-foreground mt-1">
-            Simple username & password authentication - no email required
+            Simple username & password authentication
           </p>
         </div>
         <div className="flex gap-2">
@@ -518,7 +457,7 @@ export default function UserManagementPage() {
       )}
 
       {/* Users Table */}
-      <Card key={refreshKey}> {/* Add key to force re-render */}
+      <Card key={refreshKey}>
         <CardHeader>
           <CardTitle>All Users</CardTitle>
           <CardDescription>Total users: {users.length}</CardDescription>
@@ -624,7 +563,7 @@ export default function UserManagementPage() {
             <DialogDescription>
               {editingUser
                 ? "Update user details and role assignment"
-                : "Create a user with username and password - email is optional"}
+                : "Create a user with username and password"}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -699,7 +638,7 @@ export default function UserManagementPage() {
                     setFormData({ ...formData, password: e.target.value })
                   }
                   required
-                  placeholder="Minimum 8 characters"
+                  placeholder="Any password accepted"
                 />
               </div>
             )}
@@ -748,15 +687,6 @@ export default function UserManagementPage() {
                 </p>
               </div>
             </details>
-
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="text-xs">
-                {editingUser 
-                  ? "Username cannot be changed. Use password reset to update passwords."
-                  : "Username must be unique. No email required - users login with username only."}
-              </AlertDescription>
-            </Alert>
 
             <DialogFooter>
               <Button
@@ -838,12 +768,12 @@ export default function UserManagementPage() {
                     <Alert>
                       <Lock className="h-4 w-4" />
                       <AlertDescription>
-                        Set a new password directly for this user. The password will be updated immediately without sending an email.
+                        Set a new password directly for this user. Any password is accepted.
                       </AlertDescription>
                     </Alert>
 
                     <div className="space-y-2">
-                      <Label htmlFor="newPassword">New Password *</Label>
+                      <Label htmlFor="newPassword">New Password</Label>
                       <Input
                         id="newPassword"
                         type="password"
@@ -853,33 +783,8 @@ export default function UserManagementPage() {
                       />
                     </div>
 
-                    {passwordStrength && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <Label className="text-sm">Password Strength</Label>
-                          <span className="text-xs font-medium capitalize">
-                            {passwordStrength.strength}
-                          </span>
-                        </div>
-                        <Progress 
-                          value={getPasswordStrengthValue(passwordStrength.strength)} 
-                          className="h-2"
-                        />
-                        <div className={`h-1 rounded-full ${getPasswordStrengthColor(passwordStrength.strength)}`} 
-                             style={{ width: `${getPasswordStrengthValue(passwordStrength.strength)}%` }} 
-                        />
-                        {passwordStrength.feedback.length > 0 && (
-                          <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-                            {passwordStrength.feedback.map((fb, idx) => (
-                              <li key={idx}>{fb}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )}
-
                     <div className="space-y-2">
-                      <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                      <Label htmlFor="confirmPassword">Confirm Password</Label>
                       <Input
                         id="confirmPassword"
                         type="password"
@@ -907,7 +812,7 @@ export default function UserManagementPage() {
                   </Alert>
 
                   <div className="space-y-2">
-                    <Label htmlFor="newPassword">New Password *</Label>
+                    <Label htmlFor="newPassword">New Password</Label>
                     <Input
                       id="newPassword"
                       type="password"
@@ -917,33 +822,8 @@ export default function UserManagementPage() {
                     />
                   </div>
 
-                  {passwordStrength && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <Label className="text-sm">Password Strength</Label>
-                        <span className="text-xs font-medium capitalize">
-                          {passwordStrength.strength}
-                        </span>
-                      </div>
-                      <Progress 
-                        value={getPasswordStrengthValue(passwordStrength.strength)} 
-                        className="h-2"
-                      />
-                      <div className={`h-1 rounded-full ${getPasswordStrengthColor(passwordStrength.strength)}`} 
-                           style={{ width: `${getPasswordStrengthValue(passwordStrength.strength)}%` }} 
-                      />
-                      {passwordStrength.feedback.length > 0 && (
-                        <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-                          {passwordStrength.feedback.map((fb, idx) => (
-                            <li key={idx}>{fb}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
                     <Input
                       id="confirmPassword"
                       type="password"

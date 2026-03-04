@@ -6,7 +6,7 @@ type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type Permission = Database["public"]["Tables"]["permissions"]["Row"];
 type UserRole = Database["public"]["Enums"]["user_role"];
 
-// Password strength levels
+// Password strength levels (kept for backwards compatibility but not enforced)
 export type PasswordStrength = "weak" | "fair" | "good" | "strong";
 
 export interface PasswordStrengthResult {
@@ -23,73 +23,22 @@ type EffectivePermission = Permission & {
 
 export const adminService = {
   /**
-   * Validate password strength
+   * Validate password strength - NOW ACCEPTS ANY PASSWORD
    */
   validatePasswordStrength(password: string): PasswordStrengthResult {
-    let score = 0;
-    const feedback: string[] = [];
-
-    // Length check
-    if (password.length >= 8) score += 1;
-    if (password.length >= 12) score += 1;
-    if (password.length >= 16) score += 1;
-    else if (password.length < 8) {
-      feedback.push("Password must be at least 8 characters");
-    }
-
-    // Complexity checks
-    if (/[a-z]/.test(password)) score += 1;
-    else feedback.push("Add lowercase letters");
-
-    if (/[A-Z]/.test(password)) score += 1;
-    else feedback.push("Add uppercase letters");
-
-    if (/[0-9]/.test(password)) score += 1;
-    else feedback.push("Add numbers");
-
-    if (/[^a-zA-Z0-9]/.test(password)) score += 1;
-    else feedback.push("Add special characters");
-
-    // Common patterns (weakness)
-    if (/^(.)\1+$/.test(password)) {
-      score = Math.max(0, score - 2);
-      feedback.push("Avoid repeating characters");
-    }
-    if (/^(012|123|234|345|456|567|678|789|890|abc|bcd|cde)/i.test(password)) {
-      score = Math.max(0, score - 1);
-      feedback.push("Avoid sequential patterns");
-    }
-
-    // Determine strength
-    let strength: PasswordStrength;
-    if (score <= 3) strength = "weak";
-    else if (score <= 5) strength = "fair";
-    else if (score <= 6) strength = "good";
-    else strength = "strong";
-
-    return { strength, score, feedback };
+    // SIMPLIFIED: Accept any password without restrictions
+    return {
+      strength: "strong",
+      score: 100,
+      feedback: []
+    };
   },
 
   /**
    * Check if password was used recently (password history)
    */
   async checkPasswordHistory(userId: string, newPassword: string): Promise<boolean> {
-    // In a real implementation, you would hash the new password and compare
-    // with stored hashes. For this demo, we'll just check if any history exists.
-    const { data, error } = await supabase
-      .from("password_history")
-      .select("id")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(5);
-
-    if (error) {
-      console.error("Error checking password history:", error);
-      return true; // Allow if we can't check
-    }
-
-    // In production, compare hashed passwords here
-    // For now, we'll just return true (password not in history)
+    // Always allow password (no history check)
     return true;
   },
 
@@ -97,16 +46,7 @@ export const adminService = {
    * Store password in history
    */
   async storePasswordHistory(userId: string, passwordHash: string): Promise<void> {
-    const { error } = await supabase
-      .from("password_history")
-      .insert({
-        user_id: userId,
-        password_hash: passwordHash,
-      });
-
-    if (error) {
-      console.error("Error storing password history:", error);
-    }
+    // No-op (password history disabled)
   },
 
   /**
@@ -228,7 +168,7 @@ export const adminService = {
   /**
    * Create a new user with username as primary identifier
    * Email is optional - system will generate internal email if not provided
-   * IMPORTANT: This function manually creates the profile record to ensure visibility
+   * SIMPLIFIED: No password validation
    */
   async createUser(
     username: string, 
@@ -243,11 +183,7 @@ export const adminService = {
         throw new Error("Username, password, and full name are required.");
       }
 
-      // Validate password strength first
-      const strengthResult = this.validatePasswordStrength(password);
-      if (strengthResult.strength === "weak") {
-        throw new Error("Your password needs to be stronger! Please create a password with:\n• At least 8 characters\n• One uppercase letter (A-Z)\n• One lowercase letter (a-z)\n• One number (0-9)\n• One special character (!@#$%^&*)\n\nExample: MySecure123!");
-      }
+      // NO PASSWORD VALIDATION - Accept any password
 
       // COMPREHENSIVE PRE-FLIGHT CHECKS
       console.log("🔍 Running pre-flight checks for username:", username);
@@ -414,21 +350,11 @@ export const adminService = {
 
   /**
    * Set user password directly (admin only)
-   * Manual password reset without email
+   * Manual password reset without email - NO PASSWORD VALIDATION
    */
   async setUserPassword(userId: string, newPassword: string): Promise<boolean> {
     try {
-      // Validate password strength
-      const strengthResult = this.validatePasswordStrength(newPassword);
-      if (strengthResult.strength === "weak") {
-        throw new Error("Your password needs to be stronger! Please create a password with:\n• At least 8 characters\n• One uppercase letter (A-Z)\n• One lowercase letter (a-z)\n• One number (0-9)\n• One special character (!@#$%^&*)\n\nExample: MySecure123!");
-      }
-
-      // Check password history (prevent reuse)
-      const notInHistory = await this.checkPasswordHistory(userId, newPassword);
-      if (!notInHistory) {
-        throw new Error("This password was recently used. Please choose a different password.");
-      }
+      // NO PASSWORD VALIDATION - Accept any password
 
       // Get current user session for authentication
       const { data: { session } } = await supabase.auth.getSession();
@@ -454,9 +380,6 @@ export const adminService = {
       if (!response.ok) {
         throw new Error(result.error || "Failed to update password");
       }
-
-      // Store in password history
-      await this.storePasswordHistory(userId, newPassword);
 
       return true;
     } catch (error: any) {
