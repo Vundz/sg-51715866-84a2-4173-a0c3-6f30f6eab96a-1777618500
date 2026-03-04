@@ -117,7 +117,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Create profile record
-    const { data: profile, error: profileInsertError } = await adminClient
+    const { data: newProfile, error: profileInsertError } = await adminClient
       .from("profiles")
       .insert({
         id: newUser.user.id,
@@ -154,7 +154,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({ 
       success: true, 
-      user: profile,
+      user: newProfile,
       message: "User created successfully"
     });
 
