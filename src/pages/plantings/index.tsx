@@ -49,10 +49,17 @@ import { plantingService } from "@/services/plantingService";
 import { plantTypeService } from "@/services/plantTypeService";
 import { locationService } from "@/services/locationService";
 import { reservationService, type Reservation } from "@/services/reservationService";
-import type { Location } from "@/services/locationService";
-import type { SeedInventory, LowStock } from "@/services/inventoryService";
+import type { Database } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
+
+type Location = Database["public"]["Tables"]["locations"]["Row"];
+
+interface SeedInventory {
+  plant_type_id: string;
+  quantity: number;
+  reorder_point?: number;
+}
 
 interface PlantType {
   id: string;
@@ -85,7 +92,8 @@ interface Planting {
 
 export default function PlantingsPage() {
   const { user } = useAuth();
-  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const permissions = usePermissions('plantings');
+  const permissionsLoading = false;
   
   const [plantings, setPlantings] = useState<Planting[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
@@ -123,10 +131,10 @@ export default function PlantingsPage() {
     try {
       setIsLoading(true);
       const [plantingsData, plantTypesData, locationsData, reservationsData, inventoryData] = await Promise.all([
-        plantingService.getAll(),
-        plantTypeService.getAll(),
-        locationService.getAll(),
-        reservationService.getAll(),
+        plantingService.getPlantings(),
+        plantTypeService.getPlantTypes(),
+        locationService.getLocations(),
+        reservationService.getReservations(),
         fetch("/api/inventory/seed").then(res => res.json()),
       ]);
 
@@ -185,9 +193,9 @@ export default function PlantingsPage() {
       };
 
       if (editingPlanting) {
-        await plantingService.update(editingPlanting.id, plantingData);
+        await plantingService.updatePlanting(editingPlanting.id, plantingData);
       } else {
-        await plantingService.create(plantingData);
+        await plantingService.createPlanting(plantingData);
       }
 
       await loadData();
@@ -225,7 +233,7 @@ export default function PlantingsPage() {
     if (!deletingPlantingId) return;
 
     try {
-      await plantingService.delete(deletingPlantingId);
+      await plantingService.deletePlanting(deletingPlantingId);
       await loadData();
       setShowDeleteDialog(false);
       setDeletingPlantingId(null);
@@ -259,7 +267,7 @@ export default function PlantingsPage() {
     try {
       await Promise.all(
         selectedPlantings.map(id =>
-          plantingService.update(id, { status: bulkNewStatus })
+          plantingService.updatePlanting(id, { status: bulkNewStatus })
         )
       );
       await loadData();
@@ -280,7 +288,7 @@ export default function PlantingsPage() {
     setIsBulkActionLoading(true);
     try {
       await Promise.all(
-        selectedPlantings.map(id => plantingService.delete(id))
+        selectedPlantings.map(id => plantingService.deletePlanting(id))
       );
       await loadData();
       setShowBulkDeleteDialog(false);
@@ -294,7 +302,7 @@ export default function PlantingsPage() {
   };
 
   const getReservationCount = (plantingId: string): number => {
-    return reservations.filter(r => r.planting_id === plantingId && r.status === 'active').length;
+    return reservations.filter(r => r.planting_id === plantingId && r.status === 'pending').length;
   };
 
   // Validate seed quantity and show warnings
@@ -382,8 +390,8 @@ export default function PlantingsPage() {
     const totalAvailable = filteredPlantings.reduce((sum, p) => sum + (p.remaining_quantity || 0), 0);
     const totalReserved = filteredPlantings.reduce((sum, p) => {
       const reserved = reservations
-        .filter(r => r.planting_id === p.id && r.status === 'active')
-        .reduce((rSum, r) => rSum + r.quantity, 0);
+        .filter(r => r.planting_id === p.id && r.status === 'pending')
+        .reduce((rSum, r) => rSum + (r.quantity_reserved || 0), 0);
       return sum + reserved;
     }, 0);
     const totalForSale = totalAvailable - totalReserved;
@@ -434,9 +442,9 @@ export default function PlantingsPage() {
     );
   }
 
-  const canCreate = hasPermission('plantings', 'create');
-  const canEdit = hasPermission('plantings', 'update');
-  const canDelete = hasPermission('plantings', 'delete');
+  const canCreate = permissions.canCreate;
+  const canEdit = permissions.canUpdate;
+  const canDelete = permissions.canDelete;
 
   return (
     <Layout>
@@ -718,8 +726,8 @@ export default function PlantingsPage() {
                       filteredPlantings.map((planting) => {
                         const location = locations.find(l => l.id === planting.location_id);
                         const reservedQty = reservations
-                          .filter(r => r.planting_id === planting.id && r.status === 'active')
-                          .reduce((sum, r) => sum + r.quantity, 0);
+                          .filter(r => r.planting_id === planting.id && r.status === 'pending')
+                          .reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
                         const forSale = (planting.remaining_quantity || 0) - reservedQty;
                         const daysToHarvest = getDaysToHarvest(planting);
 
@@ -811,8 +819,8 @@ export default function PlantingsPage() {
                   filteredPlantings.map((p) => {
                     const location = locations.find(l => l.id === p.location_id);
                     const reservedQty = reservations
-                      .filter(r => r.planting_id === p.id && r.status === 'active')
-                      .reduce((sum, r) => sum + r.quantity, 0);
+                      .filter(r => r.planting_id === p.id && r.status === 'pending')
+                      .reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
                     const forSale = (p.remaining_quantity || 0) - reservedQty;
                     const daysToHarvest = getDaysToHarvest(p);
 
