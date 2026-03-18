@@ -15,6 +15,7 @@ import { plantTypeService } from "@/services/plantTypeService";
 import { locationService } from "@/services/locationService";
 import { reservationService } from "@/services/reservationService";
 import { inventoryService } from "@/services/inventoryService";
+import { harvestService } from "@/services/harvestService";
 import type { InventoryItemWithLowStock } from "@/services/inventoryService";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -89,6 +90,9 @@ export default function PlantingsPage() {
 
   // Add view mode state here
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  
+  // Add harvested quantities tracking
+  const [harvestedQuantities, setHarvestedQuantities] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadData();
@@ -112,6 +116,14 @@ export default function PlantingsPage() {
       setLocations(locationsData);
       setReservations(reservationsData as Reservation[]);
       setSeedInventory(inventoryData);
+      
+      // Load harvested quantities for all plantings
+      const harvestedQtys: Record<string, number> = {};
+      for (const planting of plantingsData) {
+        const qty = await harvestService.getTotalHarvestedForPlanting(planting.id);
+        harvestedQtys[planting.id] = qty;
+      }
+      setHarvestedQuantities(harvestedQtys);
     } catch (error) {
       console.error("Error loading data:", error);
       toast({ title: "Error", description: "Failed to load data. Please try refreshing the page.", variant: "destructive" });
@@ -133,6 +145,11 @@ export default function PlantingsPage() {
 
   const getReservationCount = (plantingId: string): number => {
     return reservations.filter(r => r.planting_id === plantingId && r.status === 'active').length;
+  };
+
+  // Get harvested quantity for a planting
+  const getHarvestedQuantity = (plantingId: string): number => {
+    return harvestedQuantities[plantingId] || 0;
   };
 
   // Validate seed quantity and show warnings
@@ -1325,7 +1342,7 @@ export default function PlantingsPage() {
                 <h3 className="font-medium">Data Preview</h3>
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
-                    <TableHeader className="sticky top-0 bg-white dark:bg-gray-950 z-10 shadow-sm">
+                    <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm">
                       <TableRow className="border-b">
                         <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Row</TableHead>
                         <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Plant Type</TableHead>
@@ -1337,7 +1354,6 @@ export default function PlantingsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {/* Valid rows */}
                       {csvData.slice(0, 5).map((row, index) => (
                         <TableRow key={`valid-${index}`} className="bg-green-50 dark:bg-green-950">
                           <TableCell>{row.rowNumber}</TableCell>
@@ -1352,7 +1368,6 @@ export default function PlantingsPage() {
                         </TableRow>
                       ))}
                       
-                      {/* Invalid rows */}
                       {invalidRows.slice(0, 5).map((row, index) => (
                         <TableRow key={`invalid-${index}`} className="bg-red-50 dark:bg-red-950">
                           <TableCell>{row.rowNumber}</TableCell>
@@ -1516,6 +1531,7 @@ export default function PlantingsPage() {
                       <TableHead className="min-w-[150px]">Plant</TableHead>
                       <TableHead className="min-w-[120px]">Location</TableHead>
                       <TableHead className="min-w-[90px]">Total Qty</TableHead>
+                      <TableHead className="min-w-[90px]">Harvested</TableHead>
                       <TableHead className="min-w-[70px]">Trays</TableHead>
                       <TableHead className="min-w-[100px]">Reserved</TableHead>
                       <TableHead className="min-w-[100px]">Available</TableHead>
@@ -1529,7 +1545,7 @@ export default function PlantingsPage() {
                   <TableBody>
                     {filteredPlantings.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={12} className="text-center h-24 px-4 py-2">
+                        <TableCell colSpan={13} className="text-center h-24 px-4 py-2">
                           {searchQuery || filterType !== "all" 
                             ? "No plantings match your search or filter criteria." 
                             : "No plantings recorded yet."}
@@ -1541,6 +1557,7 @@ export default function PlantingsPage() {
                         const available = getAvailableQuantity(p);
                         const reservationCount = getReservationCount(p.id);
                         const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
+                        const harvested = getHarvestedQuantity(p.id);
                         
                         return (
                           <TableRow key={p.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
@@ -1554,6 +1571,11 @@ export default function PlantingsPage() {
                             </TableCell>
                             <TableCell>{p.locations?.name || 'N/A'}</TableCell>
                             <TableCell>{formatNumber(p.remaining_quantity ?? p.quantity)}</TableCell>
+                            <TableCell>
+                              <span className={harvested > 0 ? "font-medium text-purple-600" : "text-gray-400"}>
+                                {formatNumber(harvested)}
+                              </span>
+                            </TableCell>
                             <TableCell>
                               <span className="font-medium text-blue-600">{trayUsage}</span>
                             </TableCell>
@@ -1629,7 +1651,7 @@ export default function PlantingsPage() {
                   const available = getAvailableQuantity(p);
                   const reservationCount = getReservationCount(p.id);
                   const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
-                  
+                  const harvested = getHarvestedQuantity(p.id);
                   return (
                     <Card key={p.id} className="border-2 hover:border-lime-500 transition-colors">
                       <CardContent className="pt-6">
@@ -1664,6 +1686,16 @@ export default function PlantingsPage() {
                               <div className="text-xs text-gray-500">{trayUsage} trays</div>
                             </div>
 
+                            <div className="bg-purple-50 dark:bg-purple-950 rounded-lg p-3">
+                              <div className="text-xs text-gray-600 dark:text-gray-400">Harvested</div>
+                              <div className={`text-xl font-bold ${harvested > 0 ? "text-purple-600" : "text-gray-400"}`}>
+                                {formatNumber(harvested)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {harvested > 0 ? `${Math.round((harvested / (p.quantity || 1)) * 100)}% of total` : "None yet"}
+                              </div>
+                            </div>
+
                             <div className="bg-green-50 dark:bg-green-950 rounded-lg p-3">
                               <div className="text-xs text-gray-600 dark:text-gray-400">Available</div>
                               <div className={`text-xl font-bold ${available <= 0 ? "text-red-600" : "text-green-600"}`}>
@@ -1671,6 +1703,16 @@ export default function PlantingsPage() {
                               </div>
                               <div className="text-xs text-gray-500">
                                 {reserved > 0 && `${formatNumber(reserved)} reserved`}
+                              </div>
+                            </div>
+                            
+                            <div className="bg-orange-50 dark:bg-orange-950 rounded-lg p-3">
+                              <div className="text-xs text-gray-600 dark:text-gray-400">Reserved</div>
+                              <div className={`text-xl font-bold ${reserved > 0 ? "text-orange-600" : "text-gray-400"}`}>
+                                {formatNumber(reserved)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {reservationCount > 0 ? `${reservationCount} reservations` : "None"}
                               </div>
                             </div>
                           </div>
