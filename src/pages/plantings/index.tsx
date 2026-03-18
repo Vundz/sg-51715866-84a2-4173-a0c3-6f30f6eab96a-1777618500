@@ -78,14 +78,15 @@ interface Planting {
   plant_type_id: string;
   variety?: string;
   location_id: string;
-  planting_date: string;
+  date_planted: string;
   expected_harvest_date?: string;
   quantity: number;
   remaining_quantity: number;
-  tray_count?: number;
+  selling_price: number;
   status: "active" | "harvested" | "closed";
   notes?: string;
   created_at: string;
+  updated_at: string;
   plant_types?: PlantType;
   locations?: Location;
 }
@@ -157,10 +158,10 @@ export default function PlantingsPage() {
     plant_type_id: "",
     variety: "",
     location_id: "",
-    planting_date: format(new Date(), "yyyy-MM-dd"),
+    date_planted: format(new Date(), "yyyy-MM-dd"),
     expected_harvest_date: "",
     quantity: "",
-    tray_count: "",
+    selling_price: "",
     status: "active" as "active" | "harvested" | "closed",
     notes: "",
   });
@@ -171,10 +172,10 @@ export default function PlantingsPage() {
       plant_type_id: "",
       variety: "",
       location_id: "",
-      planting_date: format(new Date(), "yyyy-MM-dd"),
+      date_planted: format(new Date(), "yyyy-MM-dd"),
       expected_harvest_date: "",
       quantity: "",
-      tray_count: "",
+      selling_price: "",
       status: "active",
       notes: "",
     });
@@ -185,11 +186,20 @@ export default function PlantingsPage() {
     e.preventDefault();
 
     try {
+      const selectedType = plantTypes.find(pt => pt.id === formData.plant_type_id);
+      
       const plantingData = {
-        ...formData,
+        batch_number: formData.batch_number,
+        plant_type_id: formData.plant_type_id,
+        variety: formData.variety || "",
+        location_id: formData.location_id,
+        date_planted: formData.date_planted,
+        expected_harvest_date: formData.expected_harvest_date || null,
+        status: formData.status,
+        notes: formData.notes || "",
         quantity: parseInt(formData.quantity),
-        remaining_quantity: parseInt(formData.quantity),
-        tray_count: formData.tray_count ? parseInt(formData.tray_count) : undefined,
+        remaining_quantity: editingPlanting ? editingPlanting.remaining_quantity : parseInt(formData.quantity),
+        selling_price: formData.selling_price ? parseFloat(formData.selling_price) : (selectedType?.selling_price || 0),
       };
 
       if (editingPlanting) {
@@ -214,10 +224,10 @@ export default function PlantingsPage() {
       plant_type_id: planting.plant_type_id,
       variety: planting.variety || "",
       location_id: planting.location_id,
-      planting_date: planting.planting_date,
+      date_planted: planting.date_planted,
       expected_harvest_date: planting.expected_harvest_date || "",
       quantity: planting.quantity.toString(),
-      tray_count: planting.tray_count?.toString() || "",
+      selling_price: planting.selling_price?.toString() || "",
       status: planting.status,
       notes: planting.notes || "",
     });
@@ -381,7 +391,7 @@ export default function PlantingsPage() {
 
     // Sort by planting date (newest first)
     return filtered.sort((a, b) => 
-      new Date(b.planting_date).getTime() - new Date(a.planting_date).getTime()
+      new Date(b.date_planted).getTime() - new Date(a.date_planted).getTime()
     );
   }, [plantings, searchQuery, filterType, filterValue]);
 
@@ -750,9 +760,9 @@ export default function PlantingsPage() {
                             <TableCell>{location?.name || 'N/A'}</TableCell>
                             <TableCell>
                               <div className="flex flex-col">
-                                <span>{format(new Date(planting.planting_date), "MMM dd, yyyy")}</span>
+                                <span>{format(new Date(planting.date_planted), "MMM dd, yyyy")}</span>
                                 <span className="text-xs text-gray-500">
-                                  {differenceInDays(new Date(), new Date(planting.planting_date))} days ago
+                                  {differenceInDays(new Date(), new Date(planting.date_planted))} days ago
                                 </span>
                               </div>
                             </TableCell>
@@ -853,9 +863,9 @@ export default function PlantingsPage() {
                               <div className="flex items-center gap-2 text-gray-600">
                                 <Calendar className="h-4 w-4" />
                                 <span>
-                                  {format(new Date(p.planting_date), "MMM dd, yyyy")}
+                                  {format(new Date(p.date_planted), "MMM dd, yyyy")}
                                   <span className="text-xs ml-1">
-                                    ({differenceInDays(new Date(), new Date(p.planting_date))} days ago)
+                                    ({differenceInDays(new Date(), new Date(p.date_planted))} days ago)
                                   </span>
                                 </span>
                               </div>
@@ -880,13 +890,6 @@ export default function PlantingsPage() {
                                 <p className="font-bold">{forSale.toLocaleString()}</p>
                               </div>
                             </div>
-
-                            {p.tray_count && (
-                              <div className="text-xs text-gray-600">
-                                <Package className="h-3 w-3 inline mr-1" />
-                                {p.tray_count} trays @ {p.plant_types?.tray_size || 'N/A'}/tray
-                              </div>
-                            )}
 
                             <div className="flex gap-2 pt-2">
                               {canEdit && (
@@ -1083,13 +1086,13 @@ export default function PlantingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="planting_date">Planting Date *</Label>
+                <Label htmlFor="date_planted">Planting Date *</Label>
                 <Input
-                  id="planting_date"
+                  id="date_planted"
                   type="date"
-                  value={formData.planting_date}
+                  value={formData.date_planted}
                   onChange={(e) =>
-                    setFormData({ ...formData, planting_date: e.target.value })
+                    setFormData({ ...formData, date_planted: e.target.value })
                   }
                   required
                 />
@@ -1140,15 +1143,17 @@ export default function PlantingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="tray_count">Tray Count</Label>
+                <Label htmlFor="selling_price">Selling Price</Label>
                 <Input
-                  id="tray_count"
+                  id="selling_price"
                   type="number"
-                  value={formData.tray_count}
+                  step="0.01"
+                  value={formData.selling_price}
                   onChange={(e) =>
-                    setFormData({ ...formData, tray_count: e.target.value })
+                    setFormData({ ...formData, selling_price: e.target.value })
                   }
-                  min="1"
+                  placeholder="Defaults to plant type price"
+                  min="0"
                 />
               </div>
 
