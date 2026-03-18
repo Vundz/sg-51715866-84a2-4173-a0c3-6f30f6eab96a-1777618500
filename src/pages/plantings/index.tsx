@@ -120,7 +120,7 @@ export default function PlantingsPage() {
       // Load harvested quantities for all plantings
       const harvestedQtys: Record<string, number> = {};
       for (const planting of plantingsData) {
-        const qty = await harvestService.getTotalHarvestedForPlanting(planting.id);
+        const qty = await harvestService.getTotalHarvestedQuantity(planting.id);
         harvestedQtys[planting.id] = qty;
       }
       setHarvestedQuantities(harvestedQtys);
