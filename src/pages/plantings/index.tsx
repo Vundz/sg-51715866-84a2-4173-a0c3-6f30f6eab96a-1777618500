@@ -178,6 +178,11 @@ export default function PlantingsPage() {
     return locations.map(l => ({ id: l.id, name: l.name }));
   }, [locations]);
 
+  const uniquePlantTypesForFilter = useMemo(() => {
+    const plantTypeNames = new Set(plantings.map(p => p.plant_types?.name).filter(Boolean));
+    return Array.from(plantTypeNames).sort();
+  }, [plantings]);
+
   // Filter and search logic
   const filteredPlantings = useMemo(() => {
     let filtered = [...plantings];
@@ -211,6 +216,9 @@ export default function PlantingsPage() {
           break;
         case "status":
           filtered = filtered.filter(p => p.status === filterValue);
+          break;
+        case "plant_type":
+          filtered = filtered.filter(p => p.plant_types?.name === filterValue);
           break;
       }
     }
@@ -1428,11 +1436,25 @@ export default function PlantingsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Plantings</SelectItem>
-                  <SelectItem value="location">By Location</SelectItem>
+                  <SelectItem value="plant_type">By Plant Type</SelectItem>
                   <SelectItem value="variety">By Variety</SelectItem>
+                  <SelectItem value="location">By Location</SelectItem>
                   <SelectItem value="status">By Status</SelectItem>
                 </SelectContent>
               </Select>
+
+              {filterType === "plant_type" && (
+                <Select value={filterValue} onValueChange={setFilterValue}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select plant type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniquePlantTypesForFilter.map(plantType => (
+                      <SelectItem key={plantType} value={plantType}>{plantType}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
 
               {filterType === "location" && (
                 <Select value={filterValue} onValueChange={setFilterValue}>
