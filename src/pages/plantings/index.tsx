@@ -68,7 +68,7 @@ export default function PlantingsPage() {
   
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "location" | "variety" | "status">("status");
+  const [filterType, setFilterType] = useState<"all" | "plant_type" | "location" | "variety" | "status">("status");
   const [filterValue, setFilterValue] = useState("active");
   
   // CSV Import states
