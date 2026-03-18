@@ -42,11 +42,15 @@ import {
   ArrowDown,
   CheckSquare,
   X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Grid3x3,
   List,
   Pencil,
   AlertTriangle,
-  TrendingUp
+  TrendingUp,
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { Layout } from "@/components/Layout";
@@ -125,8 +129,16 @@ export default function PlantingsPage() {
   const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
   
   // Sorting state
-  const [sortColumn, setSortColumn] = useState<string | null>("date_planted");
+  const [sortColumn, setSortColumn] = useState<SortColumn>("date_planted");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("plantings_rows_per_page");
+      return saved ? parseInt(saved, 10) : 50;
+    }
+    return 50;
+  });
 
   // Sorting function
   const handleSort = (column: string) => {
@@ -233,42 +245,6 @@ export default function PlantingsPage() {
     } catch (error) {
       console.error("Error saving planting:", error);
       alert("Failed to save planting");
-    }
-  };
-
-  const handleEdit = (planting: Planting) => {
-    setEditingPlanting(planting);
-    setFormData({
-      batch_number: planting.batch_number,
-      plant_type_id: planting.plant_type_id,
-      variety: planting.variety || "",
-      location_id: planting.location_id,
-      date_planted: planting.date_planted,
-      expected_harvest_date: planting.expected_harvest_date || "",
-      quantity: planting.quantity.toString(),
-      selling_price: planting.selling_price?.toString() || "",
-      status: planting.status,
-      notes: planting.notes || "",
-    });
-    setShowDialog(true);
-  };
-
-  const handleDeleteClick = (plantingId: string) => {
-    setDeletingPlantingId(plantingId);
-    setShowDeleteDialog(true);
-  };
-
-  const handleDelete = async () => {
-    if (!deletingPlantingId) return;
-
-    try {
-      await plantingService.deletePlanting(deletingPlantingId);
-      await loadData();
-      setShowDeleteDialog(false);
-      setDeletingPlantingId(null);
-    } catch (error) {
-      console.error("Error deleting planting:", error);
-      alert("Failed to delete planting");
     }
   };
 
@@ -475,6 +451,67 @@ export default function PlantingsPage() {
       }
     });
   }, [plantings, searchQuery, filterType, filterValue, sortColumn, sortDirection]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredPlantings.length / rowsPerPage);
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const paginatedPlantings = filteredPlantings.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterType, filterValue]);
+
+  // Save rows per page preference
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("plantings_rows_per_page", rowsPerPage.toString());
+    }
+  }, [rowsPerPage]);
+
+  // Pagination handlers
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  const handleRowsPerPageChange = (value: string) => {
+    setRowsPerPage(parseInt(value, 10));
+    setCurrentPage(1);
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisible = 5;
+
+    if (totalPages <= maxVisible + 2) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      pages.push(1);
+
+      if (currentPage > 3) {
+        pages.push("...");
+      }
+
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+
+      if (currentPage < totalPages - 2) {
+        pages.push("...");
+      }
+
+      pages.push(totalPages);
+    }
+
+    return pages;
+  };
 
   // Calculate dashboard metrics based on filtered plantings
   const dashboardMetrics = useMemo(() => {
@@ -778,218 +815,176 @@ export default function PlantingsPage() {
               </div>
 
               <div className="text-sm text-gray-600">
-                Showing {filteredPlantings.length} of {plantings.length} plantings
+                Showing {paginatedPlantings.length} of {plantings.length} plantings
               </div>
             </div>
 
             {/* Table View */}
             {viewMode === "table" && (
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border rounded-lg overflow-auto">
                 <Table>
-                  <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm">
+                  <TableHeader className="bg-white dark:bg-gray-950">
                     <TableRow>
-                      <TableHead className="w-[50px]">
+                      <TableHead className="w-12">
                         <Checkbox
-                          checked={selectedPlantings.size === filteredPlantings.length && filteredPlantings.length > 0}
+                          checked={selectedPlantings.size === paginatedPlantings.length && paginatedPlantings.length > 0}
                           onCheckedChange={toggleSelectAll}
                         />
                       </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort("batch_number")}
-                      >
-                        <div className="flex items-center gap-2">
+                      <TableHead className="w-32 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => handleSort("batch_number")}>
+                        <div className="flex items-center gap-1">
                           Batch #
                           {sortColumn === "batch_number" ? (
-                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                           ) : (
-                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                            <ArrowUpDown className="h-3 w-3" />
                           )}
                         </div>
                       </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort("plant_type")}
-                      >
-                        <div className="flex items-center gap-2">
-                          Plant Type
+                      <TableHead className="w-32 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => handleSort("plant_type")}>
+                        <div className="flex items-center gap-1">
+                          Type
                           {sortColumn === "plant_type" ? (
-                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                           ) : (
-                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                            <ArrowUpDown className="h-3 w-3" />
                           )}
                         </div>
                       </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort("variety")}
-                      >
-                        <div className="flex items-center gap-2">
+                      <TableHead className="w-32 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => handleSort("variety")}>
+                        <div className="flex items-center gap-1">
                           Variety
                           {sortColumn === "variety" ? (
-                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                           ) : (
-                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                            <ArrowUpDown className="h-3 w-3" />
                           )}
                         </div>
                       </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort("location")}
-                      >
-                        <div className="flex items-center gap-2">
+                      <TableHead className="w-28 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => handleSort("location")}>
+                        <div className="flex items-center gap-1">
                           Location
                           {sortColumn === "location" ? (
-                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                           ) : (
-                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                            <ArrowUpDown className="h-3 w-3" />
                           )}
                         </div>
                       </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort("date_planted")}
-                      >
-                        <div className="flex items-center gap-2">
-                          Date Planted
+                      <TableHead className="w-28 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => handleSort("date_planted")}>
+                        <div className="flex items-center gap-1">
+                          Planted
                           {sortColumn === "date_planted" ? (
-                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                           ) : (
-                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                            <ArrowUpDown className="h-3 w-3" />
                           )}
                         </div>
                       </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort("expected_harvest_date")}
-                      >
-                        <div className="flex items-center gap-2">
-                          Expected Harvest
+                      <TableHead className="w-28 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => handleSort("expected_harvest_date")}>
+                        <div className="flex items-center gap-1">
+                          Harvest
                           {sortColumn === "expected_harvest_date" ? (
-                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                           ) : (
-                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                            <ArrowUpDown className="h-3 w-3" />
                           )}
                         </div>
                       </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort("days_to_harvest")}
-                      >
-                        <div className="flex items-center gap-2">
-                          Days to Harvest
+                      <TableHead className="w-20 text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => handleSort("days_to_harvest")}>
+                        <div className="flex items-center justify-center gap-1">
+                          Days
                           {sortColumn === "days_to_harvest" ? (
-                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                           ) : (
-                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                            <ArrowUpDown className="h-3 w-3" />
                           )}
                         </div>
                       </TableHead>
-                      <TableHead 
-                        className="text-right cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort("remaining_quantity")}
-                      >
-                        <div className="flex items-center justify-end gap-2">
-                          Available
+                      <TableHead className="w-24 text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => handleSort("remaining_quantity")}>
+                        <div className="flex items-center justify-end gap-1">
+                          Avail.
                           {sortColumn === "remaining_quantity" ? (
-                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                           ) : (
-                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                            <ArrowUpDown className="h-3 w-3" />
                           )}
                         </div>
                       </TableHead>
-                      <TableHead 
-                        className="text-right cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort("reserved")}
-                      >
-                        <div className="flex items-center justify-end gap-2">
-                          Reserved
+                      <TableHead className="w-24 text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => handleSort("reserved")}>
+                        <div className="flex items-center justify-end gap-1">
+                          Resv.
                           {sortColumn === "reserved" ? (
-                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                           ) : (
-                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                            <ArrowUpDown className="h-3 w-3" />
                           )}
                         </div>
                       </TableHead>
-                      <TableHead 
-                        className="text-right cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort("for_sale")}
-                      >
-                        <div className="flex items-center justify-end gap-2">
-                          For Sale
+                      <TableHead className="w-24 text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => handleSort("for_sale")}>
+                        <div className="flex items-center justify-end gap-1">
+                          Sale
                           {sortColumn === "for_sale" ? (
-                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                           ) : (
-                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                            <ArrowUpDown className="h-3 w-3" />
                           )}
                         </div>
                       </TableHead>
-                      <TableHead 
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                        onClick={() => handleSort("status")}
-                      >
-                        <div className="flex items-center gap-2">
+                      <TableHead className="w-24 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={() => handleSort("status")}>
+                        <div className="flex items-center gap-1">
                           Status
                           {sortColumn === "status" ? (
-                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                            sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                           ) : (
-                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                            <ArrowUpDown className="h-3 w-3" />
                           )}
                         </div>
                       </TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="w-24 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredPlantings.length === 0 ? (
+                    {paginatedPlantings.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={11} className="text-center py-8 text-gray-500">
                           No plantings found
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredPlantings.map((planting) => {
-                        const location = locations.find(l => l.id === planting.location_id);
+                      paginatedPlantings.map((planting) => {
+                        const plantType = plantTypes.find(
+                          pt => pt.id === planting.plant_type_id
+                        );
+                        const location = locations.find(
+                          l => l.id === planting.location_id
+                        );
                         const reservedQty = reservations
                           .filter(r => r.planting_id === planting.id && r.status === 'pending')
                           .reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
                         const forSale = (planting.remaining_quantity || 0) - reservedQty;
                         const daysToHarvest = getDaysToHarvest(planting);
-                        const plantType = plantTypes.find(pt => pt.id === planting.plant_type_id);
 
                         return (
                           <TableRow key={planting.id}>
-                            <TableCell>
+                            <TableCell className="py-2">
                               <Checkbox
                                 checked={selectedPlantings.has(planting.id)}
                                 onCheckedChange={() => togglePlantingSelection(planting.id)}
                               />
                             </TableCell>
-                            <TableCell className="font-medium">{planting.batch_number}</TableCell>
-                            <TableCell>
-                              <div className="flex flex-col">
-                                <span className="font-medium">{planting.plant_types?.name}</span>
-                                <span className="text-xs text-gray-500">{planting.plant_types?.name}</span>
-                              </div>
+                            <TableCell className="font-medium py-2 text-sm">{planting.batch_number}</TableCell>
+                            <TableCell className="py-2 text-sm">{plantType?.name || "Unknown"}</TableCell>
+                            <TableCell className="py-2 text-sm">{planting.variety || "-"}</TableCell>
+                            <TableCell className="py-2 text-sm">{location?.name || "Unknown"}</TableCell>
+                            <TableCell className="py-2 text-sm text-center text-sm">{format(new Date(planting.date_planted), "MMM d")}</TableCell>
+                            <TableCell className="py-2 text-sm text-sm">
+                              {planting.expected_harvest_date 
+                                ? format(new Date(planting.expected_harvest_date), "MMM d")
+                                : "-"
+                              }
                             </TableCell>
-                            <TableCell>{planting.variety || 'N/A'}</TableCell>
-                            <TableCell>{location?.name || 'N/A'}</TableCell>
-                            <TableCell>
-                              <div className="flex flex-col">
-                                <span className="font-medium">{format(new Date(planting.date_planted), "MMM dd, yyyy")}</span>
-                                <span className="text-xs text-gray-500">{format(new Date(planting.date_planted), "p")}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {planting.expected_harvest_date ? (
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{format(new Date(planting.expected_harvest_date), "MMM dd, yyyy")}</span>
-                                </div>
-                              ) : (
-                                <span className="text-gray-400">Not set</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
+                            <TableCell className="text-center py-2 text-sm">
                               {daysToHarvest !== null ? (
                                 daysToHarvest <= 0 ? (
                                   <span className="text-green-600 font-semibold">Ready!</span>
@@ -1000,12 +995,12 @@ export default function PlantingsPage() {
                                 <span className="text-gray-400">-</span>
                               )}
                             </TableCell>
-                            <TableCell className="text-right font-medium">{(planting.remaining_quantity || 0).toLocaleString()}</TableCell>
-                            <TableCell className="text-right">{reservedQty.toLocaleString()}</TableCell>
-                            <TableCell className="text-right">
-                              <span className="text-green-600 font-medium">{forSale.toLocaleString()}</span>
+                            <TableCell className="text-right font-medium py-2 text-sm">{(planting.remaining_quantity || 0).toLocaleString()}</TableCell>
+                            <TableCell className="text-right py-2 text-sm">{reservedQty.toLocaleString()}</TableCell>
+                            <TableCell className="text-right py-2">
+                              <span className="text-green-600 font-medium text-sm">{forSale.toLocaleString()}</span>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="py-2">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                 planting.status === 'active' ? 'bg-green-100 text-green-800' :
                                 planting.status === 'harvested' ? 'bg-blue-100 text-blue-800' :
@@ -1014,15 +1009,16 @@ export default function PlantingsPage() {
                                 {planting.status}
                               </span>
                             </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex gap-2 justify-end">
+                            <TableCell className="text-right py-2">
+                              <div className="flex items-center justify-end gap-1">
                                 {canEdit && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => handleEdit(planting)}
+                                    onClick={() => handleEditClick(planting)}
+                                    className="h-8 w-8 p-0"
                                   >
-                                    <Pencil className="h-4 w-4" />
+                                    <Edit className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
                                 {canDelete && (
@@ -1030,8 +1026,9 @@ export default function PlantingsPage() {
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleDeleteClick(planting.id)}
+                                    className="h-8 w-8 p-0"
                                   >
-                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                    <Trash2 className="h-3.5 w-3.5 text-red-500" />
                                   </Button>
                                 )}
                               </div>
@@ -1048,12 +1045,12 @@ export default function PlantingsPage() {
             {/* Cards View */}
             {viewMode === "cards" && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredPlantings.length === 0 ? (
+                {paginatedPlantings.length === 0 ? (
                   <div className="col-span-full text-center py-8 text-gray-500">
                     No plantings found
                   </div>
                 ) : (
-                  filteredPlantings.map((p) => {
+                  paginatedPlantings.map((p) => {
                     const location = locations.find(l => l.id === p.location_id);
                     const reservedQty = reservations
                       .filter(r => r.planting_id === p.id && r.status === 'pending')
@@ -1146,6 +1143,98 @@ export default function PlantingsPage() {
                       </Card>
                     );
                   })
+                )}
+
+                {/* Pagination Controls */}
+                {filteredPlantings.length > 0 && (
+                  <div className="flex items-center justify-between pt-4 border-t mt-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Rows per page:</span>
+                        <Select value={rowsPerPage.toString()} onValueChange={handleRowsPerPageChange}>
+                          <SelectTrigger className="w-[70px] h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="25">25</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                            <SelectItem value="100">100</SelectItem>
+                            <SelectItem value="200">200</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="text-sm text-muted-foreground hidden sm:block">
+                        Showing {startIndex + 1}-{Math.min(endIndex, filteredPlantings.length)} of {filteredPlantings.length}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm text-muted-foreground mr-2 hidden sm:block">
+                        Page {currentPage} of {totalPages}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(1)}
+                        disabled={currentPage === 1}
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronsLeft className="h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+
+                      <div className="flex items-center gap-1 hidden md:flex">
+                        {getPageNumbers().map((page, index) => (
+                          page === "..." ? (
+                            <span key={`ellipsis-${index}`} className="px-2 text-muted-foreground">
+                              ...
+                            </span>
+                          ) : (
+                            <Button
+                              key={page}
+                              variant={currentPage === page ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => goToPage(page as number)}
+                              className="h-8 w-8 p-0"
+                            >
+                              {page}
+                            </Button>
+                          )
+                        ))}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                        className="h-8 w-8 p-0"
+                      >
+                        <ChevronsRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
