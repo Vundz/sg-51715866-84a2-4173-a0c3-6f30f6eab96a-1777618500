@@ -131,19 +131,17 @@ export default function PlantingsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [plantingsData, plantTypesData, locationsData, reservationsData, inventoryData] = await Promise.all([
+      const [plantingsData, plantTypesData, locationsData, reservationsData] = await Promise.all([
         plantingService.getPlantings(),
         plantTypeService.getPlantTypes(),
         locationService.getLocations(),
         reservationService.getReservations(),
-        fetch("/api/inventory/seed").then(res => res.json()),
       ]);
 
       setPlantings(plantingsData as Planting[]);
       setPlantTypes(plantTypesData as PlantType[]);
       setLocations(locationsData);
       setReservations(reservationsData as Reservation[]);
-      setSeedInventory(inventoryData);
       
     } catch (error) {
       console.error("Error loading data:", error);
@@ -1125,21 +1123,6 @@ export default function PlantingsPage() {
                   required
                   min="1"
                 />
-                {formData.plant_type_id && formData.quantity && (
-                  <p className="text-xs text-gray-500">
-                    {(() => {
-                      const validation = validateSeedQuantity(
-                        formData.plant_type_id,
-                        parseInt(formData.quantity)
-                      );
-                      return validation.message ? (
-                        <span className={validation.isValid ? "text-orange-600" : "text-red-600"}>
-                          {validation.message}
-                        </span>
-                      ) : null;
-                    })()}
-                  </p>
-                )}
               </div>
 
               <div className="space-y-2">
