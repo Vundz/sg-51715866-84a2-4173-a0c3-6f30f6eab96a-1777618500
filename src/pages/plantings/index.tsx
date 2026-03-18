@@ -42,6 +42,7 @@ import {
   Grid3x3,
   List,
   CheckSquare,
+  Edit,
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { Layout } from "@/components/Layout";
@@ -711,16 +712,18 @@ export default function PlantingsPage() {
                           onCheckedChange={toggleSelectAll}
                         />
                       </TableHead>
-                      <TableHead className="min-w-[120px]">Batch #</TableHead>
+                      <TableHead className="min-w-[100px]">Batch #</TableHead>
                       <TableHead className="min-w-[150px]">Plant Type</TableHead>
-                      <TableHead>Variety</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead>Planted</TableHead>
-                      <TableHead className="text-right">Available Qty</TableHead>
-                      <TableHead className="text-right">Reserved</TableHead>
-                      <TableHead className="text-right">For Sale</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="min-w-[120px]">Variety</TableHead>
+                      <TableHead className="min-w-[120px]">Location</TableHead>
+                      <TableHead className="min-w-[100px]">Date Planted</TableHead>
+                      <TableHead className="min-w-[100px]">Expected Harvest</TableHead>
+                      <TableHead className="min-w-[100px]">Days to Harvest</TableHead>
+                      <TableHead className="min-w-[80px]">Starting Quantity</TableHead>
+                      <TableHead className="min-w-[80px]">Reserved</TableHead>
+                      <TableHead className="min-w-[100px]">For Sale</TableHead>
+                      <TableHead className="min-w-[100px]">Status</TableHead>
+                      <TableHead className="min-w-[150px] text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -738,6 +741,7 @@ export default function PlantingsPage() {
                           .reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
                         const forSale = (planting.remaining_quantity || 0) - reservedQty;
                         const daysToHarvest = getDaysToHarvest(planting);
+                        const plantType = plantTypes.find(pt => pt.id === planting.plant_type_id);
 
                         return (
                           <TableRow key={planting.id}>
@@ -750,11 +754,11 @@ export default function PlantingsPage() {
                             <TableCell className="font-medium">{planting.batch_number}</TableCell>
                             <TableCell>
                               <div className="flex flex-col">
-                                <span className="font-medium">{planting.plant_types?.name}</span>
+                                <span className="font-medium">{plantType?.name}</span>
                                 <span className="text-xs text-gray-500">{planting.plant_types?.name}</span>
                               </div>
                             </TableCell>
-                            <TableCell>{planting.variety || '-'}</TableCell>
+                            <TableCell>{planting.variety || 'N/A'}</TableCell>
                             <TableCell>{location?.name || 'N/A'}</TableCell>
                             <TableCell>
                               <div className="flex flex-col">
@@ -802,7 +806,7 @@ export default function PlantingsPage() {
                                     size="sm"
                                     onClick={() => handleDeleteClick(planting.id)}
                                   >
-                                    <Trash2 className="h-4 w-4" />
+                                    <Trash2 className="h-4 w-4 text-red-500" />
                                   </Button>
                                 )}
                               </div>
@@ -829,8 +833,9 @@ export default function PlantingsPage() {
                     const reservedQty = reservations
                       .filter(r => r.planting_id === p.id && r.status === 'pending')
                       .reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
-                    const forSale = (p.remaining_quantity || 0) - reservedQty;
+                    const forSaleQty = (p.remaining_quantity || 0) - reservedQty;
                     const daysToHarvest = getDaysToHarvest(p);
+                    const plantType = plantTypes.find(pt => pt.id === p.plant_type_id);
 
                     return (
                       <Card key={p.id} className="border-2">
@@ -885,7 +890,7 @@ export default function PlantingsPage() {
                               </div>
                               <div>
                                 <p className="text-xs text-gray-500">For Sale</p>
-                                <p className="font-bold">{forSale.toLocaleString()}</p>
+                                <p className="font-bold">{forSaleQty.toLocaleString()}</p>
                               </div>
                             </div>
 
