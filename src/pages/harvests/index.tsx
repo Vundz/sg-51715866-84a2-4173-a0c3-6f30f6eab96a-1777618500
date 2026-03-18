@@ -133,15 +133,10 @@ export default function HarvestsPage() {
     // Search filter
     if (searchQuery) {
       filtered = filtered.filter(h => 
-        h.plantings?.plant_types?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        h.plantings?.plant_types?.variety.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        h.plantings?.batch_number?.toLowerCase().includes(searchQuery.toLowerCase())
+        h.plantings?.batch_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        h.plantings?.plant_types?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        h.plantings?.variety?.toLowerCase().includes(searchQuery.toLowerCase())
       );
-    }
-    
-    // Planting filter
-    if (filters.planting_id && filters.planting_id !== "__all__") {
-      filtered = filtered.filter(h => h.planting_id === filters.planting_id);
     }
     
     // Variety filter
@@ -149,20 +144,17 @@ export default function HarvestsPage() {
       filtered = filtered.filter(h => h.plantings?.plant_types?.variety === filters.variety);
     }
     
-    // Date range filters
-    if (filters.date_from) {
-      filtered = filtered.filter(h => new Date(h.harvest_date) >= new Date(filters.date_from));
-    }
-    if (filters.date_to) {
-      filtered = filtered.filter(h => new Date(h.harvest_date) <= new Date(filters.date_to));
-    }
-    
     // Status filter
     if (filters.status && filters.status !== "__all__") {
-      filtered = filtered.filter(h => h.status === filters.status);
+      filtered = filtered.filter(h => h.status && h.status === filters.status);
     }
     
-    return filtered;
+    // Sort by harvest_date descending (newest first)
+    return filtered.sort((a, b) => {
+      const dateA = new Date(a.harvest_date).getTime();
+      const dateB = new Date(b.harvest_date).getTime();
+      return dateB - dateA; // Descending order (newest first)
+    });
   }, [harvests, searchQuery, filters]);
 
   // Calculate total harvested based on filters
