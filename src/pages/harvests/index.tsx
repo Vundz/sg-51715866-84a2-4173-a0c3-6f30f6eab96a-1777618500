@@ -88,6 +88,9 @@ export default function HarvestsPage() {
         plantingService.getPlantingsWithDetails()
       ]);
       
+      console.log("📊 Harvests loaded:", harvestsData?.length || 0, "records");
+      console.log("🌱 Plantings loaded:", plantingsData?.length || 0, "records");
+      
       setHarvests(harvestsData);
       setPlantings(plantingsData);
 
@@ -130,6 +133,9 @@ export default function HarvestsPage() {
   const filteredHarvests = useMemo(() => {
     let filtered = harvests;
     
+    console.log("🔍 Starting with", harvests?.length || 0, "total harvests");
+    console.log("🔍 Filters:", { searchQuery, variety: filters.variety, status: filters.status });
+    
     // Search filter
     if (searchQuery) {
       filtered = filtered.filter(h => 
@@ -150,11 +156,15 @@ export default function HarvestsPage() {
     }
     
     // Sort by harvest_date descending (newest first)
-    return filtered.sort((a, b) => {
+    const sorted = filtered.sort((a, b) => {
       const dateA = new Date(a.harvest_date).getTime();
       const dateB = new Date(b.harvest_date).getTime();
       return dateB - dateA; // Descending order (newest first)
     });
+    
+    console.log("✅ Filtered results:", sorted?.length || 0, "harvests");
+    
+    return sorted;
   }, [harvests, searchQuery, filters]);
 
   // Calculate total harvested based on filters

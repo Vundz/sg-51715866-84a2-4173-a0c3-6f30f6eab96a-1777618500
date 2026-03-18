@@ -40,7 +40,8 @@ export const harvestService = {
           plant_types (*),
           locations (*)
         )
-      `);
+      `)
+      .order("harvest_date", { ascending: false });
     if (error) {
       console.error("Error getting harvests with details:", error);
       throw error;
