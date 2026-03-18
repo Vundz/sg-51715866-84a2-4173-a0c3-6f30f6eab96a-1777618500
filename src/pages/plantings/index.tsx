@@ -1786,7 +1786,7 @@ export default function PlantingsPage() {
                     const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
                     
                     return (
-                      <Card key={p.id} className="border-2 hover:border-lime-500 transition-colors">
+                      <Card key={p.id} className="border-2">
                         <CardContent className="pt-6">
                           <div className="space-y-3">
                             {/* Header: Variety + Status */}
