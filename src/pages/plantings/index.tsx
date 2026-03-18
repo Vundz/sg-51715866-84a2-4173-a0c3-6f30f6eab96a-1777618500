@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter, Upload, Download, PlusCircle, LayoutGrid, Table as TableIcon } from "lucide-react";
+import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter, Upload, Download, PlusCircle, LayoutGrid, Table as TableIcon, AlertTriangle } from "lucide-react";
 import { plantingService } from "@/services/plantingService";
 import { plantTypeService } from "@/services/plantTypeService";
 import { locationService } from "@/services/locationService";
@@ -68,7 +68,7 @@ export default function PlantingsPage() {
   
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "plant_type" | "location" | "variety" | "status">("status");
+  const [filterType, setFilterType] = useState<"all" | "location" | "plant_type" | "variety" | "status">("status");
   const [filterValue, setFilterValue] = useState("active");
   
   // CSV Import states
@@ -90,6 +90,13 @@ export default function PlantingsPage() {
   // Add view mode state here
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   
+  // Bulk operations state
+  const [selectedPlantings, setSelectedPlantings] = useState<string[]>([]);
+  const [showBulkStatusDialog, setShowBulkStatusDialog] = useState(false);
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<"active" | "harvested" | "closed">("active");
+  const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
+
   useEffect(() => {
     loadData();
   }, [user]);
@@ -133,6 +140,77 @@ export default function PlantingsPage() {
 
   const getReservationCount = (plantingId: string): number => {
     return reservations.filter(r => r.planting_id === plantingId && r.status === 'active').length;
+  };
+
+  // Bulk operations handlers
+  const togglePlantingSelection = (plantingId: string) => {
+    setSelectedPlantings(prev => 
+      prev.includes(plantingId) 
+        ? prev.filter(id => id !== plantingId)
+        : [...prev, plantingId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedPlantings.length === filteredPlantings.length) {
+      setSelectedPlantings([]);
+    } else {
+      setSelectedPlantings(filteredPlantings.map(p => p.id));
+    }
+  };
+
+  const handleBulkStatusUpdate = async () => {
+    if (selectedPlantings.length === 0) return;
+
+    setIsBulkActionLoading(true);
+    try {
+      await plantingService.updateMultipleStatuses(selectedPlantings, bulkStatus);
+      
+      toast({
+        title: "Status updated",
+        description: `Successfully updated ${selectedPlantings.length} planting(s) to ${bulkStatus}`,
+      });
+
+      setSelectedPlantings([]);
+      setShowBulkStatusDialog(false);
+      loadData();
+    } catch (error) {
+      console.error("Error updating statuses:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update planting statuses",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedPlantings.length === 0) return;
+
+    setIsBulkActionLoading(true);
+    try {
+      await plantingService.deleteMultiple(selectedPlantings);
+      
+      toast({
+        title: "Plantings deleted",
+        description: `Successfully deleted ${selectedPlantings.length} planting(s)`,
+      });
+
+      setSelectedPlantings([]);
+      setShowBulkDeleteDialog(false);
+      loadData();
+    } catch (error) {
+      console.error("Error deleting plantings:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete plantings",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkActionLoading(false);
+    }
   };
 
   // Validate seed quantity and show warnings
@@ -1318,20 +1396,30 @@ export default function PlantingsPage() {
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
                     <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm">
-                      <TableRow className="border-b">
-                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Row</TableHead>
-                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Plant Type</TableHead>
-                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Variety</TableHead>
-                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Location</TableHead>
-                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Quantity</TableHead>
-                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Date Planted</TableHead>
-                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Status</TableHead>
+                      <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={selectedPlantings.length === filteredPlantings.length && filteredPlantings.length > 0}
+                            onCheckedChange={toggleSelectAll}
+                          />
+                        </TableHead>
+                        <TableHead className="min-w-[150px]">Plant Type</TableHead>
+                        <TableHead className="min-w-[120px]">Variety</TableHead>
+                        <TableHead className="min-w-[120px]">Location</TableHead>
+                        <TableHead className="min-w-[90px]">Quantity</TableHead>
+                        <TableHead className="min-w-[70px]">Date Planted</TableHead>
+                        <TableHead className="min-w-[100px]">Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {csvData.slice(0, 5).map((row, index) => (
                         <TableRow key={`valid-${index}`} className="bg-green-50 dark:bg-green-950">
-                          <TableCell>{row.rowNumber}</TableCell>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedPlantings.includes(row.id)}
+                              onCheckedChange={() => togglePlantingSelection(row.id)}
+                            />
+                          </TableCell>
                           <TableCell>{row.plantType?.name}</TableCell>
                           <TableCell>{row.plantType?.variety}</TableCell>
                           <TableCell>{row.location?.name}</TableCell>
@@ -1345,7 +1433,12 @@ export default function PlantingsPage() {
                       
                       {invalidRows.slice(0, 5).map((row, index) => (
                         <TableRow key={`invalid-${index}`} className="bg-red-50 dark:bg-red-950">
-                          <TableCell>{row.rowNumber}</TableCell>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedPlantings.includes(row.id)}
+                              onCheckedChange={() => togglePlantingSelection(row.id)}
+                            />
+                          </TableCell>
                           <TableCell>{row.rawData["Plant Type"]}</TableCell>
                           <TableCell>{row.rawData["Variety"]}</TableCell>
                           <TableCell>{row.rawData["Location"]}</TableCell>
@@ -1413,343 +1506,464 @@ export default function PlantingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Search and Filter Bar */}
-          <div className="flex flex-col md:flex-row gap-4 pb-4 border-b">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Search by batch, plant, variety, or location..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+          {/* Search and Filters */}
+          <div className="space-y-4">
+            {/* Bulk Actions Bar */}
+            {selectedPlantings.length > 0 && (
+              <Card className="border-primary/50 bg-primary/5">
+                <CardContent className="py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <p className="text-sm font-medium">
+                        {selectedPlantings.length} planting{selectedPlantings.length !== 1 ? 's' : ''} selected
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedPlantings([])}
+                      >
+                        Clear Selection
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowBulkStatusDialog(true)}
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Update Status
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setShowBulkDeleteDialog(true)}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete Selected
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-4">
+              {/* Search and Filter Bar */}
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder="Search by batch, plant, variety, or location..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+
+              <div className="flex gap-2 items-center">
+                <Filter className="w-4 h-4 text-gray-500" />
+                <Select value={filterType} onValueChange={(value: typeof filterType) => {
+                  setFilterType(value);
+                  setFilterValue("");
+                }}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue placeholder="Filter by..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Plantings</SelectItem>
+                    <SelectItem value="plant_type">By Plant Type</SelectItem>
+                    <SelectItem value="variety">By Variety</SelectItem>
+                    <SelectItem value="location">By Location</SelectItem>
+                    <SelectItem value="status">By Status</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {filterType === "plant_type" && (
+                  <Select value={filterValue} onValueChange={setFilterValue}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select plant type..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {uniquePlantTypesForFilter.map(plantType => (
+                        <SelectItem key={plantType} value={plantType}>{plantType}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {filterType === "location" && (
+                  <Select value={filterValue} onValueChange={setFilterValue}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select location..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {uniqueLocations.map(loc => (
+                        <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {filterType === "variety" && (
+                  <Select value={filterValue} onValueChange={setFilterValue}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select variety..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {uniqueVarieties.map(variety => (
+                        <SelectItem key={variety} value={variety}>{variety}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {filterType === "status" && (
+                  <Select value={filterValue} onValueChange={setFilterValue}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select status..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="harvested">Harvested</SelectItem>
+                      <SelectItem value="closed">Closed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {(searchQuery || filterType !== "all") && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={handleClearFilters}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
             </div>
 
-            <div className="flex gap-2 items-center">
-              <Filter className="w-4 h-4 text-gray-500" />
-              <Select value={filterType} onValueChange={(value: typeof filterType) => {
-                setFilterType(value);
-                setFilterValue("");
-              }}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Filter by..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Plantings</SelectItem>
-                  <SelectItem value="plant_type">By Plant Type</SelectItem>
-                  <SelectItem value="variety">By Variety</SelectItem>
-                  <SelectItem value="location">By Location</SelectItem>
-                  <SelectItem value="status">By Status</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {filterType === "plant_type" && (
-                <Select value={filterValue} onValueChange={setFilterValue}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select plant type..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {uniquePlantTypesForFilter.map(plantType => (
-                      <SelectItem key={plantType} value={plantType}>{plantType}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-
-              {filterType === "location" && (
-                <Select value={filterValue} onValueChange={setFilterValue}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select location..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {uniqueLocations.map(loc => (
-                      <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-
-              {filterType === "variety" && (
-                <Select value={filterValue} onValueChange={setFilterValue}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select variety..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {uniqueVarieties.map(variety => (
-                      <SelectItem key={variety} value={variety}>{variety}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-
-              {filterType === "status" && (
-                <Select value={filterValue} onValueChange={setFilterValue}>
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Select status..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="harvested">Harvested</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-
-              {(searchQuery || filterType !== "all") && (
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={handleClearFilters}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  Clear
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {/* Table or Card View */}
-          {viewMode === "table" ? (
-            /* TABLE VIEW */
-            <div className="border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm">
-                    <TableRow className="border-b">
-                      <TableHead className="min-w-[120px]">Batch #</TableHead>
-                      <TableHead className="min-w-[150px]">Plant</TableHead>
-                      <TableHead className="min-w-[120px]">Location</TableHead>
-                      <TableHead className="min-w-[90px]">Available Qty</TableHead>
-                      <TableHead className="min-w-[70px]">Trays</TableHead>
-                      <TableHead className="min-w-[100px]">Reserved</TableHead>
-                      <TableHead className="min-w-[100px]">For Sale</TableHead>
-                      <TableHead className="min-w-[100px]">Price (ZMW)</TableHead>
-                      <TableHead className="min-w-[120px]">Date Planted</TableHead>
-                      <TableHead className="min-w-[130px]">Expected Harvest</TableHead>
-                      <TableHead className="min-w-[90px]">Status</TableHead>
-                      <TableHead className="min-w-[120px] text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredPlantings.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={12} className="text-center h-24 px-4 py-2">
-                          {searchQuery || filterType !== "all" 
-                            ? "No plantings match your search or filter criteria." 
-                            : "No plantings recorded yet."}
-                        </TableCell>
+            {/* Table or Card View */}
+            {viewMode === "table" ? (
+              /* TABLE VIEW */
+              <div className="border rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm">
+                      <TableRow className="border-b">
+                        <TableHead className="min-w-[120px]">Batch #</TableHead>
+                        <TableHead className="min-w-[150px]">Plant</TableHead>
+                        <TableHead className="min-w-[120px]">Location</TableHead>
+                        <TableHead className="min-w-[90px]">Available Qty</TableHead>
+                        <TableHead className="min-w-[70px]">Trays</TableHead>
+                        <TableHead className="min-w-[100px]">Reserved</TableHead>
+                        <TableHead className="min-w-[100px]">For Sale</TableHead>
+                        <TableHead className="min-w-[100px]">Price (ZMW)</TableHead>
+                        <TableHead className="min-w-[120px]">Date Planted</TableHead>
+                        <TableHead className="min-w-[130px]">Expected Harvest</TableHead>
+                        <TableHead className="min-w-[90px]">Status</TableHead>
+                        <TableHead className="min-w-[120px] text-right">Actions</TableHead>
                       </TableRow>
-                    ) : (
-                      filteredPlantings.map(p => {
-                        const reserved = getReservedQuantity(p.id);
-                        const forSale = getAvailableQuantity(p);
-                        const reservationCount = getReservationCount(p.id);
-                        const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
-                        
-                        return (
-                          <TableRow key={p.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
-                            <TableCell className="font-mono font-semibold text-sm">
-                              {p.batch_number || 'N/A'}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              {p.plant_types?.variety || 'N/A'}
-                              <br/>
-                              <span className="text-xs text-gray-500">{p.plant_types?.name}</span>
-                            </TableCell>
-                            <TableCell>{p.locations?.name || 'N/A'}</TableCell>
-                            <TableCell className="font-medium text-blue-600">
-                              {formatNumber(p.remaining_quantity ?? p.quantity)}
-                            </TableCell>
-                            <TableCell>
-                              <span className="font-medium text-blue-600">{trayUsage}</span>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <span className={reserved > 0 ? "font-medium text-orange-600" : ""}>{formatNumber(reserved)}</span>
-                                {reservationCount > 0 && (
-                                  <Link 
-                                    href={`/reservations?planting=${p.id}`}
-                                    className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                                    title="View reservations"
-                                  >
-                                    <ShoppingCart className="w-3 h-3" />
-                                    <span className="text-xs">({reservationCount})</span>
-                                  </Link>
-                                )}
+                    </TableHeader>
+                    <TableBody>
+                      {filteredPlantings.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                            No plantings found matching your criteria
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredPlantings.map((planting) => {
+                          const location = locations.find(l => l.id === planting.location_id);
+                          const reservationCount = getReservationCount(planting.id);
+                          const reservedQty = reservations
+                            .filter(r => r.planting_id === planting.id && r.status === 'active')
+                            .reduce((sum, r) => sum + r.quantity, 0);
+                          const forSale = planting.remaining_quantity - reservedQty;
+                          
+                          return (
+                            <TableRow key={planting.id}>
+                              <TableCell>
+                                <Checkbox
+                                  checked={selectedPlantings.includes(planting.id)}
+                                  onCheckedChange={() => togglePlantingSelection(planting.id)}
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                {planting.plant_types?.variety || 'N/A'}
+                                <br/>
+                                <span className="text-xs text-gray-500">{planting.plant_types?.name}</span>
+                              </TableCell>
+                              <TableCell>{location?.name || 'N/A'}</TableCell>
+                              <TableCell className="font-medium text-blue-600">
+                                {formatNumber(planting.remaining_quantity ?? planting.quantity)}
+                              </TableCell>
+                              <TableCell>
+                                <span className="font-medium text-blue-600">{Math.round((planting.remaining_quantity ?? planting.quantity) / 220)}</span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <span className={reservedQty > 0 ? "font-medium text-orange-600" : ""}>{formatNumber(reservedQty)}</span>
+                                  {reservationCount > 0 && (
+                                    <Link 
+                                      href={`/reservations?planting=${planting.id}`}
+                                      className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                      title="View reservations"
+                                    >
+                                      <ShoppingCart className="w-3 h-3" />
+                                      <span className="text-xs">({reservationCount})</span>
+                                    </Link>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <span className={forSale <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
+                                  {formatNumber(forSale)}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right font-mono">
+                                K{(planting.selling_price || 0).toFixed(2)}
+                              </TableCell>
+                              <TableCell>{new Date(planting.date_planted).toLocaleDateString()}</TableCell>
+                              <TableCell>{getExpectedHarvestDate(planting)}</TableCell>
+                              <TableCell>
+                                <Badge variant={planting.status === 'active' ? 'default' : planting.status === 'closed' ? 'destructive' : 'secondary'}
+                                  className={planting.status === 'active' ? 'bg-green-100 text-green-800' : planting.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
+                                >
+                                  {planting.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex gap-1 justify-end">
+                                  {permissions.canUpdate && (
+                                    <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(planting)} title="Edit planting">
+                                      <Edit className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                  {permissions.canDelete && (
+                                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(planting.id)} title="Delete planting">
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                  {!permissions.canUpdate && !permissions.canDelete && (
+                                    <span className="text-xs text-gray-400 italic flex-1 text-center py-2">View only</span>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            ) : (
+              /* CARD VIEW */
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredPlantings.length === 0 ? (
+                  <div className="col-span-full text-center py-12 text-gray-500">
+                    {searchQuery || filterType !== "all" 
+                      ? "No plantings match your search or filter criteria." 
+                      : "No plantings recorded yet."}
+                  </div>
+                ) : (
+                  filteredPlantings.map(p => {
+                    const reserved = getReservedQuantity(p.id);
+                    const forSale = getAvailableQuantity(p);
+                    const reservationCount = getReservationCount(p.id);
+                    const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
+                    
+                    return (
+                      <Card key={p.id} className="border-2 hover:border-lime-500 transition-colors">
+                        <CardContent className="pt-6">
+                          <div className="space-y-3">
+                            {/* Header: Variety + Status */}
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
+                                  {p.plant_types?.variety || 'N/A'}
+                                </h3>
+                                <p className="text-sm text-gray-500">{p.plant_types?.name}</p>
                               </div>
-                            </TableCell>
-                            <TableCell>
-                              <span className={forSale <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
-                                {formatNumber(forSale)}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              K{(p.selling_price || 0).toFixed(2)}
-                            </TableCell>
-                            <TableCell>{new Date(p.date_planted).toLocaleDateString()}</TableCell>
-                            <TableCell>{getExpectedHarvestDate(p)}</TableCell>
-                            <TableCell>
                               <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
                                 className={p.status === 'active' ? 'bg-green-100 text-green-800' : p.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
                               >
                                 {p.status}
                               </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex gap-1 justify-end">
-                                {permissions.canUpdate && (
-                                  <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(p)} title="Edit planting">
-                                    <Edit className="w-4 h-4" />
-                                  </Button>
-                                )}
-                                {permissions.canDelete && (
-                                  <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(p.id)} title="Delete planting">
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                )}
-                                {!permissions.canUpdate && !permissions.canDelete && (
-                                  <span className="text-xs text-gray-400 italic">View only</span>
-                                )}
+                            </div>
+
+                            {/* Batch Number */}
+                            <div className="text-xs font-mono text-gray-500">
+                              Batch: {p.batch_number || 'N/A'}
+                            </div>
+
+                            {/* Key Metrics Grid - 3 columns */}
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3">
+                                <div className="text-xs text-gray-600 dark:text-gray-400">Available</div>
+                                <div className="text-xl font-bold text-blue-600">
+                                  {formatNumber(p.remaining_quantity ?? p.quantity)}
+                                </div>
+                                <div className="text-xs text-gray-500">{trayUsage} trays</div>
                               </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
+
+                              <div className="bg-orange-50 dark:bg-orange-950 rounded-lg p-3">
+                                <div className="text-xs text-gray-600 dark:text-gray-400">Reserved</div>
+                                <div className={`text-xl font-bold ${reserved > 0 ? "text-orange-600" : "text-gray-400"}`}>
+                                  {formatNumber(reserved)}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {reservationCount > 0 ? `${reservationCount} reservations` : "None"}
+                                </div>
+                              </div>
+
+                              <div className="bg-green-50 dark:bg-green-950 rounded-lg p-3">
+                                <div className="text-xs text-gray-600 dark:text-gray-400">For Sale</div>
+                                <div className={`text-xl font-bold ${forSale <= 0 ? "text-red-600" : "text-green-600"}`}>
+                                  {formatNumber(forSale)}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {forSale > 0 ? "Available now" : "Fully reserved"}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Details */}
+                            <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600 dark:text-gray-400">Location:</span>
+                                <span className="font-medium">{location?.name || 'N/A'}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600 dark:text-gray-400">Price:</span>
+                                <span className="font-mono font-semibold">K{(p.selling_price || 0).toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600 dark:text-gray-400">Planted:</span>
+                                <span>{new Date(p.date_planted).toLocaleDateString()}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600 dark:text-gray-400">Harvest:</span>
+                                <span>{getExpectedHarvestDate(p)}</span>
+                              </div>
+                              {reservationCount > 0 && (
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-gray-600 dark:text-gray-400">Reservations:</span>
+                                  <Link 
+                                    href={`/reservations?planting=${p.id}`}
+                                    className="text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium"
+                                  >
+                                    <ShoppingCart className="w-3 h-3" />
+                                    {reservationCount}
+                                  </Link>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                              {permissions.canUpdate && (
+                                <Button size="sm" variant="outline" onClick={() => handleOpenDialog(p)} className="flex-1">
+                                  <Edit className="w-4 h-4 mr-1" />
+                                  Edit
+                                </Button>
+                              )}
+                              {permissions.canDelete && (
+                                <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleDeletePlanting(p.id)}>
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {!permissions.canUpdate && !permissions.canDelete && (
+                                <span className="text-xs text-gray-400 italic flex-1 text-center py-2">View only</span>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Bulk Status Update Dialog */}
+      <Dialog open={showBulkStatusDialog} onOpenChange={setShowBulkStatusDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Status for {selectedPlantings.length} Planting(s)</DialogTitle>
+            <DialogDescription>
+              Select the new status for the selected plantings. This action will update all selected plantings at once.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">New Status</label>
+              <Select value={bulkStatus} onValueChange={(value: typeof bulkStatus) => setBulkStatus(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="harvested">Harvested</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="rounded-lg bg-muted p-4">
+              <p className="text-sm text-muted-foreground">
+                <strong>Selected plantings:</strong> {selectedPlantings.length}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                All selected plantings will be updated to <strong>{bulkStatus}</strong> status.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkStatusDialog(false)} disabled={isBulkActionLoading}>
+              Cancel
+            </Button>
+            <Button onClick={handleBulkStatusUpdate} disabled={isBulkActionLoading}>
+              {isBulkActionLoading ? "Updating..." : "Update Status"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {selectedPlantings.length} Planting(s)?</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. This will permanently delete the selected plantings and all associated data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-destructive mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-destructive">Warning: This is irreversible</p>
+                <p className="text-sm text-muted-foreground">
+                  You are about to delete <strong>{selectedPlantings.length}</strong> planting(s). 
+                  All harvests, reservations, and related data will also be deleted.
+                </p>
               </div>
             </div>
-          ) : (
-            /* CARD VIEW */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredPlantings.length === 0 ? (
-                <div className="col-span-full text-center py-12 text-gray-500">
-                  {searchQuery || filterType !== "all" 
-                    ? "No plantings match your search or filter criteria." 
-                    : "No plantings recorded yet."}
-                </div>
-              ) : (
-                filteredPlantings.map(p => {
-                  const reserved = getReservedQuantity(p.id);
-                  const forSale = getAvailableQuantity(p);
-                  const reservationCount = getReservationCount(p.id);
-                  const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
-                  
-                  return (
-                    <Card key={p.id} className="border-2 hover:border-lime-500 transition-colors">
-                      <CardContent className="pt-6">
-                        <div className="space-y-3">
-                          {/* Header: Variety + Status */}
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
-                                {p.plant_types?.variety || 'N/A'}
-                              </h3>
-                              <p className="text-sm text-gray-500">{p.plant_types?.name}</p>
-                            </div>
-                            <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
-                              className={p.status === 'active' ? 'bg-green-100 text-green-800' : p.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
-                            >
-                              {p.status}
-                            </Badge>
-                          </div>
-
-                          {/* Batch Number */}
-                          <div className="text-xs font-mono text-gray-500">
-                            Batch: {p.batch_number || 'N/A'}
-                          </div>
-
-                          {/* Key Metrics Grid - 3 columns */}
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3">
-                              <div className="text-xs text-gray-600 dark:text-gray-400">Available</div>
-                              <div className="text-xl font-bold text-blue-600">
-                                {formatNumber(p.remaining_quantity ?? p.quantity)}
-                              </div>
-                              <div className="text-xs text-gray-500">{trayUsage} trays</div>
-                            </div>
-
-                            <div className="bg-orange-50 dark:bg-orange-950 rounded-lg p-3">
-                              <div className="text-xs text-gray-600 dark:text-gray-400">Reserved</div>
-                              <div className={`text-xl font-bold ${reserved > 0 ? "text-orange-600" : "text-gray-400"}`}>
-                                {formatNumber(reserved)}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {reservationCount > 0 ? `${reservationCount} reservations` : "None"}
-                              </div>
-                            </div>
-
-                            <div className="bg-green-50 dark:bg-green-950 rounded-lg p-3">
-                              <div className="text-xs text-gray-600 dark:text-gray-400">For Sale</div>
-                              <div className={`text-xl font-bold ${forSale <= 0 ? "text-red-600" : "text-green-600"}`}>
-                                {formatNumber(forSale)}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {forSale > 0 ? "Available now" : "Fully reserved"}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Details */}
-                          <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600 dark:text-gray-400">Location:</span>
-                              <span className="font-medium">{p.locations?.name || 'N/A'}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600 dark:text-gray-400">Price:</span>
-                              <span className="font-mono font-semibold">K{(p.selling_price || 0).toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600 dark:text-gray-400">Planted:</span>
-                              <span>{new Date(p.date_planted).toLocaleDateString()}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600 dark:text-gray-400">Harvest:</span>
-                              <span>{getExpectedHarvestDate(p)}</span>
-                            </div>
-                            {reservationCount > 0 && (
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-600 dark:text-gray-400">Reservations:</span>
-                                <Link 
-                                  href={`/reservations?planting=${p.id}`}
-                                  className="text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium"
-                                >
-                                  <ShoppingCart className="w-3 h-3" />
-                                  {reservationCount}
-                                </Link>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                            {permissions.canUpdate && (
-                              <Button size="sm" variant="outline" onClick={() => handleOpenDialog(p)} className="flex-1">
-                                <Edit className="w-4 h-4 mr-1" />
-                                Edit
-                              </Button>
-                            )}
-                            {permissions.canDelete && (
-                              <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleDeletePlanting(p.id)}>
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                            {!permissions.canUpdate && !permissions.canDelete && (
-                              <span className="text-xs text-gray-400 italic flex-1 text-center py-2">View only</span>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkDeleteDialog(false)} disabled={isBulkActionLoading}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={isBulkActionLoading}>
+              {isBulkActionLoading ? "Deleting..." : "Delete Plantings"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
