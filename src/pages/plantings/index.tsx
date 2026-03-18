@@ -1396,15 +1396,15 @@ export default function PlantingsPage() {
                 <div className="border rounded-lg overflow-hidden">
                   <Table>
                     <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm">
-                      <TableRow>
+                      <TableRow className="border-b">
                         <TableHead className="w-12">
                           <Checkbox
                             checked={selectedPlantings.length === filteredPlantings.length && filteredPlantings.length > 0}
                             onCheckedChange={toggleSelectAll}
                           />
                         </TableHead>
-                        <TableHead className="min-w-[150px]">Plant Type</TableHead>
-                        <TableHead className="min-w-[120px]">Variety</TableHead>
+                        <TableHead className="min-w-[120px]">Batch #</TableHead>
+                        <TableHead className="min-w-[150px]">Plant</TableHead>
                         <TableHead className="min-w-[120px]">Location</TableHead>
                         <TableHead className="min-w-[90px]">Quantity</TableHead>
                         <TableHead className="min-w-[70px]">Date Planted</TableHead>
@@ -1420,8 +1420,12 @@ export default function PlantingsPage() {
                               onCheckedChange={() => togglePlantingSelection(row.id)}
                             />
                           </TableCell>
-                          <TableCell>{row.plantType?.name}</TableCell>
-                          <TableCell>{row.plantType?.variety}</TableCell>
+                          <TableCell className="font-mono text-xs">{row.plantType?.name}</TableCell>
+                          <TableCell className="font-medium">
+                            {row.plantType?.variety || 'N/A'}
+                            <br/>
+                            <span className="text-xs text-gray-500">{row.plantType?.name}</span>
+                          </TableCell>
                           <TableCell>{row.location?.name}</TableCell>
                           <TableCell>{formatNumber(row.quantity)}</TableCell>
                           <TableCell>{new Date(row.datePlanted).toLocaleDateString()}</TableCell>
@@ -1651,6 +1655,12 @@ export default function PlantingsPage() {
                   <Table>
                     <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm">
                       <TableRow className="border-b">
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={selectedPlantings.length === filteredPlantings.length && filteredPlantings.length > 0}
+                            onCheckedChange={toggleSelectAll}
+                          />
+                        </TableHead>
                         <TableHead className="min-w-[120px]">Batch #</TableHead>
                         <TableHead className="min-w-[150px]">Plant</TableHead>
                         <TableHead className="min-w-[120px]">Location</TableHead>
@@ -1667,8 +1677,8 @@ export default function PlantingsPage() {
                     </TableHeader>
                     <TableBody>
                       {filteredPlantings.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
                             No plantings found matching your criteria
                           </TableCell>
                         </TableRow>
@@ -1682,13 +1692,14 @@ export default function PlantingsPage() {
                           const forSale = planting.remaining_quantity - reservedQty;
                           
                           return (
-                            <TableRow key={planting.id}>
+                            <TableRow key={planting.id} className="hover:bg-transparent">
                               <TableCell>
                                 <Checkbox
                                   checked={selectedPlantings.includes(planting.id)}
                                   onCheckedChange={() => togglePlantingSelection(planting.id)}
                                 />
                               </TableCell>
+                              <TableCell className="font-mono text-xs">{planting.batch_number || 'N/A'}</TableCell>
                               <TableCell className="font-medium">
                                 {planting.plant_types?.variety || 'N/A'}
                                 <br/>
