@@ -5,15 +5,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Package, Printer, LayoutGrid, Table as TableIcon } from "lucide-react";
+import { Plus, Edit, Trash2, Package, Printer, LayoutGrid, Table as TableIcon, AlertTriangle, ShieldAlert } from "lucide-react";
 import { harvestService, HarvestWithDetails } from "@/services/harvestService";
 import { plantingService, PlantingWithDetails } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { formatNumber } from "@/lib/format";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,6 +28,7 @@ export default function HarvestsPage() {
   const [editingHarvest, setEditingHarvest] = useState<HarvestWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [harvestedQuantities, setHarvestedQuantities] = useState<Record<string, number>>({});
+  const [reservedQuantities, setReservedQuantities] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredHarvests, setFilteredHarvests] = useState<HarvestWithDetails[]>([]);
   const [filters, setFilters] = useState({
@@ -40,6 +41,9 @@ export default function HarvestsPage() {
   const [selectedPlantingId, setSelectedPlantingId] = useState<string>("");
   const [harvestQuantity, setHarvestQuantity] = useState<number>(0);
   const [quantityError, setQuantityError] = useState<string>("");
+  const [reservationConflict, setReservationConflict] = useState<any>(null);
+  const [showReservationDialog, setShowReservationDialog] = useState(false);
+  const [overrideReservations, setOverrideReservations] = useState(false);
   const { toast } = useToast();
 
   // Add view mode state
@@ -63,17 +67,28 @@ export default function HarvestsPage() {
 
       // Calculate total harvested quantity for each planting
       const quantities: Record<string, number> = {};
+      const reserved: Record<string, number> = {};
+      
       for (const p of plantingsData) {
         const totalHarvested = harvestsData
           .filter(h => h.planting_id === p.id)
           .reduce((sum, h) => sum + h.quantity_harvested, 0);
         quantities[p.id] = totalHarvested;
+        
+        // Get reserved quantity
+        const reservedQty = await harvestService.getReservedQuantity(p.id);
+        reserved[p.id] = reservedQty;
       }
       setHarvestedQuantities(quantities);
+      setReservedQuantities(reserved);
 
     } catch (error) {
       console.error("Error loading data:", error);
-      alert("Failed to load data. Please try again.");
+      toast({
+        title: "Error",
+        description: "Failed to load data. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
@@ -141,32 +156,53 @@ export default function HarvestsPage() {
     return planting.quantity - harvested;
   };
 
-  const validateHarvestQuantity = (quantity: number, plantingId: string): boolean => {
+  const getHarvestableQuantity = (plantingId: string): number => {
+    const available = getAvailableQuantity(plantingId);
+    const reserved = reservedQuantities[plantingId] || 0;
+    return Math.max(0, available - reserved);
+  };
+
+  const validateHarvestQuantity = async (quantity: number, plantingId: string): Promise<boolean> => {
     if (!plantingId) {
       setQuantityError("Please select a planting first");
       return false;
     }
-    
-    const available = getAvailableQuantity(plantingId);
     
     if (quantity <= 0) {
       setQuantityError("Quantity must be greater than 0");
       return false;
     }
     
-    if (quantity > available) {
-      setQuantityError(`Quantity exceeds available: ${available} seedlings`);
+    // Call backend validation
+    try {
+      const validation = await harvestService.validateHarvest(plantingId, quantity);
+      
+      if (!validation.valid) {
+        setQuantityError(validation.error || "Invalid quantity");
+        
+        // If reservation conflict, show special handling
+        if (validation.reservationConflict) {
+          setReservationConflict(validation);
+        }
+        
+        return false;
+      }
+      
+      setQuantityError("");
+      setReservationConflict(null);
+      return true;
+    } catch (error: any) {
+      setQuantityError(error.message || "Validation failed");
       return false;
     }
-    
-    setQuantityError("");
-    return true;
   };
 
   const handlePlantingChange = (plantingId: string) => {
     setSelectedPlantingId(plantingId);
     setHarvestQuantity(0);
     setQuantityError("");
+    setReservationConflict(null);
+    setOverrideReservations(false);
   };
 
   const handleQuantityChange = (value: string) => {
@@ -175,6 +211,10 @@ export default function HarvestsPage() {
     if (selectedPlantingId) {
       validateHarvestQuantity(qty, selectedPlantingId);
     }
+  };
+
+  const handleShowReservationConflict = () => {
+    setShowReservationDialog(true);
   };
 
   const handlePrintDispatchSlip = (harvest: HarvestWithDetails) => {
@@ -360,19 +400,26 @@ export default function HarvestsPage() {
     const plantingId = formData.get("planting_id") as string;
     const quantity = parseInt(formData.get("quantity_harvested") as string);
     
-    // Validate before saving
-    if (!validateHarvestQuantity(quantity, plantingId)) {
-      toast({ 
-        title: "Validation Error", 
-        description: quantityError,
-        variant: "destructive" 
-      });
-      return;
+    // Validate before saving (unless overriding)
+    if (!overrideReservations) {
+      const isValid = await validateHarvestQuantity(quantity, plantingId);
+      if (!isValid) {
+        if (reservationConflict) {
+          handleShowReservationConflict();
+        } else {
+          toast({ 
+            title: "Validation Error", 
+            description: quantityError,
+            variant: "destructive" 
+          });
+        }
+        return;
+      }
     }
 
     const harvestData = {
-      planting_id: formData.get("planting_id") as string,
-      quantity_harvested: parseInt(formData.get("quantity_harvested") as string),
+      planting_id: plantingId,
+      quantity_harvested: quantity,
       harvest_date: formData.get("harvest_date") as string,
       status: formData.get("status") as string,
       notes: (formData.get("notes") as string) || null,
@@ -383,8 +430,18 @@ export default function HarvestsPage() {
     try {
       if (editingHarvest) {
         await harvestService.updateHarvest(editingHarvest.id, harvestData);
+        toast({
+          title: "Success",
+          description: "Harvest updated successfully"
+        });
       } else {
-        await harvestService.createHarvest(harvestData);
+        await harvestService.createHarvest(harvestData, overrideReservations);
+        toast({
+          title: "Success",
+          description: overrideReservations 
+            ? "Harvest created (reservations overridden)" 
+            : "Harvest created successfully"
+        });
       }
       
       await loadInitialData();
@@ -393,9 +450,15 @@ export default function HarvestsPage() {
       setSelectedPlantingId("");
       setHarvestQuantity(0);
       setQuantityError("");
-    } catch (error) {
+      setReservationConflict(null);
+      setOverrideReservations(false);
+    } catch (error: any) {
       console.error("Error saving harvest:", error);
-      alert("Failed to save harvest. Please try again.");
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save harvest",
+        variant: "destructive"
+      });
     }
   };
 
@@ -404,16 +467,26 @@ export default function HarvestsPage() {
     
     try {
       await harvestService.deleteHarvest(id);
+      toast({
+        title: "Success",
+        description: "Harvest deleted successfully"
+      });
       await loadInitialData();
     } catch (error) {
       console.error("Error deleting harvest:", error);
-      alert("Failed to delete harvest. Please try again.");
+      toast({
+        title: "Error",
+        description: "Failed to delete harvest",
+        variant: "destructive"
+      });
     }
   };
 
   const handleOpenDialog = (harvest: HarvestWithDetails | null = null) => {
     setEditingHarvest(harvest);
     setIsDialogOpen(true);
+    setOverrideReservations(false);
+    setReservationConflict(null);
   };
 
   if (loading) {
@@ -469,6 +542,7 @@ export default function HarvestsPage() {
         )}
       </div>
 
+      {/* Harvest Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
@@ -492,9 +566,13 @@ export default function HarvestsPage() {
                   <SelectContent>
                     {plantings.filter(p => p.status === "active").map(p => {
                       const available = getAvailableQuantity(p.id);
+                      const harvestable = getHarvestableQuantity(p.id);
+                      const reserved = reservedQuantities[p.id] || 0;
+                      
                       return (
                         <SelectItem key={p.id} value={p.id} disabled={available <= 0}>
-                          {p.plant_types?.name} ({p.plant_types?.variety}) - Available: {formatNumber(available)}
+                          {p.plant_types?.name} ({p.plant_types?.variety}) - Available: {formatNumber(harvestable)}
+                          {reserved > 0 && ` (${formatNumber(reserved)} reserved)`}
                         </SelectItem>
                       );
                     })}
@@ -504,7 +582,13 @@ export default function HarvestsPage() {
                   <Alert className="mt-2">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
-                      Available: <strong>{formatNumber(getAvailableQuantity(selectedPlantingId))}</strong> seedlings
+                      <div className="space-y-1 text-sm">
+                        <div><strong>Total Available:</strong> {formatNumber(getAvailableQuantity(selectedPlantingId))}</div>
+                        <div><strong>Reserved:</strong> {formatNumber(reservedQuantities[selectedPlantingId] || 0)}</div>
+                        <div className="text-green-600 font-semibold">
+                          <strong>Harvestable:</strong> {formatNumber(getHarvestableQuantity(selectedPlantingId))} seedlings
+                        </div>
+                      </div>
                     </AlertDescription>
                   </Alert>
                 )}
@@ -529,10 +613,23 @@ export default function HarvestsPage() {
                   disabled={isViewer}
                 />
                 {quantityError && (
-                  <p className="text-sm text-red-600 flex items-center gap-1">
+                  <Alert variant="destructive">
                     <AlertCircle className="w-4 h-4" />
-                    {quantityError}
-                  </p>
+                    <AlertDescription className="flex items-start gap-2">
+                      <div className="flex-1">{quantityError}</div>
+                      {reservationConflict && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={handleShowReservationConflict}
+                          className="shrink-0"
+                        >
+                          View Details
+                        </Button>
+                      )}
+                    </AlertDescription>
+                  </Alert>
                 )}
               </div>
               <div className="space-y-2">
@@ -573,13 +670,16 @@ export default function HarvestsPage() {
                   setSelectedPlantingId("");
                   setHarvestQuantity(0);
                   setQuantityError("");
+                  setReservationConflict(null);
+                  setOverrideReservations(false);
                 }}>Cancel</Button>
                 <Button 
                   type="submit" 
                   className="bg-blue-600 hover:bg-blue-700"
-                  disabled={!!quantityError || harvestQuantity === 0}
+                  disabled={(!overrideReservations && !!quantityError) || harvestQuantity === 0}
                 >
-                  Save Harvest
+                  {overrideReservations && <ShieldAlert className="w-4 h-4 mr-2" />}
+                  {overrideReservations ? "Override & Save" : "Save Harvest"}
                 </Button>
               </div>
             ) : (
@@ -590,7 +690,113 @@ export default function HarvestsPage() {
           </form>
         </DialogContent>
       </Dialog>
-      
+
+      {/* Reservation Conflict Dialog */}
+      <Dialog open={showReservationDialog} onOpenChange={setShowReservationDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-600" />
+              Reservation Conflict Detected
+            </DialogTitle>
+            <DialogDescription>
+              This harvest would exceed the harvestable quantity due to pending reservations.
+            </DialogDescription>
+          </DialogHeader>
+
+          {reservationConflict && (
+            <div className="space-y-4">
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Cannot Proceed Without Override</AlertTitle>
+                <AlertDescription>
+                  You are trying to harvest <strong>{harvestQuantity}</strong> seedlings, but only{" "}
+                  <strong>{reservationConflict.harvestable}</strong> are available for harvest.
+                  <div className="mt-2 space-y-1 text-sm">
+                    <div>• Total Available: {reservationConflict.available}</div>
+                    <div>• Reserved for Customers: {reservationConflict.reserved}</div>
+                    <div className="text-green-600 font-semibold">• Harvestable: {reservationConflict.harvestable}</div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+
+              {reservationConflict.conflictingReservations && reservationConflict.conflictingReservations.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Pending Reservations</CardTitle>
+                    <CardDescription>These customers have reserved seedlings from this planting</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Customer</TableHead>
+                          <TableHead>Reserved Date</TableHead>
+                          <TableHead className="text-right">Quantity</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reservationConflict.conflictingReservations.map((res: any) => (
+                          <TableRow key={res.id}>
+                            <TableCell className="font-medium">{res.customer_name}</TableCell>
+                            <TableCell>{new Date(res.reserved_date).toLocaleDateString()}</TableCell>
+                            <TableCell className="text-right">{formatNumber(res.quantity_reserved)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Alert className="border-orange-500">
+                <ShieldAlert className="h-4 w-4 text-orange-600" />
+                <AlertTitle>Options to Proceed</AlertTitle>
+                <AlertDescription>
+                  <ol className="list-decimal list-inside space-y-2 mt-2">
+                    <li>Reduce harvest quantity to {reservationConflict.harvestable} or less</li>
+                    <li>Cancel or modify the conflicting reservations in the Reservations module</li>
+                    <li>Override reservations (not recommended - may break customer commitments)</li>
+                  </ol>
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowReservationDialog(false);
+                setOverrideReservations(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Link href="/reservations">
+              <Button variant="secondary">
+                Go to Reservations
+              </Button>
+            </Link>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setOverrideReservations(true);
+                setShowReservationDialog(false);
+                toast({
+                  title: "Override Enabled",
+                  description: "You can now save the harvest. Please ensure you communicate with affected customers.",
+                  variant: "default"
+                });
+              }}
+            >
+              <ShieldAlert className="w-4 h-4 mr-2" />
+              Override Reservations
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Card>
         <CardHeader>
           <CardTitle>Harvest Log</CardTitle>
