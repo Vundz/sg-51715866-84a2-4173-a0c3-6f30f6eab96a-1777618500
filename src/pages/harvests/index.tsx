@@ -8,7 +8,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Package, Printer, LayoutGrid, Table as TableIcon, AlertTriangle, ShieldAlert } from "lucide-react";
+import { 
+  Plus, 
+  Edit, 
+  Trash2, 
+  Package, 
+  Printer, 
+  LayoutGrid, 
+  Table as TableIcon, 
+  AlertTriangle, 
+  ShieldAlert,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
+} from "lucide-react";
 import { harvestService, HarvestWithDetails } from "@/services/harvestService";
 import { plantingService, PlantingWithDetails } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
@@ -30,7 +44,6 @@ export default function HarvestsPage() {
   const [harvestedQuantities, setHarvestedQuantities] = useState<Record<string, number>>({});
   const [reservedQuantities, setReservedQuantities] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredHarvests, setFilteredHarvests] = useState<HarvestWithDetails[]>([]);
   const [filters, setFilters] = useState({
     planting_id: "__all__",
     variety: "__all__",
@@ -49,6 +62,16 @@ export default function HarvestsPage() {
   // Add view mode state
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("harvests_rows_per_page");
+      return saved ? parseInt(saved, 10) : 50;
+    }
+    return 50;
+  });
+
   const isViewer = profile?.role === "viewer";
 
   useEffect(() => {
@@ -58,28 +81,38 @@ export default function HarvestsPage() {
   const loadInitialData = async () => {
     try {
       setLoading(true);
+      
+      // Fetch harvests and plantings in parallel
       const [harvestsData, plantingsData] = await Promise.all([
         harvestService.getHarvests(),
         plantingService.getPlantingsWithDetails()
       ]);
+      
       setHarvests(harvestsData);
       setPlantings(plantingsData);
 
-      // Calculate total harvested quantity for each planting
+      // Calculate harvested quantities locally (no API calls needed)
       const quantities: Record<string, number> = {};
-      const reserved: Record<string, number> = {};
-      
-      for (const p of plantingsData) {
+      plantingsData.forEach(p => {
         const totalHarvested = harvestsData
           .filter(h => h.planting_id === p.id)
           .reduce((sum, h) => sum + h.quantity_harvested, 0);
         quantities[p.id] = totalHarvested;
-        
-        // Get reserved quantity
-        const reservedQty = await harvestService.getReservedQuantity(p.id);
-        reserved[p.id] = reservedQty;
-      }
+      });
       setHarvestedQuantities(quantities);
+
+      // Fetch reserved quantities in parallel (not sequential!)
+      const reservedPromises = plantingsData.map(p => 
+        harvestService.getReservedQuantity(p.id)
+          .then(qty => ({ plantingId: p.id, quantity: qty }))
+          .catch(() => ({ plantingId: p.id, quantity: 0 })) // Fallback on error
+      );
+      
+      const reservedResults = await Promise.all(reservedPromises);
+      const reserved: Record<string, number> = {};
+      reservedResults.forEach(result => {
+        reserved[result.plantingId] = result.quantity;
+      });
       setReservedQuantities(reserved);
 
     } catch (error) {
@@ -134,6 +167,66 @@ export default function HarvestsPage() {
 
   // Calculate total harvested based on filters
   const totalHarvested = filteredHarvests.reduce((sum, h) => sum + h.quantity_harvested, 0);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredHarvests.length / rowsPerPage);
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const paginatedHarvests = filteredHarvests.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filters]);
+
+  // Save rows per page preference
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("harvests_rows_per_page", rowsPerPage.toString());
+    }
+  }, [rowsPerPage]);
+
+  const handleRowsPerPageChange = (value: string) => {
+    setRowsPerPage(parseInt(value, 10));
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const showEllipsis = totalPages > 7;
+
+    if (!showEllipsis) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+      return pages;
+    }
+
+    pages.push(1);
+
+    if (currentPage > 3) {
+      pages.push("...");
+    }
+
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+      pages.push(i);
+    }
+
+    if (currentPage < totalPages - 2) {
+      pages.push("...");
+    }
+
+    if (totalPages > 1) {
+      pages.push(totalPages);
+    }
+
+    return pages;
+  };
 
   // Get unique varieties for filter
   const uniqueVarieties = Array.from(
@@ -907,14 +1000,14 @@ export default function HarvestsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredHarvests.length === 0 ? (
+                  {paginatedHarvests.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center h-24">
                         No harvests found matching your filters.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredHarvests.map(h => {
+                    paginatedHarvests.map(h => {
                       const details = h.plantings;
                       return (
                         <TableRow key={h.id}>
@@ -965,13 +1058,13 @@ export default function HarvestsPage() {
           ) : (
             /* CARD VIEW */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredHarvests.length === 0 ? (
+              {paginatedHarvests.length === 0 ? (
                 <div className="col-span-full text-center py-12">
                   <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-500">No harvests found matching your filters.</p>
                 </div>
               ) : (
-                filteredHarvests.map(h => {
+                paginatedHarvests.map(h => {
                   const details = h.plantings;
                   return (
                     <Card key={h.id} className="border-2 hover:border-blue-500 transition-colors">
@@ -1089,6 +1182,99 @@ export default function HarvestsPage() {
                 </p>
               </div>
             </div>
+          )}
+
+          {/* Pagination Controls */}
+          {filteredHarvests.length > 0 && (
+            <Card>
+              <CardContent className="py-4">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  {/* Rows per page */}
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="rows-per-page" className="text-sm">
+                      Rows per page:
+                    </Label>
+                    <Select value={rowsPerPage.toString()} onValueChange={handleRowsPerPageChange}>
+                      <SelectTrigger id="rows-per-page" className="w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="25">25</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                        <SelectItem value="200">200</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Page info */}
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Showing {startIndex + 1}-{Math.min(endIndex, filteredHarvests.length)} of {filteredHarvests.length}
+                  </div>
+
+                  {/* Page navigation */}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(1)}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronsLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+
+                    {getPageNumbers().map((page, index) =>
+                      typeof page === "number" ? (
+                        <Button
+                          key={index}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handlePageChange(page)}
+                          className="min-w-[40px]"
+                        >
+                          {page}
+                        </Button>
+                      ) : (
+                        <span key={index} className="px-2 text-gray-400">
+                          {page}
+                        </span>
+                      )
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(totalPages)}
+                      disabled={currentPage === totalPages}
+                    >
+                      <ChevronsRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  {/* Page indicator */}
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    Page {currentPage} of {totalPages}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </CardContent>
       </Card>

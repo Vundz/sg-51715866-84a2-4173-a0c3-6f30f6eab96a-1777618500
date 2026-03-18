@@ -144,6 +144,8 @@ export default function PlantingsPage() {
   // Sorting state
   const [sortColumn, setSortColumn] = useState<SortColumn>("date_planted");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  
+  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(() => {
     if (typeof window !== "undefined") {
@@ -153,19 +155,7 @@ export default function PlantingsPage() {
     return 50;
   });
 
-  // Sorting function
-  const handleSort = (column: string) => {
-    if (sortColumn === column) {
-      // Toggle direction if same column
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      // New column, default to ascending
-      setSortColumn(column as SortColumn);
-      setSortDirection("asc");
-    }
-  };
-
-  // Add view mode state here
+  // Add view mode state
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   
   useEffect(() => {
@@ -360,33 +350,18 @@ export default function PlantingsPage() {
     }
   };
 
-  const getReservationCount = (plantingId: string): number => {
-    return reservations.filter(r => r.planting_id === plantingId && r.status === 'pending').length;
+  // Sorting function
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column as SortColumn);
+      setSortDirection("asc");
+    }
   };
 
-  // Validate seed quantity and show warnings
-  const validateSeedQuantity = (plantTypeId: string, quantity: number): { isValid: boolean; message?: string } => {
-    const inventory = seedInventory.find(inv => inv.plant_type_id === plantTypeId);
-    
-    if (!inventory) {
-      return { isValid: false, message: "No seed inventory found for this plant type" };
-    }
-
-    if (inventory.quantity < quantity) {
-      return { 
-        isValid: false, 
-        message: `Not enough seeds. Available: ${inventory.quantity}, Required: ${quantity}` 
-      };
-    }
-
-    if (inventory.quantity - quantity < (inventory.reorder_point || 0)) {
-      return { 
-        isValid: true, 
-        message: `Warning: This will bring seed inventory below reorder point (${inventory.reorder_point})` 
-      };
-    }
-
-    return { isValid: true };
+  const getReservationCount = (plantingId: string): number => {
+    return reservations.filter(r => r.planting_id === plantingId && r.status === 'pending').length;
   };
 
   // Get unique varieties and locations for filter dropdowns
@@ -563,29 +538,6 @@ export default function PlantingsPage() {
     return pages;
   };
 
-  // Calculate dashboard metrics based on filtered plantings
-  const dashboardMetrics = useMemo(() => {
-    const totalAvailable = filteredPlantings.reduce((sum, p) => sum + (p.remaining_quantity || 0), 0);
-    const totalReserved = filteredPlantings.reduce((sum, p) => {
-      const reserved = reservations
-        .filter(r => r.planting_id === p.id && r.status === 'pending')
-        .reduce((rSum, r) => rSum + (r.quantity_reserved || 0), 0);
-      return sum + reserved;
-    }, 0);
-    const totalForSale = totalAvailable - totalReserved;
-    const inventoryValue = filteredPlantings.reduce((sum, p) => {
-      const price = p.plant_types?.selling_price || 0;
-      return sum + (p.remaining_quantity * price);
-    }, 0);
-
-    return {
-      totalAvailable,
-      totalReserved,
-      totalForSale,
-      inventoryValue,
-    };
-  }, [filteredPlantings, reservations]);
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -626,254 +578,198 @@ export default function PlantingsPage() {
 
   return (
     <Layout>
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold">Plantings Management</h1>
-            <p className="text-gray-600 mt-1">Track and manage all your plantings</p>
+      <div className="p-6">
+        <div className="mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold">Plantings</h1>
+              <p className="text-gray-600 mt-1">Manage your planting batches and inventory</p>
+            </div>
+            {canCreate && (
+              <Button onClick={() => setShowDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Planting
+              </Button>
+            )}
           </div>
-          {canCreate && (
-            <Button onClick={() => setShowDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Planting
-            </Button>
-          )}
         </div>
 
-        {/* Dashboard Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
+        {/* Bulk Actions Bar */}
+        {selectedPlantings.size > 0 && (
+          <Card className="border-primary/50 bg-primary/5 mb-4">
+            <CardContent className="py-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Available</p>
-                  <p className="text-2xl font-bold">{dashboardMetrics.totalAvailable.toLocaleString()}</p>
+                <div className="flex items-center gap-4">
+                  <CheckSquare className="h-5 w-5 text-primary" />
+                  <span className="font-medium">
+                    {selectedPlantings.size} planting(s) selected
+                  </span>
                 </div>
-                <Package className="h-8 w-8 text-blue-500" />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Total seedlings in inventory</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Reserved</p>
-                  <p className="text-2xl font-bold">{dashboardMetrics.totalReserved.toLocaleString()}</p>
-                </div>
-                <AlertTriangle className="h-8 w-8 text-orange-500" />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Committed to customers</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">For Sale</p>
-                  <p className="text-2xl font-bold">{dashboardMetrics.totalForSale.toLocaleString()}</p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-green-500" />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Available - Reserved</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Inventory Value</p>
-                  <p className="text-2xl font-bold">${dashboardMetrics.inventoryValue.toLocaleString()}</p>
-                </div>
-                <Package className="h-8 w-8 text-purple-500" />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Based on current selling prices</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>All Plantings</CardTitle>
-            <CardDescription>
-              View and manage your planting batches
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Search and Filters */}
-            <div className="space-y-4">
-              {/* Bulk Actions Bar */}
-              {selectedPlantings.size > 0 && (
-                <Card className="border-primary/50 bg-primary/5">
-                  <CardContent className="py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <CheckSquare className="h-5 w-5 text-primary" />
-                        <span className="font-medium">
-                          {selectedPlantings.size} planting(s) selected
-                        </span>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowBulkUpdateDialog(true)}
-                          disabled={!canEdit}
-                        >
-                          Update Status
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowBulkDeleteDialog(true)}
-                          disabled={!canDelete}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          Delete
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedPlantings(new Set())}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Search plantings..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-
                 <div className="flex gap-2">
-                  <Select
-                    value={filterType}
-                    onValueChange={(value: typeof filterType) => {
-                      setFilterType(value);
-                      setFilterValue(value === "status" ? "active" : "");
-                    }}
-                  >
-                    <SelectTrigger className="w-[160px]">
-                      <SelectValue placeholder="Filter by..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Plantings</SelectItem>
-                      <SelectItem value="status">By Status</SelectItem>
-                      <SelectItem value="location">By Location</SelectItem>
-                      <SelectItem value="plant_type">By Plant Type</SelectItem>
-                      <SelectItem value="variety">By Variety</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {filterType === "status" && (
-                    <Select value={filterValue} onValueChange={setFilterValue}>
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="harvested">Harvested</SelectItem>
-                        <SelectItem value="closed">Closed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-
-                  {filterType === "location" && (
-                    <Select value={filterValue} onValueChange={setFilterValue}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Select location" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {uniqueLocations.map((loc) => (
-                          <SelectItem key={loc.id} value={loc.id}>
-                            {loc.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-
-                  {filterType === "plant_type" && (
-                    <Select value={filterValue} onValueChange={setFilterValue}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Select plant type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {uniquePlantTypes.map((plantType) => (
-                          <SelectItem key={plantType} value={plantType}>
-                            {plantType}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-
-                  {filterType === "variety" && (
-                    <Select value={filterValue} onValueChange={setFilterValue}>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Select variety" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {uniqueVarieties.map((variety) => (
-                          <SelectItem key={variety} value={variety}>
-                            {variety}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-
-                  {filterType !== "all" && filterValue && (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => {
-                        setFilterType("all");
-                        setFilterValue("");
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-
                   <Button
                     variant="outline"
-                    size="icon"
-                    onClick={() => setViewMode(viewMode === "table" ? "cards" : "table")}
+                    size="sm"
+                    onClick={() => setShowBulkUpdateDialog(true)}
+                    disabled={!canEdit}
                   >
-                    {viewMode === "table" ? (
-                      <Grid3x3 className="h-4 w-4" />
-                    ) : (
-                      <List className="h-4 w-4" />
-                    )}
+                    Update Status
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowBulkDeleteDialog(true)}
+                    disabled={!canDelete}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedPlantings(new Set())}
+                  >
+                    <X className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        )}
 
-              <div className="text-sm text-gray-600">
-                Showing {paginatedPlantings.length} of {plantings.length} plantings
+        {/* Search and Filters */}
+        <Card className="mb-4">
+          <CardContent className="pt-6">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search plantings..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Select
+                  value={filterType}
+                  onValueChange={(value: typeof filterType) => {
+                    setFilterType(value);
+                    setFilterValue(value === "status" ? "active" : "");
+                  }}
+                >
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Filter by..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Plantings</SelectItem>
+                    <SelectItem value="status">By Status</SelectItem>
+                    <SelectItem value="location">By Location</SelectItem>
+                    <SelectItem value="plant_type">By Plant Type</SelectItem>
+                    <SelectItem value="variety">By Variety</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {filterType === "status" && (
+                  <Select value={filterValue} onValueChange={setFilterValue}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="harvested">Harvested</SelectItem>
+                      <SelectItem value="closed">Closed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {filterType === "location" && (
+                  <Select value={filterValue} onValueChange={setFilterValue}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {uniqueLocations.map((loc) => (
+                        <SelectItem key={loc.id} value={loc.id}>
+                          {loc.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {filterType === "plant_type" && (
+                  <Select value={filterValue} onValueChange={setFilterValue}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select plant type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {uniquePlantTypes.map((plantType) => (
+                        <SelectItem key={plantType} value={plantType}>
+                          {plantType}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {filterType === "variety" && (
+                  <Select value={filterValue} onValueChange={setFilterValue}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select variety" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {uniqueVarieties.map((variety) => (
+                        <SelectItem key={variety} value={variety}>
+                          {variety}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {filterType !== "all" && filterValue && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      setFilterType("all");
+                      setFilterValue("");
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setViewMode(viewMode === "table" ? "cards" : "table")}
+                >
+                  {viewMode === "table" ? (
+                    <Grid3x3 className="h-4 w-4" />
+                  ) : (
+                    <List className="h-4 w-4" />
+                  )}
+                </Button>
               </div>
             </div>
 
-            {/* Table View */}
-            {viewMode === "table" && (
-              <div className="border rounded-lg overflow-auto">
+            <div className="text-sm text-gray-600 mt-4">
+              Showing {paginatedPlantings.length} of {filteredPlantings.length} plantings
+              {filteredPlantings.length !== plantings.length && ` (filtered from ${plantings.length} total)`}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Table View */}
+        {viewMode === "table" && (
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader className="bg-white dark:bg-gray-950">
+                  <TableHeader className="bg-gray-50 dark:bg-gray-900">
                     <TableRow>
                       <TableHead className="w-12">
                         <Checkbox
@@ -997,7 +893,7 @@ export default function PlantingsPage() {
                   <TableBody>
                     {paginatedPlantings.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="text-center py-8 text-gray-500">
+                        <TableCell colSpan={13} className="text-center py-8 text-gray-500">
                           No plantings found
                         </TableCell>
                       </TableRow>
@@ -1090,206 +986,203 @@ export default function PlantingsPage() {
                   </TableBody>
                 </Table>
               </div>
-            )}
+            </CardContent>
+          </Card>
+        )}
 
-            {/* Cards View */}
-            {viewMode === "cards" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {paginatedPlantings.length === 0 ? (
-                  <div className="col-span-full text-center py-8 text-gray-500">
-                    No plantings found
-                  </div>
-                ) : (
-                  paginatedPlantings.map((p) => {
-                    const location = locations.find(l => l.id === p.location_id);
-                    const reservedQty = reservations
-                      .filter(r => r.planting_id === p.id && r.status === 'pending')
-                      .reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
-                    const forSaleQty = (p.remaining_quantity || 0) - reservedQty;
-                    const daysToHarvest = getDaysToHarvest(p);
-                    const plantType = plantTypes.find(pt => pt.id === p.plant_type_id);
-
-                    return (
-                      <Card key={p.id} className="border-2">
-                        <CardContent className="pt-6">
-                          <div className="space-y-3">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Checkbox
-                                    checked={selectedPlantings.has(p.id)}
-                                    onCheckedChange={() => togglePlantingSelection(p.id)}
-                                  />
-                                  <h3 className="font-semibold text-lg">{p.plant_types?.name}</h3>
-                                </div>
-                                <p className="text-sm text-gray-600">{p.variety || 'No variety'}</p>
-                                <p className="text-xs text-gray-500 mt-1">Batch: {p.batch_number}</p>
-                              </div>
-                              <Badge className={getStatusColor(p.status)}>
-                                {p.status}
-                              </Badge>
-                            </div>
-
-                            <div className="space-y-2 text-sm">
-                              <div className="flex items-center gap-2 text-gray-600">
-                                <MapPin className="h-4 w-4" />
-                                <span>{location?.name || 'Unknown'}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-gray-600">
-                                <Calendar className="h-4 w-4" />
-                                <span>
-                                  {format(new Date(p.date_planted), "MMM dd, yyyy")}
-                                  <span className="text-xs ml-1">
-                                    ({differenceInDays(new Date(), new Date(p.date_planted))} days ago)
-                                  </span>
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-3 py-3 border-t border-b">
-                              <div>
-                                <p className="text-xs text-gray-500">Available</p>
-                                <p className="font-bold">{p.remaining_quantity?.toLocaleString() || 0}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-500">Reserved</p>
-                                <p className="font-bold">{reservedQty.toLocaleString()}</p>
-                                {getReservationCount(p.id) > 0 && (
-                                  <p className="text-xs text-gray-500">
-                                    {getReservationCount(p.id)} res.
-                                  </p>
-                                )}
-                              </div>
-                              <div>
-                                <p className="text-xs text-gray-500">For Sale</p>
-                                <p className="font-bold">{forSaleQty.toLocaleString()}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex gap-2 pt-2">
-                              {canEdit && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="flex-1"
-                                  onClick={() => handleEdit(p)}
-                                >
-                                  <Pencil className="h-4 w-4 mr-1" />
-                                  Edit
-                                </Button>
-                              )}
-                              {canDelete && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleDeleteClick(p.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })
-                )}
-
-                {/* Pagination Controls */}
-                {filteredPlantings.length > 0 && (
-                  <div className="flex items-center justify-between pt-4 border-t mt-4">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">Rows per page:</span>
-                        <Select value={rowsPerPage.toString()} onValueChange={handleRowsPerPageChange}>
-                          <SelectTrigger className="w-[70px] h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="10">10</SelectItem>
-                            <SelectItem value="25">25</SelectItem>
-                            <SelectItem value="50">50</SelectItem>
-                            <SelectItem value="100">100</SelectItem>
-                            <SelectItem value="200">200</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="text-sm text-muted-foreground hidden sm:block">
-                        Showing {startIndex + 1}-{Math.min(endIndex, filteredPlantings.length)} of {filteredPlantings.length}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="text-sm text-muted-foreground mr-2 hidden sm:block">
-                        Page {currentPage} of {totalPages}
-                      </div>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => goToPage(1)}
-                        disabled={currentPage === 1}
-                        className="h-8 w-8 p-0"
-                      >
-                        <ChevronsLeft className="h-4 w-4" />
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => goToPage(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        className="h-8 w-8 p-0"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-
-                      <div className="flex items-center gap-1 hidden md:flex">
-                        {getPageNumbers().map((page, index) => (
-                          page === "..." ? (
-                            <span key={`ellipsis-${index}`} className="px-2 text-muted-foreground">
-                              ...
-                            </span>
-                          ) : (
-                            <Button
-                              key={page}
-                              variant={currentPage === page ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => goToPage(page as number)}
-                              className="h-8 w-8 p-0"
-                            >
-                              {page}
-                            </Button>
-                          )
-                        ))}
-                      </div>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => goToPage(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        className="h-8 w-8 p-0"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => goToPage(totalPages)}
-                        disabled={currentPage === totalPages}
-                        className="h-8 w-8 p-0"
-                      >
-                        <ChevronsRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
+        {/* Cards View */}
+        {viewMode === "cards" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paginatedPlantings.length === 0 ? (
+              <div className="col-span-full text-center py-8 text-gray-500">
+                No plantings found
               </div>
+            ) : (
+              paginatedPlantings.map((p) => {
+                const location = locations.find(l => l.id === p.location_id);
+                const reservedQty = reservations
+                  .filter(r => r.planting_id === p.id && r.status === 'pending')
+                  .reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
+                const forSaleQty = (p.remaining_quantity || 0) - reservedQty;
+
+                return (
+                  <Card key={p.id} className="border-2">
+                    <CardContent className="pt-6">
+                      <div className="space-y-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Checkbox
+                                checked={selectedPlantings.has(p.id)}
+                                onCheckedChange={() => togglePlantingSelection(p.id)}
+                              />
+                              <h3 className="font-semibold text-lg">{p.plant_types?.name}</h3>
+                            </div>
+                            <p className="text-sm text-gray-600">{p.variety || 'No variety'}</p>
+                            <p className="text-xs text-gray-500 mt-1">Batch: {p.batch_number}</p>
+                          </div>
+                          <Badge className={getStatusColor(p.status)}>
+                            {p.status}
+                          </Badge>
+                        </div>
+
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <MapPin className="h-4 w-4" />
+                            <span>{location?.name || 'Unknown'}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Calendar className="h-4 w-4" />
+                            <span>
+                              {format(new Date(p.date_planted), "MMM dd, yyyy")}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 py-3 border-t border-b">
+                          <div>
+                            <p className="text-xs text-gray-500">Available</p>
+                            <p className="font-bold">{p.remaining_quantity?.toLocaleString() || 0}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Reserved</p>
+                            <p className="font-bold">{reservedQty.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">For Sale</p>
+                            <p className="font-bold">{forSaleQty.toLocaleString()}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          {canEdit && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={() => handleEdit(p)}
+                            >
+                              <Pencil className="h-4 w-4 mr-1" />
+                              Edit
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteClick(p.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
             )}
-          </CardContent>
-        </Card>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {filteredPlantings.length > 0 && (
+          <Card className="mt-4">
+            <CardContent className="py-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Rows per page:</span>
+                  <Select
+                    value={rowsPerPage.toString()}
+                    onValueChange={handleRowsPerPageChange}
+                  >
+                    <SelectTrigger className="w-[70px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="200">200</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-gray-600">
+                    Showing {startIndex + 1}-{Math.min(endIndex, filteredPlantings.length)} of {filteredPlantings.length}
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(1)}
+                    disabled={currentPage === 1}
+                    className="h-9 w-9 p-0"
+                  >
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="h-9 w-9 p-0"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+
+                  <div className="hidden md:flex items-center gap-1">
+                    {getPageNumbers().map((page, index) => (
+                      page === "..." ? (
+                        <span key={`ellipsis-${index}`} className="px-2 text-gray-400">
+                          ...
+                        </span>
+                      ) : (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => goToPage(page as number)}
+                          className="h-9 w-9 p-0"
+                        >
+                          {page}
+                        </Button>
+                      )
+                    ))}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="h-9 w-9 p-0"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="h-9 w-9 p-0"
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Bulk Status Update Dialog */}
