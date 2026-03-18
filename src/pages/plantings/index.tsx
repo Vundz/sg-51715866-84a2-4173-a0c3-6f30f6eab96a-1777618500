@@ -15,7 +15,6 @@ import { plantTypeService } from "@/services/plantTypeService";
 import { locationService } from "@/services/locationService";
 import { reservationService } from "@/services/reservationService";
 import { inventoryService } from "@/services/inventoryService";
-import { harvestService } from "@/services/harvestService";
 import type { InventoryItemWithLowStock } from "@/services/inventoryService";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -91,9 +90,6 @@ export default function PlantingsPage() {
   // Add view mode state here
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   
-  // Add harvested quantities tracking
-  const [harvestedQuantities, setHarvestedQuantities] = useState<Record<string, number>>({});
-
   useEffect(() => {
     loadData();
   }, [user]);
@@ -116,14 +112,6 @@ export default function PlantingsPage() {
       setLocations(locationsData);
       setReservations(reservationsData as Reservation[]);
       setSeedInventory(inventoryData);
-      
-      // Load harvested quantities for all plantings
-      const harvestedQtys: Record<string, number> = {};
-      for (const planting of plantingsData) {
-        const qty = await harvestService.getTotalHarvestedQuantity(planting.id);
-        harvestedQtys[planting.id] = qty;
-      }
-      setHarvestedQuantities(harvestedQtys);
     } catch (error) {
       console.error("Error loading data:", error);
       toast({ title: "Error", description: "Failed to load data. Please try refreshing the page.", variant: "destructive" });
@@ -147,41 +135,20 @@ export default function PlantingsPage() {
     return reservations.filter(r => r.planting_id === plantingId && r.status === 'active').length;
   };
 
-  // Get harvested quantity for a planting
-  const getHarvestedQuantity = (plantingId: string): number => {
-    return harvestedQuantities[plantingId] || 0;
-  };
-
   // Validate seed quantity and show warnings
-  const validateSeedQuantity = (seedId: string, quantity: string) => {
-    if (!seedId || !quantity) {
-      setSeedStockWarning("");
-      return;
-    }
-
+  const validateSeedQuantity = (seedId: string, quantityUsed: string) => {
     const seed = seedInventory.find(s => s.id === seedId);
-    if (!seed) {
-      setSeedStockWarning("");
+    const qty = parseFloat(quantityUsed);
+
+    if (!seed || isNaN(qty) || qty <= 0) {
+      setSeedStockWarning("Please enter a valid seed quantity");
       return;
     }
 
-    const qtyUsed = parseFloat(quantity);
-    if (isNaN(qtyUsed) || qtyUsed <= 0) {
-      setSeedStockWarning("Please enter a valid quantity");
-      return;
-    }
-
-    const currentStock = Number(seed.current_stock);
-    if (qtyUsed > currentStock) {
-      setSeedStockWarning(`❌ Insufficient stock! Only ${formatNumber(currentStock)} ${seed.unit_of_measure} available`);
-      return;
-    }
-
-    const remainingStock = currentStock - qtyUsed;
-    if (remainingStock < (seed.minimum_stock || 0)) {
-      setSeedStockWarning(`⚠️ Warning: Stock will be low after this usage (${formatNumber(remainingStock)} ${seed.unit_of_measure} remaining)`);
+    if (qty > Number(seed.current_stock)) {
+      setSeedStockWarning(`Only ${formatNumber(Number(seed.current_stock))} ${seed.unit_of_measure} available`);
     } else {
-      setSeedStockWarning(`✅ ${formatNumber(remainingStock)} ${seed.unit_of_measure} will remain in stock`);
+      setSeedStockWarning("");
     }
   };
 
@@ -254,9 +221,9 @@ export default function PlantingsPage() {
   // Calculate dashboard metrics based on filtered plantings
   const dashboardMetrics = useMemo(() => {
     const totalPlantings = filteredPlantings.length;
-    const totalSeedlings = filteredPlantings.reduce((sum, p) => sum + (p.remaining_quantity ?? p.quantity), 0);
+    const totalAvailable = filteredPlantings.reduce((sum, p) => sum + (p.remaining_quantity ?? p.quantity), 0);
     const totalReserved = filteredPlantings.reduce((sum, p) => sum + getReservedQuantity(p.id), 0);
-    const totalAvailable = filteredPlantings.reduce((sum, p) => sum + getAvailableQuantity(p), 0);
+    const totalForSale = filteredPlantings.reduce((sum, p) => sum + getAvailableQuantity(p), 0);
     const inventoryValue = filteredPlantings.reduce((sum, p) => {
       const qty = p.remaining_quantity ?? p.quantity;
       const price = p.selling_price || 0;
@@ -265,9 +232,9 @@ export default function PlantingsPage() {
 
     return {
       totalPlantings,
-      totalSeedlings,
-      totalReserved,
       totalAvailable,
+      totalReserved,
+      totalForSale,
       inventoryValue,
     };
   }, [filteredPlantings, reservations]);
@@ -821,10 +788,10 @@ export default function PlantingsPage() {
         
         <Card className="border-l-4 border-green-500 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Seedlings</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Available Seedlings</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatNumber(dashboardMetrics.totalSeedlings)}</div>
+            <div className="text-2xl font-bold text-green-600">{formatNumber(dashboardMetrics.totalAvailable)}</div>
           </CardContent>
         </Card>
         
@@ -1530,11 +1497,10 @@ export default function PlantingsPage() {
                       <TableHead className="min-w-[120px]">Batch #</TableHead>
                       <TableHead className="min-w-[150px]">Plant</TableHead>
                       <TableHead className="min-w-[120px]">Location</TableHead>
-                      <TableHead className="min-w-[90px]">Total Qty</TableHead>
-                      <TableHead className="min-w-[90px]">Harvested</TableHead>
+                      <TableHead className="min-w-[90px]">Available Qty</TableHead>
                       <TableHead className="min-w-[70px]">Trays</TableHead>
                       <TableHead className="min-w-[100px]">Reserved</TableHead>
-                      <TableHead className="min-w-[100px]">Available</TableHead>
+                      <TableHead className="min-w-[100px]">For Sale</TableHead>
                       <TableHead className="min-w-[100px]">Price (ZMW)</TableHead>
                       <TableHead className="min-w-[120px]">Date Planted</TableHead>
                       <TableHead className="min-w-[130px]">Expected Harvest</TableHead>
@@ -1545,7 +1511,7 @@ export default function PlantingsPage() {
                   <TableBody>
                     {filteredPlantings.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={13} className="text-center h-24 px-4 py-2">
+                        <TableCell colSpan={12} className="text-center h-24 px-4 py-2">
                           {searchQuery || filterType !== "all" 
                             ? "No plantings match your search or filter criteria." 
                             : "No plantings recorded yet."}
@@ -1554,10 +1520,9 @@ export default function PlantingsPage() {
                     ) : (
                       filteredPlantings.map(p => {
                         const reserved = getReservedQuantity(p.id);
-                        const available = getAvailableQuantity(p);
+                        const forSale = getAvailableQuantity(p);
                         const reservationCount = getReservationCount(p.id);
                         const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
-                        const harvested = getHarvestedQuantity(p.id);
                         
                         return (
                           <TableRow key={p.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
@@ -1570,18 +1535,15 @@ export default function PlantingsPage() {
                               <span className="text-xs text-gray-500">{p.plant_types?.name}</span>
                             </TableCell>
                             <TableCell>{p.locations?.name || 'N/A'}</TableCell>
-                            <TableCell>{formatNumber(p.remaining_quantity ?? p.quantity)}</TableCell>
-                            <TableCell>
-                              <span className={harvested > 0 ? "font-medium text-purple-600" : "text-gray-400"}>
-                                {formatNumber(harvested)}
-                              </span>
+                            <TableCell className="font-medium text-blue-600">
+                              {formatNumber(p.remaining_quantity ?? p.quantity)}
                             </TableCell>
                             <TableCell>
                               <span className="font-medium text-blue-600">{trayUsage}</span>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
-                                <span className={reserved > 0 ? "font-medium text-blue-600" : ""}>{formatNumber(reserved)}</span>
+                                <span className={reserved > 0 ? "font-medium text-orange-600" : ""}>{formatNumber(reserved)}</span>
                                 {reservationCount > 0 && (
                                   <Link 
                                     href={`/reservations?planting=${p.id}`}
@@ -1595,8 +1557,8 @@ export default function PlantingsPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <span className={available <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
-                                {formatNumber(available)}
+                              <span className={forSale <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
+                                {formatNumber(forSale)}
                               </span>
                             </TableCell>
                             <TableCell className="text-right font-mono">
@@ -1648,10 +1610,10 @@ export default function PlantingsPage() {
               ) : (
                 filteredPlantings.map(p => {
                   const reserved = getReservedQuantity(p.id);
-                  const available = getAvailableQuantity(p);
+                  const forSale = getAvailableQuantity(p);
                   const reservationCount = getReservationCount(p.id);
                   const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
-                  const harvested = getHarvestedQuantity(p.id);
+                  
                   return (
                     <Card key={p.id} className="border-2 hover:border-lime-500 transition-colors">
                       <CardContent className="pt-6">
@@ -1676,36 +1638,16 @@ export default function PlantingsPage() {
                             Batch: {p.batch_number || 'N/A'}
                           </div>
 
-                          {/* Key Metrics Grid */}
-                          <div className="grid grid-cols-2 gap-2">
+                          {/* Key Metrics Grid - 3 columns */}
+                          <div className="grid grid-cols-3 gap-2">
                             <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3">
-                              <div className="text-xs text-gray-600 dark:text-gray-400">Total Qty</div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400">Available</div>
                               <div className="text-xl font-bold text-blue-600">
                                 {formatNumber(p.remaining_quantity ?? p.quantity)}
                               </div>
                               <div className="text-xs text-gray-500">{trayUsage} trays</div>
                             </div>
 
-                            <div className="bg-purple-50 dark:bg-purple-950 rounded-lg p-3">
-                              <div className="text-xs text-gray-600 dark:text-gray-400">Harvested</div>
-                              <div className={`text-xl font-bold ${harvested > 0 ? "text-purple-600" : "text-gray-400"}`}>
-                                {formatNumber(harvested)}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {harvested > 0 ? `${Math.round((harvested / (p.quantity || 1)) * 100)}% of total` : "None yet"}
-                              </div>
-                            </div>
-
-                            <div className="bg-green-50 dark:bg-green-950 rounded-lg p-3">
-                              <div className="text-xs text-gray-600 dark:text-gray-400">Available</div>
-                              <div className={`text-xl font-bold ${available <= 0 ? "text-red-600" : "text-green-600"}`}>
-                                {formatNumber(available)}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {reserved > 0 && `${formatNumber(reserved)} reserved`}
-                              </div>
-                            </div>
-                            
                             <div className="bg-orange-50 dark:bg-orange-950 rounded-lg p-3">
                               <div className="text-xs text-gray-600 dark:text-gray-400">Reserved</div>
                               <div className={`text-xl font-bold ${reserved > 0 ? "text-orange-600" : "text-gray-400"}`}>
@@ -1713,6 +1655,16 @@ export default function PlantingsPage() {
                               </div>
                               <div className="text-xs text-gray-500">
                                 {reservationCount > 0 ? `${reservationCount} reservations` : "None"}
+                              </div>
+                            </div>
+
+                            <div className="bg-green-50 dark:bg-green-950 rounded-lg p-3">
+                              <div className="text-xs text-gray-600 dark:text-gray-400">For Sale</div>
+                              <div className={`text-xl font-bold ${forSale <= 0 ? "text-red-600" : "text-green-600"}`}>
+                                {formatNumber(forSale)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {forSale > 0 ? "Available now" : "Fully reserved"}
                               </div>
                             </div>
                           </div>
