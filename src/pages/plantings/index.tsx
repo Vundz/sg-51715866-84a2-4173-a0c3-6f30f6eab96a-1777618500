@@ -100,6 +100,19 @@ interface Planting {
   locations?: Location;
 }
 
+export type SortColumn = 
+  | "batch_number" 
+  | "plant_type" 
+  | "variety" 
+  | "location" 
+  | "date_planted" 
+  | "expected_harvest_date" 
+  | "days_to_harvest" 
+  | "remaining_quantity" 
+  | "reserved" 
+  | "for_sale" 
+  | "status";
+
 export default function PlantingsPage() {
   const { user } = useAuth();
   const permissions = usePermissions('plantings');
@@ -147,7 +160,7 @@ export default function PlantingsPage() {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
       // New column, default to ascending
-      setSortColumn(column);
+      setSortColumn(column as SortColumn);
       setSortDirection("asc");
     }
   };
@@ -245,6 +258,43 @@ export default function PlantingsPage() {
     } catch (error) {
       console.error("Error saving planting:", error);
       alert("Failed to save planting");
+    }
+  };
+
+  const handleEditClick = (planting: Planting) => {
+    setEditingPlanting(planting);
+    setFormData({
+      batch_number: planting.batch_number,
+      plant_type_id: planting.plant_type_id,
+      variety: planting.variety || "",
+      location_id: planting.location_id,
+      date_planted: planting.date_planted,
+      expected_harvest_date: planting.expected_harvest_date || "",
+      quantity: planting.quantity.toString(),
+      selling_price: planting.selling_price?.toString() || "",
+      status: planting.status,
+      notes: planting.notes || "",
+    });
+    setShowDialog(true);
+  };
+
+  const handleEdit = handleEditClick;
+
+  const handleDeleteClick = (id: string) => {
+    setDeletingPlantingId(id);
+    setShowDeleteDialog(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deletingPlantingId) return;
+    try {
+      await plantingService.deletePlanting(deletingPlantingId);
+      await loadData();
+      setShowDeleteDialog(false);
+      setDeletingPlantingId(null);
+    } catch (error) {
+      console.error("Error deleting planting:", error);
+      alert("Failed to delete planting");
     }
   };
 
