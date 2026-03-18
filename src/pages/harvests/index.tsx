@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -127,7 +127,7 @@ export default function HarvestsPage() {
     }
   };
 
-  useEffect(() => {
+  const filteredHarvests = useMemo(() => {
     let filtered = harvests;
     
     // Search filter
@@ -162,7 +162,7 @@ export default function HarvestsPage() {
       filtered = filtered.filter(h => h.status === filters.status);
     }
     
-    setFilteredHarvests(filtered);
+    return filtered;
   }, [harvests, searchQuery, filters]);
 
   // Calculate total harvested based on filters
