@@ -28,21 +28,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-  Plus,
-  Pencil,
-  Trash2,
+import { 
+  Plus, 
+  Search, 
+  Edit, 
+  Trash2, 
   Calendar,
   MapPin,
+  Sprout,
   Package,
-  TrendingUp,
-  AlertTriangle,
-  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  CheckSquare,
   X,
   Grid3x3,
   List,
-  CheckSquare,
-  Edit,
+  Pencil,
+  AlertTriangle,
+  TrendingUp
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { Layout } from "@/components/Layout";
@@ -114,11 +118,27 @@ export default function PlantingsPage() {
   const [filterValue, setFilterValue] = useState("active");
 
   // Bulk operations states
-  const [selectedPlantings, setSelectedPlantings] = useState<string[]>([]);
-  const [showBulkStatusDialog, setShowBulkStatusDialog] = useState(false);
+  const [selectedPlantings, setSelectedPlantings] = useState<Set<string>>(new Set());
+  const [showBulkUpdateDialog, setShowBulkUpdateDialog] = useState(false);
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
-  const [bulkNewStatus, setBulkNewStatus] = useState<"active" | "harvested" | "closed">("active");
+  const [bulkUpdateStatus, setBulkUpdateStatus] = useState<"active" | "harvested" | "closed">("active");
   const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
+  
+  // Sorting state
+  const [sortColumn, setSortColumn] = useState<string | null>("date_planted");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  // Sorting function
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      // Toggle direction if same column
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // New column, default to ascending
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
 
   // Add view mode state here
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
@@ -254,35 +274,39 @@ export default function PlantingsPage() {
 
   // Bulk operations handlers
   const togglePlantingSelection = (plantingId: string) => {
-    setSelectedPlantings(prev =>
-      prev.includes(plantingId)
-        ? prev.filter(id => id !== plantingId)
-        : [...prev, plantingId]
-    );
+    setSelectedPlantings(prev => {
+      const next = new Set(prev);
+      if (next.has(plantingId)) {
+        next.delete(plantingId);
+      } else {
+        next.add(plantingId);
+      }
+      return next;
+    });
   };
 
   const toggleSelectAll = () => {
-    if (selectedPlantings.length === filteredPlantings.length) {
-      setSelectedPlantings([]);
+    if (selectedPlantings.size === filteredPlantings.length) {
+      setSelectedPlantings(new Set());
     } else {
-      setSelectedPlantings(filteredPlantings.map(p => p.id));
+      setSelectedPlantings(new Set(filteredPlantings.map(p => p.id)));
     }
   };
 
   const handleBulkStatusUpdate = async () => {
-    if (selectedPlantings.length === 0) return;
+    if (selectedPlantings.size === 0) return;
 
     setIsBulkActionLoading(true);
     try {
       await Promise.all(
-        selectedPlantings.map(id =>
-          plantingService.updatePlanting(id, { status: bulkNewStatus })
+        Array.from(selectedPlantings).map(id =>
+          plantingService.updatePlanting(id, { status: bulkUpdateStatus })
         )
       );
       await loadData();
-      setShowBulkStatusDialog(false);
-      setSelectedPlantings([]);
-      setBulkNewStatus("active");
+      setShowBulkUpdateDialog(false);
+      setSelectedPlantings(new Set());
+      setBulkUpdateStatus("active");
     } catch (error) {
       console.error("Error updating plantings:", error);
       alert("Failed to update plantings");
@@ -292,16 +316,16 @@ export default function PlantingsPage() {
   };
 
   const handleBulkDelete = async () => {
-    if (selectedPlantings.length === 0) return;
+    if (selectedPlantings.size === 0) return;
 
     setIsBulkActionLoading(true);
     try {
       await Promise.all(
-        selectedPlantings.map(id => plantingService.deletePlanting(id))
+        Array.from(selectedPlantings).map(id => plantingService.deletePlanting(id))
       );
       await loadData();
       setShowBulkDeleteDialog(false);
-      setSelectedPlantings([]);
+      setSelectedPlantings(new Set());
     } catch (error) {
       console.error("Error deleting plantings:", error);
       alert("Failed to delete plantings");
@@ -388,11 +412,69 @@ export default function PlantingsPage() {
       }
     }
 
-    // Sort by planting date (newest first)
-    return filtered.sort((a, b) => 
-      new Date(b.date_planted).getTime() - new Date(a.date_planted).getTime()
-    );
-  }, [plantings, searchQuery, filterType, filterValue]);
+    // Apply sorting
+    return filtered.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortColumn) {
+        case "batch_number":
+          aValue = a.batch_number.toLowerCase();
+          bValue = b.batch_number.toLowerCase();
+          break;
+        case "plant_type":
+          aValue = (a.plant_types?.name || "").toLowerCase();
+          bValue = (b.plant_types?.name || "").toLowerCase();
+          break;
+        case "variety":
+          aValue = (a.variety || "").toLowerCase();
+          bValue = (b.variety || "").toLowerCase();
+          break;
+        case "location":
+          aValue = (a.locations?.name || "").toLowerCase();
+          bValue = (b.locations?.name || "").toLowerCase();
+          break;
+        case "date_planted":
+          aValue = new Date(a.date_planted).getTime();
+          bValue = new Date(b.date_planted).getTime();
+          break;
+        case "expected_harvest_date":
+          aValue = a.expected_harvest_date ? new Date(a.expected_harvest_date).getTime() : 0;
+          bValue = b.expected_harvest_date ? new Date(b.expected_harvest_date).getTime() : 0;
+          break;
+        case "days_to_harvest":
+          aValue = getDaysToHarvest(a);
+          bValue = getDaysToHarvest(b);
+          break;
+        case "remaining_quantity":
+          aValue = a.remaining_quantity || 0;
+          bValue = b.remaining_quantity || 0;
+          break;
+        case "reserved":
+          aValue = getReservationCount(a.id);
+          bValue = getReservationCount(b.id);
+          break;
+        case "for_sale":
+          const aReserved = getReservationCount(a.id);
+          const bReserved = getReservationCount(b.id);
+          aValue = (a.remaining_quantity || 0) - aReserved;
+          bValue = (b.remaining_quantity || 0) - bReserved;
+          break;
+        case "status":
+          aValue = a.status.toLowerCase();
+          bValue = b.status.toLowerCase();
+          break;
+        default:
+          return 0;
+      }
+
+      if (sortDirection === "asc") {
+        return aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
+      } else {
+        return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
+      }
+    });
+  }, [plantings, searchQuery, filterType, filterValue, sortColumn, sortDirection]);
 
   // Calculate dashboard metrics based on filtered plantings
   const dashboardMetrics = useMemo(() => {
@@ -537,21 +619,21 @@ export default function PlantingsPage() {
             {/* Search and Filters */}
             <div className="space-y-4">
               {/* Bulk Actions Bar */}
-              {selectedPlantings.length > 0 && (
+              {selectedPlantings.size > 0 && (
                 <Card className="border-primary/50 bg-primary/5">
                   <CardContent className="py-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <CheckSquare className="h-5 w-5 text-primary" />
                         <span className="font-medium">
-                          {selectedPlantings.length} planting(s) selected
+                          {selectedPlantings.size} planting(s) selected
                         </span>
                       </div>
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setShowBulkStatusDialog(true)}
+                          onClick={() => setShowBulkUpdateDialog(true)}
                           disabled={!canEdit}
                         >
                           Update Status
@@ -569,7 +651,7 @@ export default function PlantingsPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setSelectedPlantings([])}
+                          onClick={() => setSelectedPlantings(new Set())}
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -708,22 +790,154 @@ export default function PlantingsPage() {
                     <TableRow>
                       <TableHead className="w-[50px]">
                         <Checkbox
-                          checked={selectedPlantings.length === filteredPlantings.length && filteredPlantings.length > 0}
+                          checked={selectedPlantings.size === filteredPlantings.length && filteredPlantings.length > 0}
                           onCheckedChange={toggleSelectAll}
                         />
                       </TableHead>
-                      <TableHead className="min-w-[100px]">Batch #</TableHead>
-                      <TableHead className="min-w-[150px]">Plant Type</TableHead>
-                      <TableHead className="min-w-[120px]">Variety</TableHead>
-                      <TableHead className="min-w-[120px]">Location</TableHead>
-                      <TableHead className="min-w-[100px]">Date Planted</TableHead>
-                      <TableHead className="min-w-[100px]">Expected Harvest</TableHead>
-                      <TableHead className="min-w-[100px]">Days to Harvest</TableHead>
-                      <TableHead className="min-w-[80px]">Starting Quantity</TableHead>
-                      <TableHead className="min-w-[80px]">Reserved</TableHead>
-                      <TableHead className="min-w-[100px]">For Sale</TableHead>
-                      <TableHead className="min-w-[100px]">Status</TableHead>
-                      <TableHead className="min-w-[150px] text-right">Actions</TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                        onClick={() => handleSort("batch_number")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Batch #
+                          {sortColumn === "batch_number" ? (
+                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                        onClick={() => handleSort("plant_type")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Plant Type
+                          {sortColumn === "plant_type" ? (
+                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                        onClick={() => handleSort("variety")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Variety
+                          {sortColumn === "variety" ? (
+                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                        onClick={() => handleSort("location")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Location
+                          {sortColumn === "location" ? (
+                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                        onClick={() => handleSort("date_planted")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Date Planted
+                          {sortColumn === "date_planted" ? (
+                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                        onClick={() => handleSort("expected_harvest_date")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Expected Harvest
+                          {sortColumn === "expected_harvest_date" ? (
+                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                        onClick={() => handleSort("days_to_harvest")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Days to Harvest
+                          {sortColumn === "days_to_harvest" ? (
+                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="text-right cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                        onClick={() => handleSort("remaining_quantity")}
+                      >
+                        <div className="flex items-center justify-end gap-2">
+                          Available
+                          {sortColumn === "remaining_quantity" ? (
+                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="text-right cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                        onClick={() => handleSort("reserved")}
+                      >
+                        <div className="flex items-center justify-end gap-2">
+                          Reserved
+                          {sortColumn === "reserved" ? (
+                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="text-right cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                        onClick={() => handleSort("for_sale")}
+                      >
+                        <div className="flex items-center justify-end gap-2">
+                          For Sale
+                          {sortColumn === "for_sale" ? (
+                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                        onClick={() => handleSort("status")}
+                      >
+                        <div className="flex items-center gap-2">
+                          Status
+                          {sortColumn === "status" ? (
+                            sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+                          ) : (
+                            <ArrowUpDown className="h-4 w-4 opacity-30" />
+                          )}
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -747,14 +961,14 @@ export default function PlantingsPage() {
                           <TableRow key={planting.id}>
                             <TableCell>
                               <Checkbox
-                                checked={selectedPlantings.includes(planting.id)}
+                                checked={selectedPlantings.has(planting.id)}
                                 onCheckedChange={() => togglePlantingSelection(planting.id)}
                               />
                             </TableCell>
                             <TableCell className="font-medium">{planting.batch_number}</TableCell>
                             <TableCell>
                               <div className="flex flex-col">
-                                <span className="font-medium">{plantType?.name}</span>
+                                <span className="font-medium">{planting.plant_types?.name}</span>
                                 <span className="text-xs text-gray-500">{planting.plant_types?.name}</span>
                               </div>
                             </TableCell>
@@ -762,35 +976,46 @@ export default function PlantingsPage() {
                             <TableCell>{location?.name || 'N/A'}</TableCell>
                             <TableCell>
                               <div className="flex flex-col">
-                                <span>{format(new Date(planting.date_planted), "MMM dd, yyyy")}</span>
-                                <span className="text-xs text-gray-500">
-                                  {differenceInDays(new Date(), new Date(planting.date_planted))} days ago
-                                </span>
+                                <span className="font-medium">{format(new Date(planting.date_planted), "MMM dd, yyyy")}</span>
+                                <span className="text-xs text-gray-500">{format(new Date(planting.date_planted), "p")}</span>
                               </div>
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {planting.remaining_quantity?.toLocaleString() || 0}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex flex-col items-end">
-                                <span>{reservedQty.toLocaleString()}</span>
-                                {getReservationCount(planting.id) > 0 && (
-                                  <span className="text-xs text-gray-500">
-                                    ({getReservationCount(planting.id)} reservations)
-                                  </span>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {forSale.toLocaleString()}
                             </TableCell>
                             <TableCell>
-                              <Badge className={getStatusColor(planting.status)}>
+                              {planting.expected_harvest_date ? (
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{format(new Date(planting.expected_harvest_date), "MMM dd, yyyy")}</span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">Not set</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {daysToHarvest !== null ? (
+                                daysToHarvest <= 0 ? (
+                                  <span className="text-green-600 font-semibold">Ready!</span>
+                                ) : (
+                                  <span className="text-gray-600">{daysToHarvest} days</span>
+                                )
+                              ) : (
+                                <span className="text-gray-400">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">{(planting.remaining_quantity || 0).toLocaleString()}</TableCell>
+                            <TableCell className="text-right">{reservedQty.toLocaleString()}</TableCell>
+                            <TableCell className="text-right">
+                              <span className="text-green-600 font-medium">{forSale.toLocaleString()}</span>
+                            </TableCell>
+                            <TableCell>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                planting.status === 'active' ? 'bg-green-100 text-green-800' :
+                                planting.status === 'harvested' ? 'bg-blue-100 text-blue-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
                                 {planting.status}
-                              </Badge>
+                              </span>
                             </TableCell>
                             <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
+                              <div className="flex gap-2 justify-end">
                                 {canEdit && (
                                   <Button
                                     variant="ghost"
@@ -845,7 +1070,7 @@ export default function PlantingsPage() {
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
                                   <Checkbox
-                                    checked={selectedPlantings.includes(p.id)}
+                                    checked={selectedPlantings.has(p.id)}
                                     onCheckedChange={() => togglePlantingSelection(p.id)}
                                   />
                                   <h3 className="font-semibold text-lg">{p.plant_types?.name}</h3>
@@ -929,10 +1154,10 @@ export default function PlantingsPage() {
       </div>
 
       {/* Bulk Status Update Dialog */}
-      <Dialog open={showBulkStatusDialog} onOpenChange={setShowBulkStatusDialog}>
+      <Dialog open={showBulkUpdateDialog} onOpenChange={setShowBulkUpdateDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Update Status for {selectedPlantings.length} Planting(s)</DialogTitle>
+            <DialogTitle>Update Status for {selectedPlantings.size} Planting(s)</DialogTitle>
             <DialogDescription>
               Select the new status for the selected plantings. This action will update all selected plantings at once.
             </DialogDescription>
@@ -940,8 +1165,8 @@ export default function PlantingsPage() {
           <div className="py-4">
             <Label htmlFor="bulk-status">New Status</Label>
             <Select
-              value={bulkNewStatus}
-              onValueChange={(value: "active" | "harvested" | "closed") => setBulkNewStatus(value)}
+              value={bulkUpdateStatus}
+              onValueChange={(value: "active" | "harvested" | "closed") => setBulkUpdateStatus(value)}
             >
               <SelectTrigger id="bulk-status">
                 <SelectValue />
@@ -956,7 +1181,7 @@ export default function PlantingsPage() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setShowBulkStatusDialog(false)}
+              onClick={() => setShowBulkUpdateDialog(false)}
               disabled={isBulkActionLoading}
             >
               Cancel
@@ -972,7 +1197,7 @@ export default function PlantingsPage() {
       <Dialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {selectedPlantings.length} Planting(s)?</DialogTitle>
+            <DialogTitle>Delete {selectedPlantings.size} Planting(s)?</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete the selected plantings? This action cannot be undone.
             </DialogDescription>
