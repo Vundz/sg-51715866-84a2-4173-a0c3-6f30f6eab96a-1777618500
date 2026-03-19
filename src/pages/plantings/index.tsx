@@ -389,7 +389,7 @@ export default function PlantingsPage() {
 
   return (
     <Layout>
-      <div className="container mx-auto px-4 py-8 space-y-6 max-w-[1400px]">
+      <div className="space-y-6">
         {/* Page Header */}
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -437,52 +437,6 @@ export default function PlantingsPage() {
               Add Planting
             </Button>
           </div>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Total Plantings */}
-          <Card className="border-l-4 border-l-blue-500">
-            <CardContent className="pt-6">
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground font-medium">Total Plantings</p>
-                <p className="text-3xl font-bold text-blue-600">{stats.totalPlantings.toLocaleString()}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Total Seedlings */}
-          <Card className="border-l-4 border-l-green-500">
-            <CardContent className="pt-6">
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground font-medium">Total Seedlings</p>
-                <p className="text-3xl font-bold text-green-600">{stats.totalSeedlings.toLocaleString()}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Reserved */}
-          <Card className="border-l-4 border-l-orange-500">
-            <CardContent className="pt-6">
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground font-medium">Reserved</p>
-                <p className="text-3xl font-bold text-orange-600">{stats.reserved.toLocaleString()}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Inventory Value (Admin Only) */}
-          {isAdmin && (
-            <Card className="border-l-4 border-l-purple-500">
-              <CardContent className="pt-6">
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground font-medium">Inventory Value</p>
-                  <p className="text-3xl font-bold text-purple-600">K{formatNumberWithDecimals(stats.inventoryValue, 2)}</p>
-                  <p className="text-xs text-muted-foreground">Based on current selling prices</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </div>
 
         {/* Current Plantings Section */}
