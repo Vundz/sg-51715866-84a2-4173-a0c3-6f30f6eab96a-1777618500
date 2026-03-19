@@ -28,22 +28,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { 
   Edit, 
   Trash2, 
   X, 
   Filter, 
   Search, 
-  ChevronDown, 
-  Package, 
   Plus,
   ChevronLeft,
   ChevronRight,
@@ -100,7 +91,6 @@ export default function PlantingsPage() {
     location: null as string | null,
     status: "all" as string,
   });
-  const [showFilters, setShowFilters] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -177,6 +167,10 @@ export default function PlantingsPage() {
     }
   };
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
   const filteredPlantings = useMemo(() => {
     let result = plantings;
 
@@ -206,7 +200,7 @@ export default function PlantingsPage() {
     }
 
     return result;
-  }, [plantings, searchQuery, filters, plantTypes, locations, sortColumn, sortDirection]);
+  }, [plantings, searchQuery, filters, plantTypes, locations]);
 
   // Calculate stats from filtered plantings
   const stats = useMemo(() => {
@@ -231,22 +225,6 @@ export default function PlantingsPage() {
       inventoryValue
     };
   }, [filteredPlantings]);
-
-  const filterPlantings = (type: string, value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      [type]: value === "all" ? null : value
-    }));
-  };
-
-  const handleSort = (column: keyof Planting | 'plant_type_id' | 'location_id') => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
 
   const varieties = useMemo(() => {
     const uniqueVarieties = new Set(
@@ -312,7 +290,7 @@ export default function PlantingsPage() {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredPlantings.slice(startIndex, endIndex);
-  }, [filteredPlantings, currentPage, itemsPerPage]);
+  }, [filteredPlantings, currentPage]);
 
   const totalPages = Math.ceil(filteredPlantings.length / itemsPerPage);
 
@@ -556,7 +534,7 @@ export default function PlantingsPage() {
                       <div className="font-medium text-sm">Toggle Columns</div>
                       <div className="space-y-2">
                         {[
-                          { key: 'batch', label: 'Batch #' },
+                          { key: 'batchNumber', label: 'Batch #' },
                           { key: 'plant', label: 'Plant' },
                           { key: 'location', label: 'Location' },
                           { key: 'totalQty', label: 'Total Qty' },
@@ -624,12 +602,9 @@ export default function PlantingsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        {/* Desktop View Headers */}
-                        <div className="hidden md:contents">
-                          {columnVisibility.batchNumber && <TableHead className="w-[140px]">Batch #</TableHead>}
-                          {columnVisibility.plant && <TableHead className="w-[200px]">Plant</TableHead>}
-                          {columnVisibility.location && <TableHead className="w-[120px]">Location</TableHead>}
-                        </div>
+                        {columnVisibility.batchNumber && <TableHead className="w-[140px]">Batch #</TableHead>}
+                        {columnVisibility.plant && <TableHead className="w-[200px]">Plant</TableHead>}
+                        {columnVisibility.location && <TableHead className="w-[120px]">Location</TableHead>}
                         {columnVisibility.totalQty && <TableHead className="text-right">Total Qty</TableHead>}
                         {columnVisibility.trays && <TableHead className="text-right">Trays</TableHead>}
                         {columnVisibility.reserved && <TableHead className="text-right">Reserved</TableHead>}
@@ -657,35 +632,28 @@ export default function PlantingsPage() {
 
                           return (
                             <TableRow key={planting.id}>
-                              {/* Desktop View Cells */}
-                              <div className="hidden md:contents">
-                                {columnVisibility.batchNumber && (
-                                  <TableCell className="font-medium">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-blue-600 font-medium">{planting.batch_number}</span>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => toggleSelectPlanting(planting.id)}
-                                        className="rounded-full"
-                                      >
-                                        {selectedPlantings.has(planting.id) ? <X className="h-4 w-4" /> : <Checkbox className="h-4 w-4" />}
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                )}
-                                {columnVisibility.plant && (
-                                  <TableCell>
-                                    <div>
-                                      <div className="font-medium">{plantType?.name || "Unknown"}</div>
-                                      <div className="text-sm text-muted-foreground">{planting.variety}</div>
-                                    </div>
-                                  </TableCell>
-                                )}
-                                {columnVisibility.location && (
-                                  <TableCell>{location?.name || "N/A"}</TableCell>
-                                )}
-                              </div>
+                              {columnVisibility.batchNumber && (
+                                <TableCell className="font-medium">
+                                  <div className="flex items-center gap-2">
+                                    <Checkbox
+                                      checked={selectedPlantings.has(planting.id)}
+                                      onCheckedChange={() => toggleSelectPlanting(planting.id)}
+                                    />
+                                    <span className="text-blue-600 font-medium">{planting.batch_number}</span>
+                                  </div>
+                                </TableCell>
+                              )}
+                              {columnVisibility.plant && (
+                                <TableCell>
+                                  <div>
+                                    <div className="font-medium">{plantType?.name || "Unknown"}</div>
+                                    <div className="text-sm text-muted-foreground">{planting.variety}</div>
+                                  </div>
+                                </TableCell>
+                              )}
+                              {columnVisibility.location && (
+                                <TableCell>{location?.name || "N/A"}</TableCell>
+                              )}
                               {columnVisibility.totalQty && (
                                 <TableCell className="text-right">{planting.quantity.toLocaleString()}</TableCell>
                               )}
@@ -748,148 +716,6 @@ export default function PlantingsPage() {
               </div>
             </div>
 
-            <div className="rounded-md border overflow-x-auto">
-              <Table className="min-w-[1000px]">
-                <TableHeader>
-                  <TableRow>
-                    {/* Mobile View Headers (Simplified) */}
-                    <div className="contents md:hidden">
-                      {columnVisibility.batchNumber && (
-                        <TableHead>Batch #</TableHead>
-                      )}
-                      {columnVisibility.plant && (
-                        <TableHead>Plant</TableHead>
-                      )}
-                      {columnVisibility.available && (
-                        <TableHead className="text-right">Available</TableHead>
-                      )}
-                    </div>
-                    {columnVisibility.totalQty && (
-                      <TableHead className="text-right">Total Qty</TableHead>
-                    )}
-                    {columnVisibility.trays && (
-                      <TableHead className="text-right">Trays</TableHead>
-                    )}
-                    {columnVisibility.reserved && (
-                      <TableHead className="text-right">Reserved</TableHead>
-                    )}
-                    {columnVisibility.price && (
-                      <TableHead className="text-right">Price (ZMW)</TableHead>
-                    )}
-                    {columnVisibility.datePlanted && (
-                      <TableHead>Date Planted</TableHead>
-                    )}
-                    {columnVisibility.expectedHarvest && (
-                      <TableHead>Expected Harvest</TableHead>
-                    )}
-                    {columnVisibility.status && (
-                      <TableHead>Status</TableHead>
-                    )}
-                    <TableHead className="w-[100px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedPlantings.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
-                        No plantings found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedPlantings.map((planting) => {
-                      const plantType = plantTypes.find(pt => pt.id === planting.plant_type_id);
-                      const location = locations.find(loc => loc.id === planting.location_id);
-                      const reserved = (planting as any).reserved_quantity || 0;
-                      const available = planting.remaining_quantity - reserved;
-
-                      return (
-                        <TableRow key={planting.id}>
-                          {/* Mobile View Cells (Simplified) */}
-                          <div className="contents md:hidden">
-                            {columnVisibility.batchNumber && (
-                              <TableCell className="font-medium">
-                                <div className="flex items-center gap-1">
-                                  <span className="text-blue-600 font-medium">{planting.batch_number}</span>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => toggleSelectPlanting(planting.id)}
-                                    className="rounded-full"
-                                  >
-                                    {selectedPlantings.has(planting.id) ? <X className="h-4 w-4" /> : <Checkbox className="h-4 w-4" />}
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            )}
-                            {columnVisibility.plant && (
-                              <TableCell>
-                                <div>
-                                  <div className="font-medium">{plantType?.name || "Unknown"}</div>
-                                  <div className="text-sm text-muted-foreground">{planting.variety}</div>
-                                </div>
-                              </TableCell>
-                            )}
-                            {columnVisibility.available && (
-                              <TableCell className="text-right text-green-600 font-medium">{available.toLocaleString()}</TableCell>
-                            )}
-                          </div>
-                          {columnVisibility.totalQty && (
-                            <TableCell className="text-right">{planting.quantity.toLocaleString()}</TableCell>
-                          )}
-                          {columnVisibility.trays && (
-                            <TableCell className="text-right">
-                              <span className="text-blue-600 font-medium">{(planting as any).number_of_trays || Math.ceil(planting.quantity / 200)}</span>
-                            </TableCell>
-                          )}
-                          {columnVisibility.reserved && (
-                            <TableCell className="text-right">{reserved.toLocaleString()}</TableCell>
-                          )}
-                          {columnVisibility.price && (
-                            <TableCell className="text-right">{formatCurrency(planting.selling_price)}</TableCell>
-                          )}
-                          {columnVisibility.datePlanted && (
-                            <TableCell>{new Date(planting.date_planted).toLocaleDateString()}</TableCell>
-                          )}
-                          {columnVisibility.expectedHarvest && (
-                            <TableCell>{new Date(planting.expected_harvest_date).toLocaleDateString()}</TableCell>
-                          )}
-                          {columnVisibility.status && (
-                            <TableCell>
-                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                planting.status === "active" ? "bg-green-100 text-green-800" :
-                                planting.status === "harvested" ? "bg-blue-100 text-blue-800" :
-                                "bg-gray-100 text-gray-800"
-                              }`}>
-                                {planting.status}
-                              </span>
-                            </TableCell>
-                          )}
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleEdit(planting)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDelete(planting.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
             {/* Pagination Controls */}
             {filteredPlantings.length > 0 && (
               <div className="flex items-center justify-between px-2">
@@ -898,7 +724,6 @@ export default function PlantingsPage() {
                   <Select
                     value={itemsPerPage.toString()}
                     onValueChange={(value) => {
-                      const newPerPage = parseInt(value);
                       setCurrentPage(1);
                     }}
                   >
