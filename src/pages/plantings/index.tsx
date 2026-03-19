@@ -411,7 +411,7 @@ export default function PlantingsPage() {
 
   return (
     <Layout>
-      <div className="container mx-auto px-4 py-8 space-y-6 max-w-[1400px]">
+      <div className="space-y-6">
         {/* Page Header */}
         <div className="flex items-start justify-between">
           <div className="space-y-1">

@@ -17,7 +17,7 @@ export function Layout({ children }: LayoutProps) {
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
       <main className="flex-1 overflow-y-auto md:ml-64">
-        <div className="container mx-auto p-6 pt-20 md:pt-6">
+        <div className="w-full p-6 pt-20 md:pt-6">
           {children}
         </div>
       </main>
