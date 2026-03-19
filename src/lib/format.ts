@@ -1,4 +1,3 @@
-
 /**
  * Format a number with comma separators
  * @param num - The number to format
@@ -21,4 +20,17 @@ export function formatNumberWithDecimals(num: number | null | undefined, decimal
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals
   });
+}
+
+export function formatPercentage(value: number): string {
+  return `${(value * 100).toFixed(0)}%`;
+}
+
+export function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('en-ZM', {
+    style: 'currency',
+    currency: 'ZMW',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 }

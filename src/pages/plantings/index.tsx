@@ -52,7 +52,8 @@ import {
   Sprout,
   Table as TableIcon,
   LayoutGrid,
-  Upload
+  Upload,
+  Eye
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -63,6 +64,8 @@ import { locationService } from "@/services/locationService";
 import { plantTypeService, type PlantType } from "@/services/plantTypeService";
 import { formatNumberWithDecimals } from "@/lib/format";
 import type { Database } from "@/integrations/supabase/types";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { formatCurrency } from "@/lib/format";
 
 type Location = Database["public"]["Tables"]["locations"]["Row"];
 
@@ -101,7 +104,43 @@ export default function PlantingsPage() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(50);
+  const itemsPerPage = 10;
+
+  // Column visibility state - default values
+  const [columnVisibility, setColumnVisibility] = useState({
+    batchNumber: true,
+    plant: true,
+    location: true,
+    totalQty: true,
+    trays: false,
+    reserved: false,
+    available: true,
+    price: false,
+    datePlanted: false,
+    expectedHarvest: true,
+    status: true,
+  });
+
+  // Load column visibility from localStorage on mount (client-side only)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('plantings_column_visibility');
+      if (saved) {
+        try {
+          setColumnVisibility(JSON.parse(saved));
+        } catch (error) {
+          console.error('Failed to parse column visibility:', error);
+        }
+      }
+    }
+  }, []);
+
+  // Save column visibility to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('plantings_column_visibility', JSON.stringify(columnVisibility));
+    }
+  }, [columnVisibility]);
 
   // Sorting state
   const [sortColumn, setSortColumn] = useState<keyof Planting | 'plant_type_id' | 'location_id'>('date_planted');
@@ -115,15 +154,6 @@ export default function PlantingsPage() {
 
   // Add view mode state
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, filters]);
 
   const loadData = async () => {
     try {
@@ -187,7 +217,7 @@ export default function PlantingsPage() {
     }, 0);
     
     const reserved = filteredPlantings.reduce((sum, p) => {
-      return sum + (p.reserved_quantity || 0);
+      return sum + ((p as any).reserved_quantity || 0);
     }, 0);
     
     const inventoryValue = filteredPlantings.reduce((sum, p) => {
@@ -279,12 +309,12 @@ export default function PlantingsPage() {
   };
 
   const paginatedPlantings = useMemo(() => {
-    const startIndex = (currentPage - 1) * rowsPerPage;
-    const endIndex = startIndex + rowsPerPage;
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
     return filteredPlantings.slice(startIndex, endIndex);
-  }, [filteredPlantings, currentPage, rowsPerPage]);
+  }, [filteredPlantings, currentPage, itemsPerPage]);
 
-  const totalPages = Math.ceil(filteredPlantings.length / rowsPerPage);
+  const totalPages = Math.ceil(filteredPlantings.length / itemsPerPage);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -293,6 +323,8 @@ export default function PlantingsPage() {
         ...formData,
         quantity: parseInt(formData.quantity),
         selling_price: parseFloat(formData.selling_price),
+        status: editingPlanting ? editingPlanting.status : 'active',
+        remaining_quantity: editingPlanting ? editingPlanting.remaining_quantity : parseInt(formData.quantity),
       };
 
       if (editingPlanting) {
@@ -379,7 +411,7 @@ export default function PlantingsPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1600px] mx-auto space-y-6">
+      <div className="container mx-auto px-4 py-8 space-y-6 max-w-[1400px]">
         {/* Page Header */}
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -496,19 +528,70 @@ export default function PlantingsPage() {
                 />
               </div>
 
-              {/* Status Filter Dropdown */}
-              <Select value={filters.status} onValueChange={(value) => filterPlantings('status', value)}>
-                <SelectTrigger className="w-[200px]">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="All Plantings" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Plantings</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="harvested">Harvested</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                {/* Filter Dropdown */}
+                <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
+                  <SelectTrigger className="w-[180px]">
+                    <Filter className="h-4 w-4 mr-2" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Plantings</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="harvested">Harvested</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Column Selector */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="gap-2">
+                      <Eye className="h-4 w-4" />
+                      Columns
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px]" align="end">
+                    <div className="space-y-3">
+                      <div className="font-medium text-sm">Toggle Columns</div>
+                      <div className="space-y-2">
+                        {[
+                          { key: 'batch', label: 'Batch #' },
+                          { key: 'plant', label: 'Plant' },
+                          { key: 'location', label: 'Location' },
+                          { key: 'totalQty', label: 'Total Qty' },
+                          { key: 'trays', label: 'Trays' },
+                          { key: 'reserved', label: 'Reserved' },
+                          { key: 'available', label: 'Available' },
+                          { key: 'price', label: 'Price (ZMW)' },
+                          { key: 'datePlanted', label: 'Date Planted' },
+                          { key: 'expectedHarvest', label: 'Expected Harvest' },
+                          { key: 'status', label: 'Status' },
+                        ].map((column) => (
+                          <div key={column.key} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={column.key}
+                              checked={columnVisibility[column.key as keyof typeof columnVisibility]}
+                              onCheckedChange={(checked) => {
+                                setColumnVisibility(prev => ({
+                                  ...prev,
+                                  [column.key]: checked
+                                }));
+                              }}
+                            />
+                            <label
+                              htmlFor={column.key}
+                              className="text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                            >
+                              {column.label}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
 
             {/* Bulk Actions */}
@@ -537,104 +620,274 @@ export default function PlantingsPage() {
             {/* Table */}
             <div className="border rounded-lg overflow-hidden">
               <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[50px] sticky top-0 bg-background z-10">
-                        <Checkbox
-                          checked={selectedPlantings.size === paginatedPlantings.length && paginatedPlantings.length > 0}
-                          onCheckedChange={toggleSelectAll}
-                        />
-                      </TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10 min-w-[140px]">Batch #</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10 min-w-[160px]">Plant</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10 min-w-[120px]">Location</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10 w-[100px] text-right">Total Qty</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10 w-[80px] text-right">Trays</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10 w-[100px] text-right">Reserved</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10 w-[100px] text-right">Available</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10 w-[120px] text-right">Price (ZMW)</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10 w-[120px]">Date Planted</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10 w-[140px]">Expected Harvest</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10 w-[100px]">Status</TableHead>
-                      <TableHead className="sticky top-0 bg-background z-10 w-[100px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedPlantings.length === 0 ? (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
-                          No plantings found
-                        </TableCell>
+                        {/* Desktop View Headers */}
+                        <div className="hidden md:contents">
+                          {columnVisibility.batchNumber && <TableHead className="w-[140px]">Batch #</TableHead>}
+                          {columnVisibility.plant && <TableHead className="w-[200px]">Plant</TableHead>}
+                          {columnVisibility.location && <TableHead className="w-[120px]">Location</TableHead>}
+                        </div>
+                        {columnVisibility.totalQty && <TableHead className="text-right">Total Qty</TableHead>}
+                        {columnVisibility.trays && <TableHead className="text-right">Trays</TableHead>}
+                        {columnVisibility.reserved && <TableHead className="text-right">Reserved</TableHead>}
+                        {columnVisibility.available && <TableHead className="text-right">Available</TableHead>}
+                        {columnVisibility.price && <TableHead className="text-right">Price (ZMW)</TableHead>}
+                        {columnVisibility.datePlanted && <TableHead>Date Planted</TableHead>}
+                        {columnVisibility.expectedHarvest && <TableHead>Expected Harvest</TableHead>}
+                        {columnVisibility.status && <TableHead>Status</TableHead>}
+                        <TableHead className="w-[100px]">Actions</TableHead>
                       </TableRow>
-                    ) : (
-                      paginatedPlantings.map((planting) => {
-                        const plantType = plantTypes.find(pt => pt.id === planting.plant_type_id);
-                        const location = locations.find(l => l.id === planting.location_id);
-                        const available = (planting.quantity || 0) - ((planting as any).reserved_quantity || 0);
-                        const trays = (planting as any).number_of_trays || 0;
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedPlantings.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
+                            No plantings found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        paginatedPlantings.map((planting) => {
+                          const plantType = plantTypes.find(pt => pt.id === planting.plant_type_id);
+                          const location = locations.find(loc => loc.id === planting.location_id);
+                          const reserved = (planting as any).reserved_quantity || 0;
+                          const available = planting.remaining_quantity - reserved;
 
-                        return (
-                          <TableRow key={planting.id}>
-                            <TableCell>
-                              <Checkbox
-                                checked={selectedPlantings.has(planting.id)}
-                                onCheckedChange={() => toggleSelectPlanting(planting.id)}
-                              />
-                            </TableCell>
-                            <TableCell className="font-medium">{planting.batch_number}</TableCell>
-                            <TableCell>
-                              <div>
-                                <div className="font-medium">{plantType?.name}</div>
-                                {planting.variety && (
-                                  <div className="text-sm text-muted-foreground">{planting.variety}</div>
+                          return (
+                            <TableRow key={planting.id}>
+                              {/* Desktop View Cells */}
+                              <div className="hidden md:contents">
+                                {columnVisibility.batchNumber && (
+                                  <TableCell className="font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-blue-600 font-medium">{planting.batch_number}</span>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => toggleSelectPlanting(planting.id)}
+                                        className="rounded-full"
+                                      >
+                                        {selectedPlantings.has(planting.id) ? <X className="h-4 w-4" /> : <Checkbox className="h-4 w-4" />}
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                )}
+                                {columnVisibility.plant && (
+                                  <TableCell>
+                                    <div>
+                                      <div className="font-medium">{plantType?.name || "Unknown"}</div>
+                                      <div className="text-sm text-muted-foreground">{planting.variety}</div>
+                                    </div>
+                                  </TableCell>
+                                )}
+                                {columnVisibility.location && (
+                                  <TableCell>{location?.name || "N/A"}</TableCell>
                                 )}
                               </div>
-                            </TableCell>
-                            <TableCell>{location?.name}</TableCell>
-                            <TableCell className="text-right font-medium">{planting.quantity?.toLocaleString()}</TableCell>
-                            <TableCell className="text-right text-blue-600 font-medium">{trays}</TableCell>
-                            <TableCell className="text-right">{((planting as any).reserved_quantity || 0).toLocaleString()}</TableCell>
-                            <TableCell className="text-right text-green-600 font-medium">{available.toLocaleString()}</TableCell>
-                            <TableCell className="text-right">K{planting.selling_price?.toFixed(2) || '0.00'}</TableCell>
-                            <TableCell>{planting.date_planted ? new Date(planting.date_planted).toLocaleDateString() : '-'}</TableCell>
-                            <TableCell>{planting.expected_harvest_date ? new Date(planting.expected_harvest_date).toLocaleDateString() : '-'}</TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  planting.status === 'active' ? 'default' :
-                                  planting.status === 'harvested' ? 'secondary' :
-                                  'outline'
-                                }
-                              >
-                                {planting.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleEdit(planting)}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleDelete(planting.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
+                              {columnVisibility.totalQty && (
+                                <TableCell className="text-right">{planting.quantity.toLocaleString()}</TableCell>
+                              )}
+                              {columnVisibility.trays && (
+                                <TableCell className="text-right">
+                                  <span className="text-blue-600 font-medium">{(planting as any).number_of_trays || Math.ceil(planting.quantity / 200)}</span>
+                                </TableCell>
+                              )}
+                              {columnVisibility.reserved && (
+                                <TableCell className="text-right">{reserved.toLocaleString()}</TableCell>
+                              )}
+                              {columnVisibility.available && (
+                                <TableCell className="text-right text-green-600 font-medium">{available.toLocaleString()}</TableCell>
+                              )}
+                              {columnVisibility.price && (
+                                <TableCell className="text-right">{formatCurrency(planting.selling_price)}</TableCell>
+                              )}
+                              {columnVisibility.datePlanted && (
+                                <TableCell>{new Date(planting.date_planted).toLocaleDateString()}</TableCell>
+                              )}
+                              {columnVisibility.expectedHarvest && (
+                                <TableCell>{new Date(planting.expected_harvest_date).toLocaleDateString()}</TableCell>
+                              )}
+                              {columnVisibility.status && (
+                                <TableCell>
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                    planting.status === "active" ? "bg-green-100 text-green-800" :
+                                    planting.status === "harvested" ? "bg-blue-100 text-blue-800" :
+                                    "bg-gray-100 text-gray-800"
+                                  }`}>
+                                    {planting.status}
+                                  </span>
+                                </TableCell>
+                              )}
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleEdit(planting)}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleDelete(planting.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
+            </div>
+
+            <div className="rounded-md border overflow-x-auto">
+              <Table className="min-w-[1000px]">
+                <TableHeader>
+                  <TableRow>
+                    {/* Mobile View Headers (Simplified) */}
+                    <div className="contents md:hidden">
+                      {columnVisibility.batchNumber && (
+                        <TableHead>Batch #</TableHead>
+                      )}
+                      {columnVisibility.plant && (
+                        <TableHead>Plant</TableHead>
+                      )}
+                      {columnVisibility.available && (
+                        <TableHead className="text-right">Available</TableHead>
+                      )}
+                    </div>
+                    {columnVisibility.totalQty && (
+                      <TableHead className="text-right">Total Qty</TableHead>
+                    )}
+                    {columnVisibility.trays && (
+                      <TableHead className="text-right">Trays</TableHead>
+                    )}
+                    {columnVisibility.reserved && (
+                      <TableHead className="text-right">Reserved</TableHead>
+                    )}
+                    {columnVisibility.price && (
+                      <TableHead className="text-right">Price (ZMW)</TableHead>
+                    )}
+                    {columnVisibility.datePlanted && (
+                      <TableHead>Date Planted</TableHead>
+                    )}
+                    {columnVisibility.expectedHarvest && (
+                      <TableHead>Expected Harvest</TableHead>
+                    )}
+                    {columnVisibility.status && (
+                      <TableHead>Status</TableHead>
+                    )}
+                    <TableHead className="w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedPlantings.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
+                        No plantings found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedPlantings.map((planting) => {
+                      const plantType = plantTypes.find(pt => pt.id === planting.plant_type_id);
+                      const location = locations.find(loc => loc.id === planting.location_id);
+                      const reserved = (planting as any).reserved_quantity || 0;
+                      const available = planting.remaining_quantity - reserved;
+
+                      return (
+                        <TableRow key={planting.id}>
+                          {/* Mobile View Cells (Simplified) */}
+                          <div className="contents md:hidden">
+                            {columnVisibility.batchNumber && (
+                              <TableCell className="font-medium">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-blue-600 font-medium">{planting.batch_number}</span>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => toggleSelectPlanting(planting.id)}
+                                    className="rounded-full"
+                                  >
+                                    {selectedPlantings.has(planting.id) ? <X className="h-4 w-4" /> : <Checkbox className="h-4 w-4" />}
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
+                            {columnVisibility.plant && (
+                              <TableCell>
+                                <div>
+                                  <div className="font-medium">{plantType?.name || "Unknown"}</div>
+                                  <div className="text-sm text-muted-foreground">{planting.variety}</div>
+                                </div>
+                              </TableCell>
+                            )}
+                            {columnVisibility.available && (
+                              <TableCell className="text-right text-green-600 font-medium">{available.toLocaleString()}</TableCell>
+                            )}
+                          </div>
+                          {columnVisibility.totalQty && (
+                            <TableCell className="text-right">{planting.quantity.toLocaleString()}</TableCell>
+                          )}
+                          {columnVisibility.trays && (
+                            <TableCell className="text-right">
+                              <span className="text-blue-600 font-medium">{(planting as any).number_of_trays || Math.ceil(planting.quantity / 200)}</span>
+                            </TableCell>
+                          )}
+                          {columnVisibility.reserved && (
+                            <TableCell className="text-right">{reserved.toLocaleString()}</TableCell>
+                          )}
+                          {columnVisibility.price && (
+                            <TableCell className="text-right">{formatCurrency(planting.selling_price)}</TableCell>
+                          )}
+                          {columnVisibility.datePlanted && (
+                            <TableCell>{new Date(planting.date_planted).toLocaleDateString()}</TableCell>
+                          )}
+                          {columnVisibility.expectedHarvest && (
+                            <TableCell>{new Date(planting.expected_harvest_date).toLocaleDateString()}</TableCell>
+                          )}
+                          {columnVisibility.status && (
+                            <TableCell>
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                planting.status === "active" ? "bg-green-100 text-green-800" :
+                                planting.status === "harvested" ? "bg-blue-100 text-blue-800" :
+                                "bg-gray-100 text-gray-800"
+                              }`}>
+                                {planting.status}
+                              </span>
+                            </TableCell>
+                          )}
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleEdit(planting)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDelete(planting.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
             </div>
 
             {/* Pagination Controls */}
@@ -643,9 +896,9 @@ export default function PlantingsPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">Rows per page:</span>
                   <Select
-                    value={rowsPerPage.toString()}
+                    value={itemsPerPage.toString()}
                     onValueChange={(value) => {
-                      setRowsPerPage(parseInt(value));
+                      const newPerPage = parseInt(value);
                       setCurrentPage(1);
                     }}
                   >
@@ -663,7 +916,7 @@ export default function PlantingsPage() {
 
                 <div className="flex items-center gap-6">
                   <span className="text-sm text-muted-foreground">
-                    Showing {((currentPage - 1) * rowsPerPage) + 1} to {Math.min(currentPage * rowsPerPage, filteredPlantings.length)} of {filteredPlantings.length}
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredPlantings.length)} of {filteredPlantings.length}
                   </span>
                   
                   <div className="flex items-center gap-1">
