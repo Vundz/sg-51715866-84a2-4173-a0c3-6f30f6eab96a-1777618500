@@ -79,7 +79,7 @@ export function Sidebar() {
         { label: "Treatments", href: "/treatments", icon: TestTube2 },
         { label: "Scouting", href: "/scouting", icon: Search },
         { label: "Inventory", href: "/inventory", icon: Box },
-        { label: "Bill of Materials", href: "/production/bom", icon: ClipboardList },
+        { label: "Production Calculator", href: "/production/bom", icon: Calculator },
         { label: "Chemical Calculator", href: "/production/calculator", icon: Beaker },
       ],
     },
