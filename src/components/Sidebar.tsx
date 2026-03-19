@@ -28,7 +28,8 @@ import {
   Building2,
   Calculator,
   Beaker,
-  Search
+  Search,
+  ClipboardList
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ThemeSwitch } from "./ThemeSwitch";
@@ -78,7 +79,7 @@ export function Sidebar() {
         { label: "Treatments", href: "/treatments", icon: TestTube2 },
         { label: "Scouting", href: "/scouting", icon: Search },
         { label: "Inventory", href: "/inventory", icon: Box },
-        { label: "Production Calculator", href: "/production/bom", icon: Calculator },
+        { label: "Bill of Materials", href: "/production/bom", icon: ClipboardList },
         { label: "Chemical Calculator", href: "/production/calculator", icon: Beaker },
       ],
     },
