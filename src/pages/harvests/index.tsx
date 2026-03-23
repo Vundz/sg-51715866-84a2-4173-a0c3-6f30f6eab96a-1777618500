@@ -67,19 +67,18 @@ export default function HarvestsPage() {
 
       // Calculate total harvested quantity for each planting
       const quantities: Record<string, number> = {};
-      const reserved: Record<string, number> = {};
       
       for (const p of plantingsData) {
         const totalHarvested = harvestsData
           .filter(h => h.planting_id === p.id)
           .reduce((sum, h) => sum + h.quantity_harvested, 0);
         quantities[p.id] = totalHarvested;
-        
-        // Get reserved quantity
-        const reservedQty = await harvestService.getReservedQuantity(p.id);
-        reserved[p.id] = reservedQty;
       }
       setHarvestedQuantities(quantities);
+      
+      // OPTIMIZED: Get ALL reserved quantities in ONE batch query instead of N queries
+      const plantingIds = plantingsData.map(p => p.id);
+      const reserved = await harvestService.getBatchReservedQuantities(plantingIds);
       setReservedQuantities(reserved);
 
     } catch (error) {

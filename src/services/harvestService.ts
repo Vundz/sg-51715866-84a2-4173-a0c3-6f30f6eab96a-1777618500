@@ -85,6 +85,35 @@ export const harvestService = {
   },
 
   /**
+   * Get reserved quantities for multiple plantings in ONE query (batch optimization)
+   */
+  async getBatchReservedQuantities(plantingIds: string[]): Promise<Record<string, number>> {
+    if (plantingIds.length === 0) return {};
+    
+    const { data, error } = await supabase
+      .from("reservations")
+      .select("planting_id, quantity_reserved")
+      .in("planting_id", plantingIds)
+      .eq("status", "pending");
+
+    if (error) {
+      console.error("Error getting batch reserved quantities:", error);
+      return {};
+    }
+
+    // Aggregate by planting_id
+    const result: Record<string, number> = {};
+    data.forEach(reservation => {
+      if (!result[reservation.planting_id]) {
+        result[reservation.planting_id] = 0;
+      }
+      result[reservation.planting_id] += reservation.quantity_reserved;
+    });
+
+    return result;
+  },
+
+  /**
    * Get pending reservations for a planting
    */
   async getPendingReservations(plantingId: string) {
