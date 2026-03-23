@@ -71,6 +71,11 @@ export default function PlantingsPage() {
   const [filterType, setFilterType] = useState<"all" | "location" | "variety" | "status" | "plant_type">("status");
   const [filterValue, setFilterValue] = useState("active");
   
+  // Bulk update states
+  const [selectedPlantings, setSelectedPlantings] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState<string>("");
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  
   // CSV Import states
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -490,6 +495,41 @@ export default function PlantingsPage() {
     setSearchQuery("");
     setFilterType("all");
     setFilterValue("");
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedPlantings(filteredPlantings.map(p => p.id));
+    } else {
+      setSelectedPlantings([]);
+    }
+  };
+
+  const handleSelectOne = (checked: boolean, id: string) => {
+    if (checked) {
+      setSelectedPlantings(prev => [...prev, id]);
+    } else {
+      setSelectedPlantings(prev => prev.filter(pId => pId !== id));
+    }
+  };
+
+  const handleBulkUpdate = async () => {
+    if (!bulkStatus || selectedPlantings.length === 0) return;
+    setIsBulkUpdating(true);
+    try {
+      await Promise.all(selectedPlantings.map(id => 
+        plantingService.updatePlanting(id, { status: bulkStatus })
+      ));
+      toast({ title: "Success", description: `Updated ${selectedPlantings.length} plantings to ${bulkStatus}.` });
+      setSelectedPlantings([]);
+      setBulkStatus("");
+      await loadData();
+    } catch (error) {
+      console.error("Bulk update error:", error);
+      toast({ title: "Error", description: "Failed to update some plantings.", variant: "destructive" });
+    } finally {
+      setIsBulkUpdating(false);
+    }
   };
 
   // CSV Import Functions
@@ -1508,6 +1548,35 @@ export default function PlantingsPage() {
             </div>
           </div>
 
+          {/* Bulk Actions Bar */}
+          {selectedPlantings.length > 0 && permissions.canUpdate && (
+            <div className="bg-lime-50 dark:bg-lime-950 border border-lime-200 dark:border-lime-800 rounded-lg p-3 flex items-center justify-between mb-4">
+              <span className="text-sm font-medium text-lime-800 dark:text-lime-200">
+                {selectedPlantings.length} planting(s) selected
+              </span>
+              <div className="flex items-center gap-2">
+                <Select value={bulkStatus} onValueChange={setBulkStatus}>
+                  <SelectTrigger className="w-[150px] h-8 bg-white dark:bg-gray-900 border-lime-300">
+                    <SelectValue placeholder="Select status..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="harvested">Harvested</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button 
+                  size="sm" 
+                  onClick={handleBulkUpdate} 
+                  disabled={!bulkStatus || isBulkUpdating}
+                  className="bg-lime-600 hover:bg-lime-700 h-8"
+                >
+                  {isBulkUpdating ? "Updating..." : "Update Status"}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Table or Card View */}
           {viewMode === "table" ? (
             /* TABLE VIEW */
@@ -1516,9 +1585,15 @@ export default function PlantingsPage() {
                 <Table>
                   <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm">
                     <TableRow className="border-b">
+                      <TableHead className="w-[50px]">
+                        <Checkbox 
+                          checked={filteredPlantings.length > 0 && selectedPlantings.length === filteredPlantings.length}
+                          onCheckedChange={(checked) => handleSelectAll(checked as boolean)}
+                          aria-label="Select all"
+                        />
+                      </TableHead>
                       <TableHead className="min-w-[120px]">Batch #</TableHead>
                       <TableHead className="min-w-[150px]">Plant</TableHead>
-                      <TableHead className="min-w-[120px]">Location</TableHead>
                       <TableHead className="min-w-[90px]">Available Qty</TableHead>
                       <TableHead className="min-w-[70px]">Trays</TableHead>
                       <TableHead className="min-w-[100px]">Reserved</TableHead>
@@ -1533,7 +1608,7 @@ export default function PlantingsPage() {
                   <TableBody>
                     {filteredPlantings.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={12} className="text-center h-24 px-4 py-2">
+                        <TableCell colSpan={13} className="text-center h-24 px-4 py-2">
                           {searchQuery || filterType !== "all" 
                             ? "No plantings match your search or filter criteria." 
                             : "No plantings recorded yet."}
@@ -1548,6 +1623,13 @@ export default function PlantingsPage() {
                         
                         return (
                           <TableRow key={p.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
+                            <TableCell>
+                              <Checkbox 
+                                checked={selectedPlantings.includes(p.id)}
+                                onCheckedChange={(checked) => handleSelectOne(checked as boolean, p.id)}
+                                aria-label={`Select planting ${p.batch_number}`}
+                              />
+                            </TableCell>
                             <TableCell className="font-mono font-semibold text-sm">
                               {p.batch_number || 'N/A'}
                             </TableCell>
@@ -1556,7 +1638,6 @@ export default function PlantingsPage() {
                               <br/>
                               <span className="text-xs text-gray-500">{p.plant_types?.name}</span>
                             </TableCell>
-                            <TableCell>{p.locations?.name || 'N/A'}</TableCell>
                             <TableCell className="font-medium text-blue-600">
                               {formatNumber(p.remaining_quantity ?? p.quantity)}
                             </TableCell>
@@ -1608,7 +1689,7 @@ export default function PlantingsPage() {
                                   </Button>
                                 )}
                                 {!permissions.canUpdate && !permissions.canDelete && (
-                                  <span className="text-xs text-gray-400 italic">View only</span>
+                                  <span className="text-xs text-gray-400 italic flex-1 text-center py-2">View only</span>
                                 )}
                               </div>
                             </TableCell>
@@ -1637,11 +1718,19 @@ export default function PlantingsPage() {
                   const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
                   
                   return (
-                    <Card key={p.id} className="border-2 hover:border-lime-500 transition-colors">
-                      <CardContent className="pt-6">
+                    <Card key={p.id} className={`border-2 transition-colors ${selectedPlantings.includes(p.id) ? 'border-lime-500 bg-lime-50/50 dark:bg-lime-900/20' : 'hover:border-lime-500'}`}>
+                      <CardContent className="pt-6 relative">
+                        {permissions.canUpdate && (
+                          <div className="absolute top-4 right-4 z-10">
+                            <Checkbox 
+                              checked={selectedPlantings.includes(p.id)}
+                              onCheckedChange={(checked) => handleSelectOne(checked as boolean, p.id)}
+                            />
+                          </div>
+                        )}
                         <div className="space-y-3">
                           {/* Header: Variety + Status */}
-                          <div className="flex items-start justify-between">
+                          <div className="flex items-start justify-between pr-8">
                             <div className="flex-1 min-w-0">
                               <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
                                 {p.plant_types?.variety || 'N/A'}
