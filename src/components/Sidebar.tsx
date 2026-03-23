@@ -28,8 +28,7 @@ import {
   Building2,
   Calculator,
   Beaker,
-  Search,
-  ClipboardList
+  Search
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ThemeSwitch } from "./ThemeSwitch";

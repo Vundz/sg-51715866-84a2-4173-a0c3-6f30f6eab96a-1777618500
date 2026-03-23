@@ -1,901 +1,1491 @@
 import { useState, useEffect, useMemo } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { Layout } from "@/components/Layout";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  Edit, 
-  Trash2, 
-  X, 
-  Filter, 
-  Search, 
-  Plus,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  Sprout,
-  Table as TableIcon,
-  LayoutGrid,
-  Upload,
-  Eye
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import {
-  plantingService,
-  type Planting,
-} from "@/services/plantingService";
+import { Plus, Edit, Trash2, Sprout, ShoppingCart, Search, Filter, Upload, Download, PlusCircle, LayoutGrid, Table as TableIcon } from "lucide-react";
+import { plantingService } from "@/services/plantingService";
+import { plantTypeService } from "@/services/plantTypeService";
 import { locationService } from "@/services/locationService";
-import { plantTypeService, type PlantType } from "@/services/plantTypeService";
-import { formatNumberWithDecimals } from "@/lib/format";
+import { reservationService } from "@/services/reservationService";
+import { inventoryService } from "@/services/inventoryService";
+import type { InventoryItemWithLowStock } from "@/services/inventoryService";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import type { Database } from "@/integrations/supabase/types";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { formatCurrency } from "@/lib/format";
+import { useToast } from "@/hooks/use-toast";
+import { formatNumber } from "@/lib/format";
 
+type Planting = Database["public"]["Tables"]["plantings"]["Row"] & { 
+  plant_types: Database["public"]["Tables"]["plant_types"]["Row"] | null,
+  locations: Database["public"]["Tables"]["locations"]["Row"] | null
+};
+type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
 type Location = Database["public"]["Tables"]["locations"]["Row"];
+type Reservation = Database["public"]["Tables"]["reservations"]["Row"];
+
+// Generate batch number: first 2 chars of plant type + first 2 chars of variety + DDMMYY
+const generateBatchNumber = (plantTypeName: string, variety: string, datePlanted: string): string => {
+  const plantPrefix = plantTypeName.substring(0, 2).toUpperCase();
+  const varietyPrefix = variety.substring(0, 2).toUpperCase();
+  const date = new Date(datePlanted);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear()).substring(2);
+  return `${plantPrefix}${varietyPrefix}${day}${month}${year}`;
+};
 
 export default function PlantingsPage() {
-  const { user, profile } = useAuth() as any;
+  const { user, profile } = useAuth();
+  const permissions = usePermissions("plantings");
   const { toast } = useToast();
-  const isAdmin = profile?.role === 'admin';
-  
   const [plantings, setPlantings] = useState<Planting[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showDialog, setShowDialog] = useState(false);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPlanting, setEditingPlanting] = useState<Planting | null>(null);
-  const [formData, setFormData] = useState({
-    batch_number: "",
-    plant_type_id: "",
-    variety: "",
-    location_id: "",
-    quantity: "",
-    date_planted: "",
-    expected_harvest_date: "",
-    selling_price: "",
-    notes: "",
-  });
-
-  // Search and filter state
+  const [loading, setLoading] = useState(true);
+  
+  const isViewer = profile?.role === "viewer";
+  
+  // Form state for plant type and variety selection
+  const [selectedPlantTypeName, setSelectedPlantTypeName] = useState<string>("");
+  const [selectedVariety, setSelectedVariety] = useState<string>("");
+  
+  // Quick-add dialogs
+  const [isAddPlantTypeDialogOpen, setIsAddPlantTypeDialogOpen] = useState(false);
+  const [isAddVarietyDialogOpen, setIsAddVarietyDialogOpen] = useState(false);
+  const [newPlantTypeName, setNewPlantTypeName] = useState("");
+  const [newVarietyName, setNewVarietyName] = useState("");
+  const [newPlantTypeGrowthDuration, setNewPlantTypeGrowthDuration] = useState("30");
+  
+  // Search and filter states
   const [searchQuery, setSearchQuery] = useState("");
-  const [filters, setFilters] = useState({
-    plant_type: null as string | null,
-    variety: null as string | null,
-    location: null as string | null,
-    status: "all" as string,
-  });
+  const [filterType, setFilterType] = useState<"all" | "location" | "variety" | "status">("status");
+  const [filterValue, setFilterValue] = useState("active");
+  
+  // CSV Import states
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvData, setCsvData] = useState<any[]>([]);
+  const [csvErrors, setCsvErrors] = useState<string[]>([]);
+  const [isProcessingCsv, setIsProcessingCsv] = useState(false);
+  const [ignoreErrors, setIgnoreErrors] = useState(false);
+  const [invalidRows, setInvalidRows] = useState<any[]>([]);
+  
+  // Inventory tracking states
+  const [seedInventory, setSeedInventory] = useState<InventoryItemWithLowStock[]>([]);
+  const [trackInventory, setTrackInventory] = useState(false);
+  const [selectedSeedId, setSelectedSeedId] = useState<string>("");
+  const [seedQuantityUsed, setSeedQuantityUsed] = useState<string>("");
+  const [seedStockWarning, setSeedStockWarning] = useState<string>("");
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-
-  // Column visibility state - default values
-  const [columnVisibility, setColumnVisibility] = useState({
-    batchNumber: true,
-    plant: true,
-    location: true,
-    totalQty: true,
-    trays: false,
-    reserved: false,
-    available: true,
-    price: false,
-    datePlanted: false,
-    expectedHarvest: true,
-    status: true,
-  });
-
-  // Load column visibility from localStorage on mount (client-side only)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('plantings_column_visibility');
-      if (saved) {
-        try {
-          setColumnVisibility(JSON.parse(saved));
-        } catch (error) {
-          console.error('Failed to parse column visibility:', error);
-        }
-      }
-    }
-  }, []);
-
-  // Save column visibility to localStorage when it changes
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('plantings_column_visibility', JSON.stringify(columnVisibility));
-    }
-  }, [columnVisibility]);
-
-  // Sorting state
-  const [sortColumn, setSortColumn] = useState<keyof Planting | 'plant_type_id' | 'location_id'>('date_planted');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-
-  // Bulk actions state
-  const [selectedPlantings, setSelectedPlantings] = useState<Set<string>>(new Set());
-  const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
-  const [showBulkUpdateDialog, setShowBulkUpdateDialog] = useState(false);
-  const [bulkUpdateStatus, setBulkUpdateStatus] = useState<'active' | 'harvested' | 'closed'>('active');
-
-  // Add view mode state
+  // Add view mode state here
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  
+  useEffect(() => {
+    loadData();
+  }, [user]);
 
   const loadData = async () => {
+    if (!user) return;
+    
     try {
-      setIsLoading(true);
-      const [plantingsData, locationsData, plantTypesData] = await Promise.all([
-        plantingService.getPlantings(),
-        locationService.getLocations(),
+      setLoading(true);
+      const [plantingsData, plantTypesData, locationsData, reservationsData, inventoryData] = await Promise.all([
+        plantingService.getPlantingsWithDetails(),
         plantTypeService.getPlantTypes(),
+        locationService.getLocations(),
+        reservationService.getReservations(),
+        inventoryService.getInventoryItemsByCategory("Seed")
       ]);
-      setPlantings(plantingsData);
-      setLocations(locationsData);
+      
+      setPlantings(plantingsData as Planting[]);
       setPlantTypes(plantTypesData);
+      setLocations(locationsData);
+      setReservations(reservationsData as Reservation[]);
+      setSeedInventory(inventoryData);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load data",
-        variant: "destructive",
-      });
+      console.error("Error loading data:", error);
+      toast({ title: "Error", description: "Failed to load data. Please try refreshing the page.", variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const getReservedQuantity = (plantingId: string): number => {
+    const activeReservations = reservations.filter(r => r.planting_id === plantingId && r.status === 'pending');
+    return activeReservations.reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
+  };
+  
+  const getAvailableQuantity = (planting: Planting): number => {
+    const reserved = getReservedQuantity(planting.id);
+    const remaining = planting.remaining_quantity ?? planting.quantity;
+    return Math.max(0, remaining - reserved);
+  };
 
+  const getReservationCount = (plantingId: string): number => {
+    return reservations.filter(r => r.planting_id === plantingId && r.status === 'active').length;
+  };
+
+  // Validate seed quantity and show warnings
+  const validateSeedQuantity = (seedId: string, quantityUsed: string) => {
+    const seed = seedInventory.find(s => s.id === seedId);
+    const qty = parseFloat(quantityUsed);
+
+    if (!seed || isNaN(qty) || qty <= 0) {
+      setSeedStockWarning("Please enter a valid seed quantity");
+      return;
+    }
+
+    if (qty > Number(seed.current_stock)) {
+      setSeedStockWarning(`Only ${formatNumber(Number(seed.current_stock))} ${seed.unit_of_measure} available`);
+    } else {
+      setSeedStockWarning("");
+    }
+  };
+
+  // Get unique plant type names
+  const uniquePlantTypeNames = useMemo(() => {
+    const names = new Set(plantTypes.map(pt => pt.name));
+    return Array.from(names).sort();
+  }, [plantTypes]);
+
+  // Get varieties for the selected plant type
+  const availableVarieties = useMemo(() => {
+    if (!selectedPlantTypeName) return [];
+    return plantTypes
+      .filter(pt => pt.name === selectedPlantTypeName)
+      .map(pt => pt.variety)
+      .filter(Boolean)
+      .sort();
+  }, [selectedPlantTypeName, plantTypes]);
+
+  // Get unique varieties and locations for filter dropdowns
+  const uniqueVarieties = useMemo(() => {
+    const varieties = new Set(plantings.map(p => p.plant_types?.variety).filter(Boolean));
+    return Array.from(varieties).sort();
+  }, [plantings]);
+
+  const uniqueLocations = useMemo(() => {
+    return locations.map(l => ({ id: l.id, name: l.name }));
+  }, [locations]);
+
+  const uniquePlantTypesForFilter = useMemo(() => {
+    const plantTypeNames = new Set(plantings.map(p => p.plant_types?.name).filter(Boolean));
+    return Array.from(plantTypeNames).sort();
+  }, [plantings]);
+
+  // Filter and search logic
   const filteredPlantings = useMemo(() => {
-    let result = plantings;
+    let filtered = [...plantings];
 
-    // Search
-    if (searchQuery) {
+    // Apply search filter (case-insensitive partial match)
+    if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      result = result.filter(p => 
-        p.batch_number?.toLowerCase().includes(query) ||
-        plantTypes.find(pt => pt.id === p.plant_type_id)?.name?.toLowerCase().includes(query) ||
-        p.variety?.toLowerCase().includes(query) ||
-        locations.find(l => l.id === p.location_id)?.name?.toLowerCase().includes(query)
-      );
+      filtered = filtered.filter(p => {
+        const batchNumber = p.batch_number || '';
+        const plantName = p.plant_types?.name || '';
+        const variety = p.plant_types?.variety || '';
+        const location = p.locations?.name || '';
+        
+        return (
+          batchNumber.toLowerCase().includes(query) ||
+          plantName.toLowerCase().includes(query) ||
+          variety.toLowerCase().includes(query) ||
+          location.toLowerCase().includes(query)
+        );
+      });
     }
 
-    // Filters
-    if (filters.plant_type) {
-      result = result.filter(p => p.plant_type_id === filters.plant_type);
-    }
-    if (filters.variety) {
-      result = result.filter(p => p.variety === filters.variety);
-    }
-    if (filters.location) {
-      result = result.filter(p => p.location_id === filters.location);
-    }
-    if (filters.status !== "all") {
-      result = result.filter(p => p.status === filters.status);
+    // Apply type-specific filters
+    if (filterType !== "all" && filterValue) {
+      switch (filterType) {
+        case "location":
+          filtered = filtered.filter(p => p.location_id === filterValue);
+          break;
+        case "variety":
+          filtered = filtered.filter(p => p.plant_types?.variety === filterValue);
+          break;
+        case "status":
+          filtered = filtered.filter(p => p.status === filterValue);
+          break;
+        case "plant_type":
+          filtered = filtered.filter(p => p.plant_types?.name === filterValue);
+          break;
+      }
     }
 
-    return result;
-  }, [plantings, searchQuery, filters, plantTypes, locations]);
+    return filtered;
+  }, [plantings, searchQuery, filterType, filterValue]);
 
-  // Calculate stats from filtered plantings
-  const stats = useMemo(() => {
+  // Calculate dashboard metrics based on filtered plantings
+  const dashboardMetrics = useMemo(() => {
     const totalPlantings = filteredPlantings.length;
-    
-    const totalSeedlings = filteredPlantings.reduce((sum, p) => {
-      return sum + (p.quantity || 0);
-    }, 0);
-    
-    const reserved = filteredPlantings.reduce((sum, p) => {
-      return sum + ((p as any).reserved_quantity || 0);
-    }, 0);
-    
+    const totalAvailable = filteredPlantings.reduce((sum, p) => sum + (p.remaining_quantity ?? p.quantity), 0);
+    const totalReserved = filteredPlantings.reduce((sum, p) => sum + getReservedQuantity(p.id), 0);
+    const totalForSale = filteredPlantings.reduce((sum, p) => sum + getAvailableQuantity(p), 0);
     const inventoryValue = filteredPlantings.reduce((sum, p) => {
-      return sum + (p.quantity * (p.selling_price || 0));
+      const qty = p.remaining_quantity ?? p.quantity;
+      const price = p.selling_price || 0;
+      return sum + (qty * price);
     }, 0);
 
     return {
       totalPlantings,
-      totalSeedlings,
-      reserved,
-      inventoryValue
+      totalAvailable,
+      totalReserved,
+      totalForSale,
+      inventoryValue,
     };
-  }, [filteredPlantings]);
+  }, [filteredPlantings, reservations]);
 
-  const varieties = useMemo(() => {
-    const uniqueVarieties = new Set(
-      plantings
-        .filter(p => p.variety)
-        .map(p => p.variety)
-    );
-    return Array.from(uniqueVarieties).sort();
-  }, [plantings]);
-
-  const toggleSelectAll = () => {
-    if (selectedPlantings.size === paginatedPlantings.length) {
-      setSelectedPlantings(new Set());
-    } else {
-      setSelectedPlantings(new Set(paginatedPlantings.map(p => p.id)));
+  // Quick-add Plant Type
+  const handleQuickAddPlantType = async () => {
+    if (!newPlantTypeName.trim()) {
+      toast({ title: "Error", description: "Please enter a plant type name.", variant: "destructive" });
+      return;
     }
-  };
 
-  const toggleSelectPlanting = (id: string) => {
-    const newSelected = new Set(selectedPlantings);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedPlantings(newSelected);
-  };
-
-  const handleBulkStatusUpdate = async () => {
     try {
-      setIsBulkActionLoading(true);
-      const selectedIds = Array.from(selectedPlantings);
-      
-      await Promise.all(
-        selectedIds.map(id => {
-          const planting = plantings.find(p => p.id === id);
-          if (planting) {
-            return plantingService.updatePlanting(id, { ...planting, status: bulkUpdateStatus });
-          }
-        })
-      );
-
-      toast({
-        title: "Success",
-        description: `Updated ${selectedIds.length} planting(s)`,
+      const newPlantType = await plantTypeService.createPlantType({
+        name: newPlantTypeName.trim(),
+        variety: "Standard", // Default variety
+        growth_duration: parseInt(newPlantTypeGrowthDuration),
+        description: null,
+        germination_rate: null,
+        default_selling_price: 0,
       });
 
-      setSelectedPlantings(new Set());
-      setShowBulkUpdateDialog(false);
-      loadData();
+      // Reload plant types
+      const updatedPlantTypes = await plantTypeService.getPlantTypes();
+      setPlantTypes(updatedPlantTypes);
+
+      // Auto-select the new plant type
+      setSelectedPlantTypeName(newPlantType.name);
+      setSelectedVariety("Standard");
+
+      // Close dialog and reset
+      setIsAddPlantTypeDialogOpen(false);
+      setNewPlantTypeName("");
+      setNewPlantTypeGrowthDuration("30");
+
+      toast({ title: "Success", description: `Plant type "${newPlantType.name}" added successfully!` });
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update plantings",
-        variant: "destructive",
-      });
-    } finally {
-      setIsBulkActionLoading(false);
+      console.error("Error adding plant type:", error);
+      toast({ title: "Error", description: "Failed to add plant type.", variant: "destructive" });
     }
   };
 
-  const paginatedPlantings = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredPlantings.slice(startIndex, endIndex);
-  }, [filteredPlantings, currentPage]);
+  // Quick-add Variety
+  const handleQuickAddVariety = async () => {
+    if (!selectedPlantTypeName) {
+      toast({ title: "Error", description: "Please select a plant type first.", variant: "destructive" });
+      return;
+    }
 
-  const totalPages = Math.ceil(filteredPlantings.length / itemsPerPage);
+    if (!newVarietyName.trim()) {
+      toast({ title: "Error", description: "Please enter a variety name.", variant: "destructive" });
+      return;
+    }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
     try {
-      const data = {
-        ...formData,
-        quantity: parseInt(formData.quantity),
-        selling_price: parseFloat(formData.selling_price),
-        status: editingPlanting ? editingPlanting.status : 'active',
-        remaining_quantity: editingPlanting ? editingPlanting.remaining_quantity : parseInt(formData.quantity),
-      };
+      const newPlantType = await plantTypeService.createPlantType({
+        name: selectedPlantTypeName,
+        variety: newVarietyName.trim(),
+        growth_duration: parseInt(newPlantTypeGrowthDuration),
+        description: null,
+        germination_rate: null,
+        default_selling_price: 0,
+      });
 
-      if (editingPlanting) {
-        await plantingService.updatePlanting(editingPlanting.id, data);
-        toast({
-          title: "Success",
-          description: "Planting updated successfully",
-        });
-      } else {
-        await plantingService.createPlanting(data);
-        toast({
-          title: "Success",
-          description: "Planting created successfully",
-        });
+      // Reload plant types
+      const updatedPlantTypes = await plantTypeService.getPlantTypes();
+      setPlantTypes(updatedPlantTypes);
+
+      // Auto-select the new variety
+      setSelectedVariety(newPlantType.variety);
+
+      // Close dialog and reset
+      setIsAddVarietyDialogOpen(false);
+      setNewVarietyName("");
+      setNewPlantTypeGrowthDuration("30");
+
+      toast({ title: "Success", description: `Variety "${newPlantType.variety}" added successfully!` });
+    } catch (error) {
+      console.error("Error adding variety:", error);
+      toast({ title: "Error", description: "Failed to add variety.", variant: "destructive" });
+    }
+  };
+
+  const handleSavePlanting = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    
+    const plantTypeId = plantTypes.find(pt => pt.name === selectedPlantTypeName && pt.variety === selectedVariety)?.id;
+    if (!plantTypeId) {
+        toast({ title: "Error", description: "Selected plant type and variety combination not found.", variant: "destructive" });
+        return;
+    }
+
+    // Validate inventory deduction if enabled
+    if (trackInventory && !editingPlanting) {
+      if (!selectedSeedId) {
+        toast({ title: "Error", description: "Please select a seed from inventory", variant: "destructive" });
+        return;
       }
 
-      setShowDialog(false);
-      setEditingPlanting(null);
-      setFormData({
-        batch_number: "",
-        plant_type_id: "",
-        variety: "",
-        location_id: "",
-        quantity: "",
-        date_planted: "",
-        expected_harvest_date: "",
-        selling_price: "",
-        notes: "",
-      });
-      loadData();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to save planting",
-        variant: "destructive",
-      });
+      const seed = seedInventory.find(s => s.id === selectedSeedId);
+      const qtyUsed = parseFloat(seedQuantityUsed);
+
+      if (!seed || isNaN(qtyUsed) || qtyUsed <= 0) {
+        toast({ title: "Error", description: "Please enter a valid seed quantity", variant: "destructive" });
+        return;
+      }
+
+      if (qtyUsed > Number(seed.current_stock)) {
+        toast({ 
+          title: "Insufficient Stock", 
+          description: `Only ${formatNumber(Number(seed.current_stock))} ${seed.unit_of_measure} available`, 
+          variant: "destructive" 
+        });
+        return;
+      }
     }
-  };
 
-  const handleEdit = (planting: Planting) => {
-    setEditingPlanting(planting);
-    setFormData({
-      batch_number: planting.batch_number || "",
-      plant_type_id: planting.plant_type_id,
-      variety: planting.variety || "",
-      location_id: planting.location_id,
-      quantity: planting.quantity.toString(),
-      date_planted: planting.date_planted || "",
-      expected_harvest_date: planting.expected_harvest_date || "",
-      selling_price: planting.selling_price?.toString() || "",
-      notes: planting.notes || "",
-    });
-    setShowDialog(true);
-  };
+    const datePlanted = new Date(formData.get("date_planted") as string);
+    const selectedPlantType = plantTypes.find(pt => pt.id === plantTypeId);
+    const expectedHarvestDate = new Date(datePlanted);
+    if (selectedPlantType?.growth_duration) {
+      expectedHarvestDate.setDate(datePlanted.getDate() + selectedPlantType.growth_duration);
+    }
+    
+    const batch_number = generateBatchNumber(selectedPlantTypeName, selectedVariety, datePlanted.toISOString().split('T')[0]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this planting?")) return;
+    const plantingData = {
+      plant_type_id: plantTypeId,
+      location_id: formData.get("location_id") as string,
+      quantity: parseInt(formData.get("quantity") as string),
+      date_planted: formData.get("date_planted") as string,
+      expected_harvest_date: expectedHarvestDate.toISOString().split('T')[0],
+      batch_number: batch_number,
+      status: editingPlanting ? formData.get("status") as string : "active",
+      notes: formData.get("notes") as string,
+      variety: selectedVariety,
+      selling_price: parseFloat(formData.get("selling_price") as string) || 0,
+    };
+    
+    const finalPlantingData = {
+        ...plantingData,
+        remaining_quantity: editingPlanting?.remaining_quantity ?? plantingData.quantity,
+    }
 
     try {
-      await plantingService.deletePlanting(id);
-      toast({
-        title: "Success",
-        description: "Planting deleted successfully",
-      });
-      loadData();
+      let createdPlanting;
+      
+      if (editingPlanting) {
+        await plantingService.updatePlanting(editingPlanting.id, finalPlantingData);
+        toast({ title: "Success", description: "Planting updated successfully." });
+      } else {
+        createdPlanting = await plantingService.addPlanting(finalPlantingData);
+        
+        // Create inventory transaction if tracking is enabled
+        if (trackInventory && selectedSeedId && seedQuantityUsed) {
+          const seed = seedInventory.find(s => s.id === selectedSeedId);
+          const qtyUsed = parseFloat(seedQuantityUsed);
+          
+          if (seed && !isNaN(qtyUsed) && qtyUsed > 0) {
+            const location = locations.find(l => l.id === plantingData.location_id);
+            const notes = `Used for planting: ${selectedPlantTypeName} (${selectedVariety}) at ${location?.name || 'Unknown Location'}`;
+            
+            await inventoryService.createStockTransaction({
+              item_id: selectedSeedId,
+              transaction_type: "usage",
+              quantity: -Math.abs(qtyUsed), // Negative for usage
+              reference_id: createdPlanting.id,
+              reference_type: "planting",
+              notes: notes,
+              transaction_date: plantingData.date_planted,
+            });
+          }
+        }
+        
+        toast({ title: "Success", description: "Planting created successfully." });
+      }
+      
+      await loadData();
+      handleCloseDialog();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete planting",
-        variant: "destructive",
-      });
+      console.error("Error saving planting:", error);
+      toast({ title: "Error", description: "Failed to save planting. Please try again.", variant: "destructive" });
     }
   };
 
-  if (isLoading) {
+  const handleDeletePlanting = async (id: string) => {
+    const reservationCount = getReservationCount(id);
+    if (reservationCount > 0) {
+      toast({ title: "Delete Error", description: `Cannot delete this planting. It has ${reservationCount} active reservation(s). Please cancel them first.`, variant: "destructive" });
+      return;
+    }
+    if (!confirm("Are you sure you want to delete this planting?")) return;
+    
+    try {
+      await plantingService.deletePlanting(id);
+      await loadData();
+      toast({ title: "Success", description: "Planting deleted successfully." });
+    } catch (error) {
+      console.error("Error deleting planting:", error);
+      toast({ title: "Error", description: "Failed to delete planting. Please try again.", variant: "destructive" });
+    }
+  };
+
+  const handleOpenDialog = (planting: Planting | null = null) => {
+    setEditingPlanting(planting);
+    if (planting) {
+      setSelectedPlantTypeName(planting.plant_types?.name || "");
+      setSelectedVariety(planting.plant_types?.variety || "");
+    } else {
+      setSelectedPlantTypeName("");
+      setSelectedVariety("");
+    }
+    
+    // Reset inventory tracking states
+    setTrackInventory(false);
+    setSelectedSeedId("");
+    setSeedQuantityUsed("");
+    setSeedStockWarning("");
+    
+    setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setEditingPlanting(null);
+    setSelectedPlantTypeName("");
+    setSelectedVariety("");
+    setTrackInventory(false);
+    setSelectedSeedId("");
+    setSeedQuantityUsed("");
+    setSeedStockWarning("");
+  };
+
+  const handlePlantTypeChange = (value: string) => {
+    setSelectedPlantTypeName(value);
+    setSelectedVariety(""); // Reset variety when plant type changes
+  };
+  
+  const getExpectedHarvestDate = (planting: Planting) => {
+    if (!planting.expected_harvest_date) return "N/A";
+    return new Date(planting.expected_harvest_date).toLocaleDateString();
+  };
+
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setFilterType("all");
+    setFilterValue("");
+  };
+
+  // CSV Import Functions
+  const downloadCsvTemplate = () => {
+    const headers = ["Plant Type", "Variety", "Location", "Quantity", "Date Planted", "Notes"];
+    const example = ["Tomato", "Cherry Red", "Greenhouse A", "1000", "2025-01-15", "First batch"];
+    const csv = [headers.join(","), example.join(",")].join("\n");
+    
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "plantings_template.csv";
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const parseCsvFile = async (file: File) => {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = (e) => reject(e);
+      reader.readAsText(file);
+    });
+  };
+
+  const validateAndParseCsv = async (file: File) => {
+    setIsProcessingCsv(true);
+    setCsvErrors([]);
+    setCsvData([]);
+    setInvalidRows([]);
+
+    try {
+      const csvText = await parseCsvFile(file);
+      const lines = csvText.split("\n").map(line => line.trim()).filter(line => line);
+      
+      if (lines.length < 2) {
+        setCsvErrors(["CSV file must contain at least a header row and one data row"]);
+        setIsProcessingCsv(false);
+        return;
+      }
+
+      const headers = lines[0].split(",").map(h => h.trim());
+      const requiredHeaders = ["Plant Type", "Variety", "Location", "Quantity", "Date Planted"];
+      
+      const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+      if (missingHeaders.length > 0) {
+        setCsvErrors([`Missing required columns: ${missingHeaders.join(", ")}`]);
+        setIsProcessingCsv(false);
+        return;
+      }
+
+      const parsedData = [];
+      const invalidData = [];
+      const errors: string[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(",").map(v => v.trim());
+        if (values.length < requiredHeaders.length) continue;
+
+        const row: any = {};
+        headers.forEach((header, index) => {
+          row[header] = values[index] || "";
+        });
+
+        // Validate row data
+        const rowErrors: string[] = [];
+        
+        // Check plant type exists
+        const plantTypeName = row["Plant Type"];
+        const variety = row["Variety"];
+        const matchingPlantType = plantTypes.find(pt => 
+          pt.name.toLowerCase() === plantTypeName.toLowerCase() && 
+          pt.variety.toLowerCase() === variety.toLowerCase()
+        );
+        
+        if (!matchingPlantType) {
+          rowErrors.push(`Plant type "${plantTypeName}" with variety "${variety}" not found`);
+        }
+
+        // Check location exists
+        const locationName = row["Location"];
+        const matchingLocation = locations.find(l => 
+          l.name.toLowerCase() === locationName.toLowerCase()
+        );
+        
+        if (!matchingLocation) {
+          rowErrors.push(`Location "${locationName}" not found`);
+        }
+
+        // Validate quantity
+        const quantity = parseInt(row["Quantity"]);
+        if (isNaN(quantity) || quantity <= 0) {
+          rowErrors.push(`Invalid quantity "${row["Quantity"]}"`);
+        }
+
+        // Validate date
+        const datePlanted = new Date(row["Date Planted"]);
+        if (isNaN(datePlanted.getTime())) {
+          rowErrors.push(`Invalid date "${row["Date Planted"]}"`);
+        }
+
+        const rowData = {
+          plantType: matchingPlantType,
+          location: matchingLocation,
+          quantity,
+          datePlanted: row["Date Planted"],
+          notes: row["Notes"] || "",
+          rowNumber: i,
+          rawData: row
+        };
+
+        if (rowErrors.length === 0) {
+          parsedData.push(rowData);
+        } else {
+          invalidData.push({
+            ...rowData,
+            errors: rowErrors
+          });
+          errors.push(`Row ${i}: ${rowErrors.join(", ")}`);
+        }
+      }
+
+      if (errors.length > 0) {
+        setCsvErrors(errors);
+      }
+      
+      setCsvData(parsedData);
+      setInvalidRows(invalidData);
+    } catch (error) {
+      setCsvErrors(["Failed to parse CSV file. Please ensure it's a valid CSV format."]);
+    } finally {
+      setIsProcessingCsv(false);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCsvFile(file);
+      validateAndParseCsv(file);
+    }
+  };
+
+  const handleBulkImport = async () => {
+    if (csvData.length === 0) {
+      toast({ title: "Error", description: "No valid data to import", variant: "destructive" });
+      return;
+    }
+
+    if (!ignoreErrors && csvErrors.length > 0) {
+      toast({ 
+        title: "Validation Errors", 
+        description: "Please fix all errors or enable 'Ignore errors and import valid data' to continue", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    setIsProcessingCsv(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      for (const row of csvData) {
+        try {
+          const datePlanted = new Date(row.datePlanted);
+          const expectedHarvestDate = new Date(datePlanted);
+          if (row.plantType?.growth_duration) {
+            expectedHarvestDate.setDate(datePlanted.getDate() + row.plantType.growth_duration);
+          }
+
+          const batchNumber = generateBatchNumber(
+            row.plantType.name,
+            row.plantType.variety,
+            row.datePlanted
+          );
+
+          const plantingData = {
+            plant_type_id: row.plantType.id,
+            location_id: row.location.id,
+            quantity: row.quantity,
+            remaining_quantity: row.quantity,
+            date_planted: row.datePlanted,
+            expected_harvest_date: expectedHarvestDate.toISOString().split('T')[0],
+            batch_number: batchNumber,
+            status: "active",
+            notes: row.notes,
+            variety: row.plantType.variety,
+            selling_price: row.plantType.default_selling_price || 0,
+          };
+
+          await plantingService.addPlanting(plantingData);
+          successCount++;
+        } catch (error) {
+          console.error(`Error importing row ${row.rowNumber}:`, error);
+          failCount++;
+        }
+      }
+
+      await loadData();
+      
+      const skippedCount = invalidRows.length;
+      let message = `Successfully imported ${successCount} plantings`;
+      if (skippedCount > 0) {
+        message += `. Skipped ${skippedCount} rows with errors`;
+      }
+      if (failCount > 0) {
+        message += `. ${failCount} failed to save`;
+      }
+
+      toast({ 
+        title: "Import Complete", 
+        description: message
+      });
+
+      setIsImportDialogOpen(false);
+      setCsvFile(null);
+      setCsvData([]);
+      setCsvErrors([]);
+      setInvalidRows([]);
+      setIgnoreErrors(false);
+    } catch (error) {
+      console.error("Error during bulk import:", error);
+      toast({ title: "Error", description: "Failed to complete bulk import", variant: "destructive" });
+    } finally {
+      setIsProcessingCsv(false);
+    }
+  };
+
+  if (!user) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-muted-foreground">Loading...</div>
-        </div>
-      </Layout>
+      <div className="max-w-7xl mx-auto p-8 text-center">
+        <p className="text-gray-600">Please log in to manage plantings.</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto p-8 text-center">
+        <p className="text-gray-600">Loading plantings...</p>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="space-y-6">
-        {/* Page Header */}
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Sprout className="h-8 w-8 text-green-600" />
-              <h1 className="text-3xl font-bold">Plantings</h1>
-            </div>
-            <p className="text-muted-foreground">
-              Track all your seedling batches from planting to harvest.
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-2">
+    <div className="max-w-[1600px] mx-auto space-y-8 px-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-bold flex items-center gap-3">
+            <Sprout className="w-10 h-10 text-lime-600" />
+            Plantings
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">Track all your seedling batches from planting to harvest.</p>
+        </div>
+        {permissions.canCreate && (
+          <div className="flex gap-2">
             {/* View Mode Toggle */}
-            <div className="flex items-center border rounded-lg">
+            <div className="flex border rounded-lg overflow-hidden">
               <Button
+                onClick={() => setViewMode("table")}
                 variant={viewMode === "table" ? "default" : "ghost"}
                 size="sm"
-                onClick={() => setViewMode("table")}
-                className="rounded-r-none"
+                className="rounded-none gap-1"
               >
-                <TableIcon className="h-4 w-4 mr-1" />
-                Table
+                <TableIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Table</span>
               </Button>
               <Button
+                onClick={() => setViewMode("cards")}
                 variant={viewMode === "cards" ? "default" : "ghost"}
                 size="sm"
-                onClick={() => setViewMode("cards")}
-                className="rounded-l-none"
+                className="rounded-none gap-1"
               >
-                <LayoutGrid className="h-4 w-4 mr-1" />
-                Cards
+                <LayoutGrid className="w-4 h-4" />
+                <span className="hidden sm:inline">Cards</span>
               </Button>
             </div>
-
-            {/* Bulk Import Button */}
-            <Button variant="outline">
-              <Upload className="h-4 w-4 mr-2" />
-              Bulk Import
+            
+            <Button onClick={() => setIsImportDialogOpen(true)} variant="outline" className="border-lime-600 text-lime-600 hover:bg-lime-50">
+              <Upload className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Bulk Import</span>
             </Button>
-
-            {/* Add Planting Button */}
-            <Button onClick={() => setShowDialog(true)} className="bg-green-600 hover:bg-green-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Planting
+            <Button onClick={() => handleOpenDialog()} className="bg-lime-600 hover:bg-lime-700">
+              <Plus className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Add Planting</span>
             </Button>
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Current Plantings Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Current Plantings</CardTitle>
-            <CardDescription>An overview of all seedling batches in the nursery.</CardDescription>
+      {/* Main Content Tabs */}
+      {/* Dashboard Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <Card className="border-l-4 border-blue-500 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Plantings</CardTitle>
           </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">{dashboardMetrics.totalPlantings}</div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-l-4 border-green-500 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Available Seedlings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{formatNumber(dashboardMetrics.totalAvailable)}</div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-l-4 border-orange-500 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Reserved</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{formatNumber(dashboardMetrics.totalReserved)}</div>
+          </CardContent>
+        </Card>
+        
+        <Card className="border-l-4 border-purple-500 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Inventory Value</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">K{formatNumber(dashboardMetrics.inventoryValue)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Based on current selling prices</p>
+          </CardContent>
+        </Card>
+      </div>
 
-          <CardContent className="space-y-4">
-            {/* Search and Filter Bar */}
-            <div className="flex items-center gap-4">
-              {/* Search Input */}
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by batch, plant, variety, or location..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Filter Dropdown */}
-                <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
-                  <SelectTrigger className="w-[180px]">
-                    <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue />
+      {/* Main Planting Dialog with Smart Dropdowns */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{editingPlanting ? "Edit" : "Add"} Planting</DialogTitle>
+            <DialogDescription>
+              {isViewer ? "Viewing planting details. No changes can be made." : (editingPlanting ? "Update the details for this planting." : "Log a new batch of seedlings.")}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSavePlanting} className="space-y-4 pt-4">
+            {/* Plant Type with Quick Add */}
+            <div className="space-y-2">
+              <Label htmlFor="plantTypeName">
+                Plant Type <span className="text-red-500">*</span>
+              </Label>
+              <div className="flex gap-2">
+                <Select 
+                  value={selectedPlantTypeName} 
+                  onValueChange={handlePlantTypeChange}
+                  required
+                  disabled={isViewer || !!editingPlanting}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select a plant type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Plantings</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="harvested">Harvested</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
+                    {uniquePlantTypeNames.map(name => (
+                      <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-
-                {/* Column Selector */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="gap-2">
-                      <Eye className="h-4 w-4" />
-                      Columns
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[200px]" align="end">
-                    <div className="space-y-3">
-                      <div className="font-medium text-sm">Toggle Columns</div>
-                      <div className="space-y-2">
-                        {[
-                          { key: 'batchNumber', label: 'Batch #' },
-                          { key: 'plant', label: 'Plant' },
-                          { key: 'location', label: 'Location' },
-                          { key: 'totalQty', label: 'Total Qty' },
-                          { key: 'trays', label: 'Trays' },
-                          { key: 'reserved', label: 'Reserved' },
-                          { key: 'available', label: 'Available' },
-                          { key: 'price', label: 'Price (ZMW)' },
-                          { key: 'datePlanted', label: 'Date Planted' },
-                          { key: 'expectedHarvest', label: 'Expected Harvest' },
-                          { key: 'status', label: 'Status' },
-                        ].map((column) => (
-                          <div key={column.key} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={column.key}
-                              checked={columnVisibility[column.key as keyof typeof columnVisibility]}
-                              onCheckedChange={(checked) => {
-                                setColumnVisibility(prev => ({
-                                  ...prev,
-                                  [column.key]: checked
-                                }));
-                              }}
-                            />
-                            <label
-                              htmlFor={column.key}
-                              className="text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                            >
-                              {column.label}
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                {!editingPlanting && !isViewer && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsAddPlantTypeDialogOpen(true)}
+                    title="Add new plant type"
+                    className="shrink-0"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             </div>
 
-            {/* Bulk Actions */}
-            {selectedPlantings.size > 0 && (
-              <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
-                <span className="text-sm font-medium">
-                  {selectedPlantings.size} selected
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowBulkUpdateDialog(true)}
+            {/* Variety with Quick Add */}
+            <div className="space-y-2">
+              <Label htmlFor="variety">
+                Variety <span className="text-red-500">*</span>
+              </Label>
+              <div className="flex gap-2">
+                <Select 
+                  name="variety"
+                  value={selectedVariety} 
+                  onValueChange={setSelectedVariety}
+                  disabled={!selectedPlantTypeName || isViewer || !!editingPlanting}
+                  required
                 >
-                  Update Status
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setSelectedPlantings(new Set())}
-                >
-                  Clear Selection
-                </Button>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder={selectedPlantTypeName ? "Select a variety" : "Select plant type first"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableVarieties.map(variety => (
+                      <SelectItem key={variety} value={variety}>{variety}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!editingPlanting && !isViewer && selectedPlantTypeName && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setIsAddVarietyDialogOpen(true)}
+                    title="Add new variety"
+                    className="shrink-0"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="location_id">Location</Label>
+                <Select name="location_id" required defaultValue={editingPlanting?.location_id} disabled={isViewer}>
+                  <SelectTrigger><SelectValue placeholder="Select a location" /></SelectTrigger>
+                  <SelectContent>
+                    {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Quantity</Label>
+                <Input 
+                  id="quantity" 
+                  name="quantity" 
+                  type="number" 
+                  defaultValue={editingPlanting?.quantity} 
+                  required 
+                  disabled={isViewer}
+                  onChange={(e) => {
+                    const qty = parseInt(e.target.value) || 0;
+                    const trays = Math.round(qty / 220);
+                    const trayDisplay = document.getElementById("trayUsageDisplay");
+                    if (trayDisplay) {
+                      trayDisplay.textContent = trays.toString();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="selling_price">Selling Price per Seedling (ZMW)</Label>
+              <Input 
+                id="selling_price" 
+                name="selling_price" 
+                type="number" 
+                step="0.01" 
+                min="0"
+                defaultValue={
+                  editingPlanting?.selling_price || 
+                  plantTypes.find(pt => pt.name === selectedPlantTypeName && pt.variety === selectedVariety)?.default_selling_price || 
+                  0
+                }
+                placeholder="0.00"
+                disabled={isViewer}
+              />
+              <p className="text-xs text-gray-500">
+                {selectedPlantTypeName && selectedVariety ? (
+                  `Default from plant type: K${(plantTypes.find(pt => pt.name === selectedPlantTypeName && pt.variety === selectedVariety)?.default_selling_price || 0).toFixed(2)}`
+                ) : (
+                  "Select a plant type to see default price"
+                )}
+              </p>
+            </div>
+            
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium text-blue-900 dark:text-blue-100">Estimated Tray Usage</Label>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Based on 220 seedlings per tray</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                    <span id="trayUsageDisplay">
+                      {editingPlanting ? Math.round(editingPlanting.quantity / 220) : "0"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">trays</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Inventory Tracking Section - Only show for new plantings */}
+            {!editingPlanting && (
+              <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="trackInventory"
+                    checked={trackInventory}
+                    onCheckedChange={(checked) => {
+                      setTrackInventory(checked as boolean);
+                      if (!checked) {
+                        setSelectedSeedId("");
+                        setSeedQuantityUsed("");
+                        setSeedStockWarning("");
+                      }
+                    }}
+                    disabled={isViewer}
+                  />
+                  <Label
+                    htmlFor="trackInventory"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  >
+                    Track seed usage from inventory
+                  </Label>
+                </div>
+
+                {trackInventory && (
+                  <div className="space-y-4 pl-6 border-l-2 border-green-300 dark:border-green-700">
+                    {seedInventory.length === 0 ? (
+                      <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                        <p className="text-sm text-amber-800 dark:text-amber-200">
+                          ⚠️ No seeds found in inventory. Please add seed items in the{" "}
+                          <Link href="/inventory" className="underline font-medium">
+                            Inventory module
+                          </Link>{" "}
+                          first.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="seedSelect">
+                            Select Seed <span className="text-red-500">*</span>
+                          </Label>
+                          <Select
+                            value={selectedSeedId}
+                            onValueChange={(value) => {
+                              setSelectedSeedId(value);
+                              validateSeedQuantity(value, seedQuantityUsed);
+                            }}
+                            disabled={isViewer}
+                          >
+                            <SelectTrigger id="seedSelect">
+                              <SelectValue placeholder="Choose a seed from inventory" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {seedInventory.map((seed) => (
+                                <SelectItem 
+                                  key={seed.id} 
+                                  value={seed.id}
+                                  disabled={Number(seed.current_stock) <= 0}
+                                >
+                                  <div className="flex items-center justify-between gap-4">
+                                    <span>{seed.name}</span>
+                                    <span className={`text-xs ${Number(seed.current_stock) <= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                      ({formatNumber(Number(seed.current_stock))} {seed.unit_of_measure} available)
+                                    </span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="seedQuantity">
+                            Quantity Used <span className="text-red-500">*</span>
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="seedQuantity"
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              placeholder="0.00"
+                              value={seedQuantityUsed}
+                              onChange={(e) => {
+                                setSeedQuantityUsed(e.target.value);
+                                validateSeedQuantity(selectedSeedId, e.target.value);
+                              }}
+                              disabled={isViewer || !selectedSeedId}
+                            />
+                            <span className="flex items-center text-sm text-gray-600 dark:text-gray-400 min-w-[60px]">
+                              {selectedSeedId && seedInventory.find(s => s.id === selectedSeedId)?.unit_of_measure}
+                            </span>
+                          </div>
+                          {seedStockWarning && (
+                            <p className={`text-xs ${
+                              seedStockWarning.startsWith('❌') ? 'text-red-600 dark:text-red-400' :
+                              seedStockWarning.startsWith('⚠️') ? 'text-amber-600 dark:text-amber-400' :
+                              'text-green-600 dark:text-green-400'
+                            }`}>
+                              {seedStockWarning}
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Table */}
-            <div className="border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        {columnVisibility.batchNumber && <TableHead className="w-[140px]">Batch #</TableHead>}
-                        {columnVisibility.plant && <TableHead className="w-[200px]">Plant</TableHead>}
-                        {columnVisibility.location && <TableHead className="w-[120px]">Location</TableHead>}
-                        {columnVisibility.totalQty && <TableHead className="text-right">Total Qty</TableHead>}
-                        {columnVisibility.trays && <TableHead className="text-right">Trays</TableHead>}
-                        {columnVisibility.reserved && <TableHead className="text-right">Reserved</TableHead>}
-                        {columnVisibility.available && <TableHead className="text-right">Available</TableHead>}
-                        {columnVisibility.price && <TableHead className="text-right">Price (ZMW)</TableHead>}
-                        {columnVisibility.datePlanted && <TableHead>Date Planted</TableHead>}
-                        {columnVisibility.expectedHarvest && <TableHead>Expected Harvest</TableHead>}
-                        {columnVisibility.status && <TableHead>Status</TableHead>}
-                        <TableHead className="w-[100px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedPlantings.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
-                            No plantings found
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        paginatedPlantings.map((planting) => {
-                          const plantType = plantTypes.find(pt => pt.id === planting.plant_type_id);
-                          const location = locations.find(loc => loc.id === planting.location_id);
-                          const reserved = (planting as any).reserved_quantity || 0;
-                          const available = planting.remaining_quantity - reserved;
-
-                          return (
-                            <TableRow key={planting.id}>
-                              {columnVisibility.batchNumber && (
-                                <TableCell className="font-medium">
-                                  <div className="flex items-center gap-2">
-                                    <Checkbox
-                                      checked={selectedPlantings.has(planting.id)}
-                                      onCheckedChange={() => toggleSelectPlanting(planting.id)}
-                                    />
-                                    <span className="text-blue-600 font-medium">{planting.batch_number}</span>
-                                  </div>
-                                </TableCell>
-                              )}
-                              {columnVisibility.plant && (
-                                <TableCell>
-                                  <div>
-                                    <div className="font-medium">{plantType?.name || "Unknown"}</div>
-                                    <div className="text-sm text-muted-foreground">{planting.variety}</div>
-                                  </div>
-                                </TableCell>
-                              )}
-                              {columnVisibility.location && (
-                                <TableCell>{location?.name || "N/A"}</TableCell>
-                              )}
-                              {columnVisibility.totalQty && (
-                                <TableCell className="text-right">{planting.quantity.toLocaleString()}</TableCell>
-                              )}
-                              {columnVisibility.trays && (
-                                <TableCell className="text-right">
-                                  <span className="text-blue-600 font-medium">{(planting as any).number_of_trays || Math.ceil(planting.quantity / 200)}</span>
-                                </TableCell>
-                              )}
-                              {columnVisibility.reserved && (
-                                <TableCell className="text-right">{reserved.toLocaleString()}</TableCell>
-                              )}
-                              {columnVisibility.available && (
-                                <TableCell className="text-right text-green-600 font-medium">{available.toLocaleString()}</TableCell>
-                              )}
-                              {columnVisibility.price && (
-                                <TableCell className="text-right">{formatCurrency(planting.selling_price)}</TableCell>
-                              )}
-                              {columnVisibility.datePlanted && (
-                                <TableCell>{new Date(planting.date_planted).toLocaleDateString()}</TableCell>
-                              )}
-                              {columnVisibility.expectedHarvest && (
-                                <TableCell>{new Date(planting.expected_harvest_date).toLocaleDateString()}</TableCell>
-                              )}
-                              {columnVisibility.status && (
-                                <TableCell>
-                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                    planting.status === "active" ? "bg-green-100 text-green-800" :
-                                    planting.status === "harvested" ? "bg-blue-100 text-blue-800" :
-                                    "bg-gray-100 text-gray-800"
-                                  }`}>
-                                    {planting.status}
-                                  </span>
-                                </TableCell>
-                              )}
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => handleEdit(planting)}
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => handleDelete(planting.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="date_planted">Date Planted</Label>
+                <Input id="date_planted" name="date_planted" type="date" defaultValue={editingPlanting?.date_planted || new Date().toISOString().split('T')[0]} required disabled={isViewer} />
               </div>
-            </div>
-
-            {/* Pagination Controls */}
-            {filteredPlantings.length > 0 && (
-              <div className="flex items-center justify-between px-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Rows per page:</span>
-                  <Select
-                    value={itemsPerPage.toString()}
-                    onValueChange={(value) => {
-                      setCurrentPage(1);
-                    }}
-                  >
-                    <SelectTrigger className="w-[70px]">
-                      <SelectValue />
-                    </SelectTrigger>
+              {editingPlanting && (
+                <div className="space-y-2">
+                  <Label htmlFor="status">Status</Label>
+                  <Select name="status" defaultValue={editingPlanting?.status} disabled={isViewer}>
+                    <SelectTrigger><SelectValue/></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="25">25</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="harvested">Harvested</SelectItem>
+                      <SelectItem value="closed">Closed</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+              )}
+            </div>
+            {(permissions.canCreate || permissions.canUpdate) ? (
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                <Button type="submit" className="bg-lime-600 hover:bg-lime-700">Save Planting</Button>
+              </div>
+            ) : (
+              <div className="flex justify-end pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Close</Button>
+              </div>
+            )}
+          </form>
+        </DialogContent>
+      </Dialog>
 
-                <div className="flex items-center gap-6">
-                  <span className="text-sm text-muted-foreground">
-                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredPlantings.length)} of {filteredPlantings.length}
-                  </span>
-                  
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(1)}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronsLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage - 1)}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    
-                    <span className="text-sm px-4">
-                      Page {currentPage} of {totalPages}
-                    </span>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(totalPages)}
-                      disabled={currentPage === totalPages}
-                    >
-                      <ChevronsRight className="h-4 w-4" />
-                    </Button>
+      {/* Quick Add Plant Type Dialog */}
+      <Dialog open={isAddPlantTypeDialogOpen} onOpenChange={setIsAddPlantTypeDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New Plant Type</DialogTitle>
+            <DialogDescription>
+              Create a new plant type to add to the list
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPlantTypeName">Plant Type Name *</Label>
+              <Input
+                id="newPlantTypeName"
+                value={newPlantTypeName}
+                onChange={(e) => setNewPlantTypeName(e.target.value)}
+                placeholder="e.g., Tomato, Cabbage, Lettuce"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newPlantTypeGrowthDuration">Growth Duration (days) *</Label>
+              <Input
+                id="newPlantTypeGrowthDuration"
+                type="number"
+                value={newPlantTypeGrowthDuration}
+                onChange={(e) => setNewPlantTypeGrowthDuration(e.target.value)}
+                placeholder="30"
+              />
+              <p className="text-xs text-gray-500">Days from planting to harvest</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => {
+              setIsAddPlantTypeDialogOpen(false);
+              setNewPlantTypeName("");
+              setNewPlantTypeGrowthDuration("30");
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleQuickAddPlantType} className="bg-lime-600 hover:bg-lime-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Plant Type
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Add Variety Dialog */}
+      <Dialog open={isAddVarietyDialogOpen} onOpenChange={setIsAddVarietyDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New Variety</DialogTitle>
+            <DialogDescription>
+              Add a new variety for <strong>{selectedPlantTypeName}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="newVarietyName">Variety Name *</Label>
+              <Input
+                id="newVarietyName"
+                value={newVarietyName}
+                onChange={(e) => setNewVarietyName(e.target.value)}
+                placeholder="e.g., Cherry Red, Roma, Beefsteak"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newVarietyGrowthDuration">Growth Duration (days) *</Label>
+              <Input
+                id="newVarietyGrowthDuration"
+                type="number"
+                value={newPlantTypeGrowthDuration}
+                onChange={(e) => setNewPlantTypeGrowthDuration(e.target.value)}
+                placeholder="30"
+              />
+              <p className="text-xs text-gray-500">Days from planting to harvest for this variety</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => {
+              setIsAddVarietyDialogOpen(false);
+              setNewVarietyName("");
+              setNewPlantTypeGrowthDuration("30");
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleQuickAddVariety} className="bg-lime-600 hover:bg-lime-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Variety
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Bulk Import Dialog */}
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Bulk Import Plantings</DialogTitle>
+            <DialogDescription>
+              Upload a CSV file to import multiple plantings at once
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 pt-4">
+            {/* Download Template */}
+            <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div>
+                <h3 className="font-medium text-blue-900 dark:text-blue-100">Need a template?</h3>
+                <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                  Download our CSV template with the correct column format
+                </p>
+              </div>
+              <Button onClick={downloadCsvTemplate} variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-2" />
+                Download Template
+              </Button>
+            </div>
+
+            {/* File Upload */}
+            <div className="space-y-2">
+              <Label htmlFor="csvFile">Upload CSV File</Label>
+              <Input
+                id="csvFile"
+                type="file"
+                accept=".csv"
+                onChange={handleFileSelect}
+                disabled={isProcessingCsv}
+              />
+              <p className="text-xs text-gray-500">
+                Required columns: Plant Type, Variety, Location, Quantity, Date Planted
+              </p>
+            </div>
+
+            {/* Processing Indicator */}
+            {isProcessingCsv && (
+              <div className="text-center py-4">
+                <p className="text-gray-600">Processing CSV file...</p>
+              </div>
+            )}
+
+            {/* Errors Display */}
+            {csvErrors.length > 0 && (
+              <div className="p-4 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
+                <h3 className="font-medium text-red-900 dark:text-red-100 mb-2">Validation Errors</h3>
+                <ul className="list-disc list-inside space-y-1 text-sm text-red-700 dark:text-red-300">
+                  {csvErrors.map((error, index) => (
+                    <li key={index}>{error}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Ignore Errors Option */}
+            {(csvData.length > 0 || invalidRows.length > 0) && (
+              <div className="space-y-4">
+                {/* Summary */}
+                <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-medium text-blue-900 dark:text-blue-100">Import Summary</h3>
+                      <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                        {csvData.length} valid rows • {invalidRows.length} rows with errors
+                      </p>
+                    </div>
+                    {invalidRows.length > 0 && (
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="ignoreErrors"
+                          checked={ignoreErrors}
+                          onCheckedChange={(checked) => setIgnoreErrors(checked as boolean)}
+                        />
+                        <Label
+                          htmlFor="ignoreErrors"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          Ignore errors and import valid data
+                        </Label>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
 
-        {/* Add/Edit Dialog */}
-        <Dialog open={showDialog} onOpenChange={setShowDialog}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingPlanting ? "Edit Planting" : "Add New Planting"}</DialogTitle>
-              <DialogDescription>
-                {editingPlanting ? "Update planting details" : "Create a new planting batch"}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="batch_number">Batch Number</Label>
-                  <Input
-                    id="batch_number"
-                    value={formData.batch_number}
-                    onChange={(e) => setFormData({ ...formData, batch_number: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="plant_type_id">Plant Type</Label>
-                  <Select
-                    value={formData.plant_type_id}
-                    onValueChange={(value) => setFormData({ ...formData, plant_type_id: value })}
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select plant type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {plantTypes.map((type) => (
-                        <SelectItem key={type.id} value={type.id}>
-                          {type.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="variety">Variety</Label>
-                  <Input
-                    id="variety"
-                    value={formData.variety}
-                    onChange={(e) => setFormData({ ...formData, variety: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="location_id">Location</Label>
-                  <Select
-                    value={formData.location_id}
-                    onValueChange={(value) => setFormData({ ...formData, location_id: value })}
-                    required
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select location" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {locations.map((location) => (
-                        <SelectItem key={location.id} value={location.id}>
-                          {location.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="quantity">Quantity</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="selling_price">Selling Price (ZMW)</Label>
-                  <Input
-                    id="selling_price"
-                    type="number"
-                    step="0.01"
-                    value={formData.selling_price}
-                    onChange={(e) => setFormData({ ...formData, selling_price: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="date_planted">Date Planted</Label>
-                  <Input
-                    id="date_planted"
-                    type="date"
-                    value={formData.date_planted}
-                    onChange={(e) => setFormData({ ...formData, date_planted: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="expected_harvest_date">Expected Harvest Date</Label>
-                  <Input
-                    id="expected_harvest_date"
-                    type="date"
-                    value={formData.expected_harvest_date}
-                    onChange={(e) => setFormData({ ...formData, expected_harvest_date: e.target.value })}
-                  />
-                </div>
-              </div>
-
+            {/* Preview Table */}
+            {(csvData.length > 0 || invalidRows.length > 0) && (
               <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3}
-                />
+                <h3 className="font-medium">Data Preview</h3>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm">
+                      <TableRow className="border-b">
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Row</TableHead>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Plant Type</TableHead>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Variety</TableHead>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Location</TableHead>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Quantity</TableHead>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Date Planted</TableHead>
+                        <TableHead className="sticky top-0 bg-white dark:bg-gray-950">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {csvData.slice(0, 5).map((row, index) => (
+                        <TableRow key={`valid-${index}`} className="bg-green-50 dark:bg-green-950">
+                          <TableCell>{row.rowNumber}</TableCell>
+                          <TableCell>{row.plantType?.name}</TableCell>
+                          <TableCell>{row.plantType?.variety}</TableCell>
+                          <TableCell>{row.location?.name}</TableCell>
+                          <TableCell>{formatNumber(row.quantity)}</TableCell>
+                          <TableCell>{new Date(row.datePlanted).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <Badge className="bg-green-600 text-white">Valid</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      
+                      {invalidRows.slice(0, 5).map((row, index) => (
+                        <TableRow key={`invalid-${index}`} className="bg-red-50 dark:bg-red-950">
+                          <TableCell>{row.rowNumber}</TableCell>
+                          <TableCell>{row.rawData["Plant Type"]}</TableCell>
+                          <TableCell>{row.rawData["Variety"]}</TableCell>
+                          <TableCell>{row.rawData["Location"]}</TableCell>
+                          <TableCell>{row.rawData["Quantity"]}</TableCell>
+                          <TableCell>{row.rawData["Date Planted"]}</TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <Badge variant="destructive">Error</Badge>
+                              <p className="text-xs text-red-600 dark:text-red-400">{row.errors[0]}</p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {(csvData.length + invalidRows.length) > 10 && (
+                    <p className="text-sm text-gray-500 text-center p-2">
+                      Showing first 10 rows. {csvData.length + invalidRows.length - 10} more rows in file.
+                    </p>
+                  )}
+                </div>
               </div>
+            )}
 
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  {editingPlanting ? "Update" : "Create"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-2 pt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  setIsImportDialogOpen(false);
+                  setCsvFile(null);
+                  setCsvData([]);
+                  setCsvErrors([]);
+                  setInvalidRows([]);
+                  setIgnoreErrors(false);
+                }}
+                disabled={isProcessingCsv}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleBulkImport}
+                disabled={csvData.length === 0 || (!ignoreErrors && csvErrors.length > 0) || isProcessingCsv}
+                className="bg-lime-600 hover:bg-lime-700"
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Import {csvData.length} {csvData.length === 1 ? 'Planting' : 'Plantings'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Current Plantings</CardTitle>
+          <CardDescription>
+            An overview of all seedling batches in the nursery. 
+            {(searchQuery || filterType !== "all") && (
+              <span className="ml-2 text-lime-600 font-medium">
+                Showing {filteredPlantings.length} of {plantings.length} plantings
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Search and Filter Bar */}
+          <div className="flex flex-col md:flex-row gap-4 pb-4 border-b">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search by batch, plant, variety, or location..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
 
-        {/* Bulk Update Dialog */}
-        <Dialog open={showBulkUpdateDialog} onOpenChange={setShowBulkUpdateDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Bulk Update Status</DialogTitle>
-              <DialogDescription>
-                Update the status for {selectedPlantings.size} selected planting(s)
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>New Status</Label>
-                <Select value={bulkUpdateStatus} onValueChange={(value: any) => setBulkUpdateStatus(value)}>
-                  <SelectTrigger>
-                    <SelectValue />
+            <div className="flex gap-2 items-center">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <Select value={filterType} onValueChange={(value: typeof filterType) => {
+                setFilterType(value);
+                setFilterValue("");
+              }}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Filter by..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Plantings</SelectItem>
+                  <SelectItem value="plant_type">By Plant Type</SelectItem>
+                  <SelectItem value="variety">By Variety</SelectItem>
+                  <SelectItem value="location">By Location</SelectItem>
+                  <SelectItem value="status">By Status</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {filterType === "plant_type" && (
+                <Select value={filterValue} onValueChange={setFilterValue}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select plant type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniquePlantTypesForFilter.map(plantType => (
+                      <SelectItem key={plantType} value={plantType}>{plantType}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {filterType === "location" && (
+                <Select value={filterValue} onValueChange={setFilterValue}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select location..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueLocations.map(loc => (
+                      <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {filterType === "variety" && (
+                <Select value={filterValue} onValueChange={setFilterValue}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select variety..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uniqueVarieties.map(variety => (
+                      <SelectItem key={variety} value={variety}>{variety}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {filterType === "status" && (
+                <Select value={filterValue} onValueChange={setFilterValue}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select status..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
@@ -903,19 +1493,263 @@ export default function PlantingsPage() {
                     <SelectItem value="closed">Closed</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowBulkUpdateDialog(false)}>
-                  Cancel
+              )}
+
+              {(searchQuery || filterType !== "all") && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={handleClearFilters}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  Clear
                 </Button>
-                <Button onClick={handleBulkStatusUpdate} disabled={isBulkActionLoading}>
-                  {isBulkActionLoading ? "Updating..." : "Update"}
-                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Table or Card View */}
+          {viewMode === "table" ? (
+            /* TABLE VIEW */
+            <div className="border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-white dark:bg-gray-950 shadow-sm">
+                    <TableRow className="border-b">
+                      <TableHead className="min-w-[120px]">Batch #</TableHead>
+                      <TableHead className="min-w-[150px]">Plant</TableHead>
+                      <TableHead className="min-w-[120px]">Location</TableHead>
+                      <TableHead className="min-w-[90px]">Available Qty</TableHead>
+                      <TableHead className="min-w-[70px]">Trays</TableHead>
+                      <TableHead className="min-w-[100px]">Reserved</TableHead>
+                      <TableHead className="min-w-[100px]">For Sale</TableHead>
+                      <TableHead className="min-w-[100px]">Price (ZMW)</TableHead>
+                      <TableHead className="min-w-[120px]">Date Planted</TableHead>
+                      <TableHead className="min-w-[130px]">Expected Harvest</TableHead>
+                      <TableHead className="min-w-[90px]">Status</TableHead>
+                      <TableHead className="min-w-[120px] text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredPlantings.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={12} className="text-center h-24 px-4 py-2">
+                          {searchQuery || filterType !== "all" 
+                            ? "No plantings match your search or filter criteria." 
+                            : "No plantings recorded yet."}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredPlantings.map(p => {
+                        const reserved = getReservedQuantity(p.id);
+                        const forSale = getAvailableQuantity(p);
+                        const reservationCount = getReservationCount(p.id);
+                        const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
+                        
+                        return (
+                          <TableRow key={p.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
+                            <TableCell className="font-mono font-semibold text-sm">
+                              {p.batch_number || 'N/A'}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {p.plant_types?.variety || 'N/A'}
+                              <br/>
+                              <span className="text-xs text-gray-500">{p.plant_types?.name}</span>
+                            </TableCell>
+                            <TableCell>{p.locations?.name || 'N/A'}</TableCell>
+                            <TableCell className="font-medium text-blue-600">
+                              {formatNumber(p.remaining_quantity ?? p.quantity)}
+                            </TableCell>
+                            <TableCell>
+                              <span className="font-medium text-blue-600">{trayUsage}</span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span className={reserved > 0 ? "font-medium text-orange-600" : ""}>{formatNumber(reserved)}</span>
+                                {reservationCount > 0 && (
+                                  <Link 
+                                    href={`/reservations?planting=${p.id}`}
+                                    className="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                    title="View reservations"
+                                  >
+                                    <ShoppingCart className="w-3 h-3" />
+                                    <span className="text-xs">({reservationCount})</span>
+                                  </Link>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className={forSale <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
+                                {formatNumber(forSale)}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              K{(p.selling_price || 0).toFixed(2)}
+                            </TableCell>
+                            <TableCell>{new Date(p.date_planted).toLocaleDateString()}</TableCell>
+                            <TableCell>{getExpectedHarvestDate(p)}</TableCell>
+                            <TableCell>
+                              <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
+                                className={p.status === 'active' ? 'bg-green-100 text-green-800' : p.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
+                              >
+                                {p.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex gap-1 justify-end">
+                                {permissions.canUpdate && (
+                                  <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(p)} title="Edit planting">
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                {permissions.canDelete && (
+                                  <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeletePlanting(p.id)} title="Delete planting">
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                {!permissions.canUpdate && !permissions.canDelete && (
+                                  <span className="text-xs text-gray-400 italic">View only</span>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </Layout>
+          ) : (
+            /* CARD VIEW */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredPlantings.length === 0 ? (
+                <div className="col-span-full text-center py-12 text-gray-500">
+                  {searchQuery || filterType !== "all" 
+                    ? "No plantings match your search or filter criteria." 
+                    : "No plantings recorded yet."}
+                </div>
+              ) : (
+                filteredPlantings.map(p => {
+                  const reserved = getReservedQuantity(p.id);
+                  const forSale = getAvailableQuantity(p);
+                  const reservationCount = getReservationCount(p.id);
+                  const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
+                  
+                  return (
+                    <Card key={p.id} className="border-2 hover:border-lime-500 transition-colors">
+                      <CardContent className="pt-6">
+                        <div className="space-y-3">
+                          {/* Header: Variety + Status */}
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
+                                {p.plant_types?.variety || 'N/A'}
+                              </h3>
+                              <p className="text-sm text-gray-500">{p.plant_types?.name}</p>
+                            </div>
+                            <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
+                              className={p.status === 'active' ? 'bg-green-100 text-green-800' : p.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
+                            >
+                              {p.status}
+                            </Badge>
+                          </div>
+
+                          {/* Batch Number */}
+                          <div className="text-xs font-mono text-gray-500">
+                            Batch: {p.batch_number || 'N/A'}
+                          </div>
+
+                          {/* Key Metrics Grid - 3 columns */}
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3">
+                              <div className="text-xs text-gray-600 dark:text-gray-400">Available</div>
+                              <div className="text-xl font-bold text-blue-600">
+                                {formatNumber(p.remaining_quantity ?? p.quantity)}
+                              </div>
+                              <div className="text-xs text-gray-500">{trayUsage} trays</div>
+                            </div>
+
+                            <div className="bg-orange-50 dark:bg-orange-950 rounded-lg p-3">
+                              <div className="text-xs text-gray-600 dark:text-gray-400">Reserved</div>
+                              <div className={`text-xl font-bold ${reserved > 0 ? "text-orange-600" : "text-gray-400"}`}>
+                                {formatNumber(reserved)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {reservationCount > 0 ? `${reservationCount} reservations` : "None"}
+                              </div>
+                            </div>
+
+                            <div className="bg-green-50 dark:bg-green-950 rounded-lg p-3">
+                              <div className="text-xs text-gray-600 dark:text-gray-400">For Sale</div>
+                              <div className={`text-xl font-bold ${forSale <= 0 ? "text-red-600" : "text-green-600"}`}>
+                                {formatNumber(forSale)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {forSale > 0 ? "Available now" : "Fully reserved"}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Details */}
+                          <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600 dark:text-gray-400">Location:</span>
+                              <span className="font-medium">{p.locations?.name || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600 dark:text-gray-400">Price:</span>
+                              <span className="font-mono font-semibold">K{(p.selling_price || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600 dark:text-gray-400">Planted:</span>
+                              <span>{new Date(p.date_planted).toLocaleDateString()}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-gray-600 dark:text-gray-400">Harvest:</span>
+                              <span>{getExpectedHarvestDate(p)}</span>
+                            </div>
+                            {reservationCount > 0 && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600 dark:text-gray-400">Reservations:</span>
+                                <Link 
+                                  href={`/reservations?planting=${p.id}`}
+                                  className="text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium"
+                                >
+                                  <ShoppingCart className="w-3 h-3" />
+                                  {reservationCount}
+                                </Link>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                            {permissions.canUpdate && (
+                              <Button size="sm" variant="outline" onClick={() => handleOpenDialog(p)} className="flex-1">
+                                <Edit className="w-4 h-4 mr-1" />
+                                Edit
+                              </Button>
+                            )}
+                            {permissions.canDelete && (
+                              <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleDeletePlanting(p.id)}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                            {!permissions.canUpdate && !permissions.canDelete && (
+                              <span className="text-xs text-gray-400 italic flex-1 text-center py-2">View only</span>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
