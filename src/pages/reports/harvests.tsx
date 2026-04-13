@@ -68,12 +68,12 @@ const HarvestsReportPage: React.FC = () => {
       });
       if (!hasMatchingHarvest) return false;
 
-      // Apply plant type filter
-      const matchesPlantType = plantTypeFilter === "all" || planting.plant_type_id === plantTypeFilter;
+      // Apply plant type filter (by name)
+      const plantType = plantTypes.find(pt => pt.id === planting.plant_type_id);
+      const matchesPlantType = plantTypeFilter === "all" || plantType?.name === plantTypeFilter;
       if (!matchesPlantType) return false;
 
       // Apply variety filter
-      const plantType = plantTypes.find(pt => pt.id === planting.plant_type_id);
       const variety = planting.variety || plantType?.variety || "";
       const matchesVariety = varietyFilter === "all" || variety === varietyFilter;
       
@@ -123,17 +123,17 @@ const HarvestsReportPage: React.FC = () => {
     }).sort((a, b) => a.plantType.localeCompare(b.plantType) || a.variety.localeCompare(b.variety));
   }, [harvests, plantings, plantTypes, startDate, endDate, plantTypeFilter, varietyFilter]);
 
-  // Get distinct plant types for the filter dropdown
+  // Get distinct plant types for the filter dropdown (by name, not ID)
   const distinctPlantTypes = useMemo(() => {
-    const uniqueTypes = new Map<string, { id: string; name: string }>();
+    const uniqueTypes = new Map<string, string>();
     
     plantTypes.forEach(pt => {
-      if (!uniqueTypes.has(pt.id)) {
-        uniqueTypes.set(pt.id, { id: pt.id, name: pt.name });
+      if (!uniqueTypes.has(pt.name)) {
+        uniqueTypes.set(pt.name, pt.name);
       }
     });
     
-    return Array.from(uniqueTypes.values()).sort((a, b) => a.name.localeCompare(b.name));
+    return Array.from(uniqueTypes.values()).sort((a, b) => a.localeCompare(b));
   }, [plantTypes]);
 
   // Get varieties based on selected plant type
@@ -148,10 +148,13 @@ const HarvestsReportPage: React.FC = () => {
       });
       return Array.from(allVarieties).sort();
     } else {
-      // Show varieties only for selected plant type
+      // Show varieties only for selected plant type (by name)
       const varieties = new Set<string>();
       plantings
-        .filter(p => p.plant_type_id === plantTypeFilter)
+        .filter(p => {
+          const plantType = plantTypes.find(pt => pt.id === p.plant_type_id);
+          return plantType?.name === plantTypeFilter;
+        })
         .forEach(p => {
           const plantType = plantTypes.find(pt => pt.id === p.plant_type_id);
           const variety = p.variety || plantType?.variety;
@@ -211,9 +214,9 @@ const HarvestsReportPage: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Plant Types</SelectItem>
-                  {distinctPlantTypes.map(pt => (
-                    <SelectItem key={pt.id} value={pt.id}>
-                      {pt.name}
+                  {distinctPlantTypes.map(name => (
+                    <SelectItem key={name} value={name}>
+                      {name}
                     </SelectItem>
                   ))}
                 </SelectContent>
