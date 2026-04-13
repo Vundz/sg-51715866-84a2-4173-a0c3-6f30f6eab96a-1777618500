@@ -91,10 +91,10 @@ export const reservationService = {
     const currentRemaining = planting.remaining_quantity ?? planting.quantity;
     let newRemaining = currentRemaining;
 
-    if (oldStatus === "pending" && newStatus === "completed") {
+    if ((oldStatus === "pending" || oldStatus === "active") && newStatus === "completed") {
       const qtyToDeduct = finalQuantity ?? reservedQty;
       newRemaining = currentRemaining - qtyToDeduct;
-    } else if (oldStatus === "pending" && newStatus === "cancelled") {
+    } else if ((oldStatus === "pending" || oldStatus === "active") && newStatus === "cancelled") {
       newRemaining = currentRemaining;
     } else if ((oldStatus === "completed" || oldStatus === "cancelled") && newStatus === "pending") {
       if (oldStatus === "completed") {
