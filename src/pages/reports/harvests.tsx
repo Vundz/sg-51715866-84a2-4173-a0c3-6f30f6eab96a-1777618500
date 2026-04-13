@@ -94,6 +94,7 @@ const HarvestsReportPage: React.FC = () => {
       const totalPlanted = planting.quantity;
       const variance = totalHarvested - totalPlanted;
       const variancePercent = totalPlanted > 0 ? ((variance / totalPlanted) * 100).toFixed(1) : "0";
+      const germinationPercent = totalPlanted > 0 ? ((totalHarvested / totalPlanted) * 100).toFixed(1) : "0";
       
       // Get latest harvest
       const sortedHarvests = plantingHarvests.sort((a, b) => 
@@ -118,6 +119,7 @@ const HarvestsReportPage: React.FC = () => {
         notes,
         variance,
         variancePercent,
+        germinationPercent,
         datePlanted: planting.date_planted
       };
     }).sort((a, b) => a.plantType.localeCompare(b.plantType) || a.variety.localeCompare(b.variety));
@@ -292,6 +294,10 @@ const HarvestsReportPage: React.FC = () => {
                   <span className="font-medium">{formatNumber(item.totalHarvested)}</span>
                 </div>
                 <Separator className="my-2" />
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Germination %:</span>
+                  <span className="font-bold text-blue-600">{item.germinationPercent}%</span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Variance:</span>
                   <span className={`font-bold ${isPositive ? "text-green-600" : "text-red-600"}`}>
