@@ -253,7 +253,25 @@ const HarvestsReportPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {harvestsReport.map(item => {
           const isPositive = item.variance >= 0;
-          const avgQuality = item.qualities.length > 0 ? item.qualities[0] : "fair";
+          const germinationRate = parseFloat(item.germinationPercent);
+          
+          // Determine germination rating based on percentage
+          let germinationRating: string;
+          let badgeColor: string;
+          
+          if (germinationRate >= 90) {
+            germinationRating = "Excellent";
+            badgeColor = "bg-green-100 text-green-800";
+          } else if (germinationRate >= 80) {
+            germinationRating = "Good";
+            badgeColor = "bg-orange-100 text-orange-800";
+          } else if (germinationRate >= 70) {
+            germinationRating = "Fair";
+            badgeColor = "bg-yellow-100 text-yellow-800";
+          } else {
+            germinationRating = "Poor";
+            badgeColor = "bg-red-100 text-red-800";
+          }
           
           return (
             <Card key={item.batchId} className="hover:shadow-md transition-shadow">
@@ -264,11 +282,7 @@ const HarvestsReportPage: React.FC = () => {
                     <CardDescription className="text-sm mt-1">{item.variety}</CardDescription>
                     <div className="text-xs text-gray-500 mt-1 font-mono">Batch: {item.batchNumber}</div>
                   </div>
-                  <Badge className={
-                    avgQuality === "excellent" ? "bg-green-100 text-green-800" :
-                    avgQuality === "good" ? "bg-blue-100 text-blue-800" :
-                    avgQuality === "fair" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"
-                  }>{avgQuality}</Badge>
+                  <Badge className={badgeColor}>{germinationRating}</Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
