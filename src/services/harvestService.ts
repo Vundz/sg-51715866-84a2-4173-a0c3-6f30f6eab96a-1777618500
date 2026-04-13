@@ -74,7 +74,7 @@ export const harvestService = {
       .from("reservations")
       .select("quantity_reserved")
       .eq("planting_id", plantingId)
-      .eq("status", "pending");
+      .in("status", ["pending", "active"]);
 
     if (error) {
       console.error("Error getting reserved quantity:", error);
@@ -94,7 +94,7 @@ export const harvestService = {
       .from("reservations")
       .select("planting_id, quantity_reserved")
       .in("planting_id", plantingIds)
-      .eq("status", "pending");
+      .in("status", ["pending", "active"]);
 
     if (error) {
       console.error("Error getting batch reserved quantities:", error);
