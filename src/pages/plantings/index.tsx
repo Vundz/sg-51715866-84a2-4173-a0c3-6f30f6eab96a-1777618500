@@ -1143,7 +1143,6 @@ export default function PlantingsPage() {
                     <SelectTrigger><SelectValue/></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="harvested">Harvested</SelectItem>
                       <SelectItem value="closed">Closed</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1529,7 +1528,6 @@ export default function PlantingsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="harvested">Harvested</SelectItem>
                     <SelectItem value="closed">Closed</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1561,7 +1559,6 @@ export default function PlantingsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="harvested">Harvested</SelectItem>
                     <SelectItem value="closed">Closed</SelectItem>
                   </SelectContent>
                 </Select>
