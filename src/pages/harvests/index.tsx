@@ -144,15 +144,13 @@ export default function HarvestsPage() {
   ).sort();
 
   const getRemainingQuantity = (planting: PlantingWithDetails) => {
-    const harvested = harvestedQuantities[planting.id] || 0;
-    return planting.quantity - harvested;
+    return planting.remaining_quantity ?? planting.quantity;
   };
 
   const getAvailableQuantity = (plantingId: string): number => {
     const planting = plantings.find(p => p.id === plantingId);
     if (!planting) return 0;
-    const harvested = harvestedQuantities[plantingId] || 0;
-    return planting.quantity - harvested;
+    return planting.remaining_quantity ?? planting.quantity;
   };
 
   const getHarvestableQuantity = (plantingId: string): number => {
@@ -570,7 +568,7 @@ export default function HarvestsPage() {
                       
                       return (
                         <SelectItem key={p.id} value={p.id} disabled={available <= 0}>
-                          {p.plant_types?.name} ({p.plant_types?.variety}) - Available: {formatNumber(harvestable)}
+                          {p.plant_types?.name} ({p.batch_number || p.plant_types?.variety}) - For Sale: {formatNumber(harvestable)}
                           {reserved > 0 && ` (${formatNumber(reserved)} reserved)`}
                         </SelectItem>
                       );
@@ -582,10 +580,10 @@ export default function HarvestsPage() {
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
                       <div className="space-y-1 text-sm">
-                        <div><strong>Total Available:</strong> {formatNumber(getAvailableQuantity(selectedPlantingId))}</div>
-                        <div><strong>Reserved:</strong> {formatNumber(reservedQuantities[selectedPlantingId] || 0)}</div>
+                        <div><strong>Remaining in Batch:</strong> {formatNumber(getAvailableQuantity(selectedPlantingId))}</div>
+                        <div><strong>Reserved for Customers:</strong> {formatNumber(reservedQuantities[selectedPlantingId] || 0)}</div>
                         <div className="text-green-600 font-semibold">
-                          <strong>Harvestable:</strong> {formatNumber(getHarvestableQuantity(selectedPlantingId))} seedlings
+                          <strong>Available For Sale:</strong> {formatNumber(getHarvestableQuantity(selectedPlantingId))} seedlings
                         </div>
                       </div>
                     </AlertDescription>

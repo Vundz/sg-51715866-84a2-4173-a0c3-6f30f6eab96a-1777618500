@@ -1594,10 +1594,11 @@ export default function PlantingsPage() {
                       </TableHead>
                       <TableHead className="min-w-[120px]">Batch #</TableHead>
                       <TableHead className="min-w-[150px]">Plant</TableHead>
-                      <TableHead className="min-w-[90px]">Available Qty</TableHead>
-                      <TableHead className="min-w-[70px]">Trays</TableHead>
+                      <TableHead className="min-w-[100px]">Total Planted</TableHead>
+                      <TableHead className="min-w-[100px]">Harvested</TableHead>
                       <TableHead className="min-w-[100px]">Reserved</TableHead>
                       <TableHead className="min-w-[100px]">For Sale</TableHead>
+                      <TableHead className="min-w-[70px]">Trays</TableHead>
                       <TableHead className="min-w-[100px]">Price (ZMW)</TableHead>
                       <TableHead className="min-w-[120px]">Date Planted</TableHead>
                       <TableHead className="min-w-[130px]">Expected Harvest</TableHead>
@@ -1616,10 +1617,13 @@ export default function PlantingsPage() {
                       </TableRow>
                     ) : (
                       filteredPlantings.map(p => {
+                        const totalPlanted = p.quantity;
+                        const remaining = p.remaining_quantity ?? p.quantity;
+                        const harvested = totalPlanted - remaining;
                         const reserved = getReservedQuantity(p.id);
                         const forSale = getAvailableQuantity(p);
                         const reservationCount = getReservationCount(p.id);
-                        const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
+                        const trayUsage = Math.round(remaining / 220);
                         
                         return (
                           <TableRow key={p.id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-900">
@@ -1638,11 +1642,11 @@ export default function PlantingsPage() {
                               <br/>
                               <span className="text-xs text-gray-500">{p.plant_types?.name}</span>
                             </TableCell>
-                            <TableCell className="font-medium text-blue-600">
-                              {formatNumber(p.remaining_quantity ?? p.quantity)}
+                            <TableCell className="font-medium">
+                              {formatNumber(totalPlanted)}
                             </TableCell>
-                            <TableCell>
-                              <span className="font-medium text-blue-600">{trayUsage}</span>
+                            <TableCell className="font-medium text-amber-600">
+                              {formatNumber(harvested)}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
@@ -1663,6 +1667,9 @@ export default function PlantingsPage() {
                               <span className={forSale <= 0 ? "text-red-600 font-medium" : "font-medium text-green-600"}>
                                 {formatNumber(forSale)}
                               </span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-gray-600">{trayUsage}</span>
                             </TableCell>
                             <TableCell className="text-right font-mono">
                               K{(p.selling_price || 0).toFixed(2)}
@@ -1712,10 +1719,13 @@ export default function PlantingsPage() {
                 </div>
               ) : (
                 filteredPlantings.map(p => {
+                  const totalPlanted = p.quantity;
+                  const remaining = p.remaining_quantity ?? p.quantity;
+                  const harvested = totalPlanted - remaining;
                   const reserved = getReservedQuantity(p.id);
                   const forSale = getAvailableQuantity(p);
                   const reservationCount = getReservationCount(p.id);
-                  const trayUsage = Math.round((p.remaining_quantity ?? p.quantity) / 220);
+                  const trayUsage = Math.round(remaining / 220);
                   
                   return (
                     <Card key={p.id} className={`border-2 transition-colors ${selectedPlantings.includes(p.id) ? 'border-lime-500 bg-lime-50/50 dark:bg-lime-900/20' : 'hover:border-lime-500'}`}>
@@ -1749,33 +1759,33 @@ export default function PlantingsPage() {
                             Batch: {p.batch_number || 'N/A'}
                           </div>
 
-                          {/* Key Metrics Grid - 3 columns */}
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3">
-                              <div className="text-xs text-gray-600 dark:text-gray-400">Available</div>
-                              <div className="text-xl font-bold text-blue-600">
-                                {formatNumber(p.remaining_quantity ?? p.quantity)}
+                          {/* Key Metrics Grid - 4 columns */}
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-2 text-center">
+                              <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Planted</div>
+                              <div className="text-lg font-bold text-gray-700 dark:text-gray-300">
+                                {formatNumber(totalPlanted)}
                               </div>
-                              <div className="text-xs text-gray-500">{trayUsage} trays</div>
                             </div>
 
-                            <div className="bg-orange-50 dark:bg-orange-950 rounded-lg p-3">
-                              <div className="text-xs text-gray-600 dark:text-gray-400">Reserved</div>
-                              <div className={`text-xl font-bold ${reserved > 0 ? "text-orange-600" : "text-gray-400"}`}>
+                            <div className="bg-amber-50 dark:bg-amber-950 rounded-lg p-2 text-center">
+                              <div className="text-[10px] text-amber-600 dark:text-amber-500 uppercase tracking-wider mb-1">Harvested</div>
+                              <div className="text-lg font-bold text-amber-600">
+                                {formatNumber(harvested)}
+                              </div>
+                            </div>
+
+                            <div className="bg-orange-50 dark:bg-orange-950 rounded-lg p-2 text-center">
+                              <div className="text-[10px] text-orange-600 dark:text-orange-500 uppercase tracking-wider mb-1">Reserved</div>
+                              <div className={`text-lg font-bold ${reserved > 0 ? "text-orange-600" : "text-gray-400"}`}>
                                 {formatNumber(reserved)}
                               </div>
-                              <div className="text-xs text-gray-500">
-                                {reservationCount > 0 ? `${reservationCount} reservations` : "None"}
-                              </div>
                             </div>
 
-                            <div className="bg-green-50 dark:bg-green-950 rounded-lg p-3">
-                              <div className="text-xs text-gray-600 dark:text-gray-400">For Sale</div>
-                              <div className={`text-xl font-bold ${forSale <= 0 ? "text-red-600" : "text-green-600"}`}>
+                            <div className="bg-green-50 dark:bg-green-950 rounded-lg p-2 text-center">
+                              <div className="text-[10px] text-green-600 dark:text-green-500 uppercase tracking-wider mb-1">For Sale</div>
+                              <div className={`text-lg font-bold ${forSale <= 0 ? "text-red-600" : "text-green-600"}`}>
                                 {formatNumber(forSale)}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {forSale > 0 ? "Available now" : "Fully reserved"}
                               </div>
                             </div>
                           </div>
