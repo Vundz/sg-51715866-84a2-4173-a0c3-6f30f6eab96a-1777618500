@@ -823,13 +823,13 @@ const ReservationsPage: React.FC = () => {
                         <div className="space-y-2">
                           <Label>Select Planting Batch *</Label>
                           <Select 
-                            value={selection.planting_id} 
-                            onValueChange={(value) => handleBatchSelectionChange(selection.id, "planting_id", value)}
-                            disabled={!!editingReservation || isViewer}
+                            name="planting_id" 
+                            value={selectedPlantingId}
+                            onValueChange={handlePlantingChange}
+                            required 
+                            disabled={isViewer || !!editingReservation}
                           >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a batch" />
-                            </SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder="Select a planting batch" /></SelectTrigger>
                             <SelectContent>
                               {batchFilteredPlantings.length === 0 ? (
                                 <div className="px-2 py-1.5 text-sm text-gray-500">
@@ -841,15 +841,34 @@ const ReservationsPage: React.FC = () => {
                                 batchFilteredPlantings.map(p => {
                                   const daysInfo = calculateDaysRemaining(p);
                                   const availableQty = getAvailableQuantity(p.id);
+                                  const harvestable = getHarvestableQuantity(p.id);
+                                  const reserved = reservedQuantities[p.id] || 0;
+                                  
                                   return (
-                                    <SelectItem key={p.id} value={p.id}>
-                                      Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - Available: {formatNumber(availableQty)}{daysInfo ? ` - ${daysInfo}` : ""}
+                                    <SelectItem key={p.id} value={p.id} disabled={availableQty <= 0}>
+                                      Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - For Sale: {formatNumber(harvestable)}
+                                      {reserved > 0 && ` (${formatNumber(reserved)} reserved)`}
+                                      - Available: {formatNumber(availableQty)}{daysInfo ? ` - ${daysInfo}` : ""}
                                     </SelectItem>
                                   );
                                 })
                               )}
                             </SelectContent>
                           </Select>
+                          {selectedPlantingId && (
+                            <Alert className="mt-2">
+                              <AlertCircle className="h-4 w-4" />
+                              <AlertDescription>
+                                <div className="space-y-1 text-sm">
+                                  <div><strong>Remaining in Batch:</strong> {formatNumber(getAvailableQuantity(selectedPlantingId))}</div>
+                                  <div><strong>Currently Reserved:</strong> {formatNumber(reservedQuantities[selectedPlantingId] || 0)}</div>
+                                  <div className="text-green-600 font-semibold">
+                                    <strong>Available For Sale:</strong> {formatNumber(getHarvestableQuantity(selectedPlantingId))} seedlings
+                                  </div>
+                                </div>
+                              </AlertDescription>
+                            </Alert>
+                          )}
                         </div>
 
                         <div className="space-y-2">
