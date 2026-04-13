@@ -65,8 +65,8 @@ const HarvestsReportPage: React.FC = () => {
       return matchesDate && matchesPlantType;
     });
 
-    // Group by plant type and aggregate
-    const aggregatedByType: Record<string, {
+    // Group by plant type AND variety for distinct varieties
+    const aggregatedByVariety: Record<string, {
       plantTypeId: string;
       plantType: string;
       variety: string;
@@ -81,13 +81,15 @@ const HarvestsReportPage: React.FC = () => {
     filteredHarvests.forEach(harvest => {
       const planting = plantings.find(p => p.id === harvest.planting_id);
       const plantType = plantTypes.find(pt => pt.id === planting?.plant_type_id);
-      const key = planting?.plant_type_id || 'unknown';
+      const variety = planting?.variety || plantType?.variety || "N/A";
+      // Create unique key combining plant type and variety
+      const key = `${planting?.plant_type_id || 'unknown'}_${variety}`;
 
-      if (!aggregatedByType[key]) {
-        aggregatedByType[key] = {
-          plantTypeId: key,
+      if (!aggregatedByVariety[key]) {
+        aggregatedByVariety[key] = {
+          plantTypeId: planting?.plant_type_id || 'unknown',
           plantType: plantType?.name || "N/A",
-          variety: planting?.variety || plantType?.variety || "N/A",
+          variety: variety,
           totalPlanted: 0,
           totalHarvested: 0,
           harvestCount: 0,
@@ -98,25 +100,25 @@ const HarvestsReportPage: React.FC = () => {
       }
 
       const plantedQty = planting?.quantity || 0;
-      aggregatedByType[key].totalPlanted += plantedQty;
-      aggregatedByType[key].totalHarvested += harvest.quantity_harvested;
-      aggregatedByType[key].harvestCount += 1;
+      aggregatedByVariety[key].totalPlanted += plantedQty;
+      aggregatedByVariety[key].totalHarvested += harvest.quantity_harvested;
+      aggregatedByVariety[key].harvestCount += 1;
       
-      if (new Date(harvest.harvest_date) > new Date(aggregatedByType[key].latestHarvestDate)) {
-        aggregatedByType[key].latestHarvestDate = harvest.harvest_date;
+      if (new Date(harvest.harvest_date) > new Date(aggregatedByVariety[key].latestHarvestDate)) {
+        aggregatedByVariety[key].latestHarvestDate = harvest.harvest_date;
       }
       
-      if (harvest.quality && !aggregatedByType[key].qualities.includes(harvest.quality)) {
-        aggregatedByType[key].qualities.push(harvest.quality);
+      if (harvest.quality && !aggregatedByVariety[key].qualities.includes(harvest.quality)) {
+        aggregatedByVariety[key].qualities.push(harvest.quality);
       }
       
       if (harvest.notes) {
-        aggregatedByType[key].notes.push(harvest.notes);
+        aggregatedByVariety[key].notes.push(harvest.notes);
       }
     });
 
     // Convert to array and calculate variance
-    return Object.values(aggregatedByType).map(item => {
+    return Object.values(aggregatedByVariety).map(item => {
       const variance = item.totalHarvested - item.totalPlanted;
       const variancePercent = item.totalPlanted > 0 ? ((variance / item.totalPlanted) * 100).toFixed(1) : "0";
       
@@ -127,6 +129,19 @@ const HarvestsReportPage: React.FC = () => {
       };
     });
   }, [harvests, plantings, plantTypes, startDate, endDate, plantTypeFilter]);
+
+  // Get distinct plant types for the filter dropdown
+  const distinctPlantTypes = useMemo(() => {
+    const uniqueTypes = new Map<string, { id: string; name: string }>();
+    
+    plantTypes.forEach(pt => {
+      if (!uniqueTypes.has(pt.id)) {
+        uniqueTypes.set(pt.id, { id: pt.id, name: pt.name });
+      }
+    });
+    
+    return Array.from(uniqueTypes.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [plantTypes]);
 
   const exportToCSV = () => console.log("Exporting to CSV...");
   const exportToExcel = () => console.log("Exporting to Excel...");
@@ -168,10 +183,16 @@ const HarvestsReportPage: React.FC = () => {
             <div className="space-y-2">
               <Label>Plant Type</Label>
               <Select value={plantTypeFilter} onValueChange={setPlantTypeFilter}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="All Plant Types" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Plant Types</SelectItem>
-                  {plantTypes.map(pt => <SelectItem key={pt.id} value={pt.id}>{pt.name} ({pt.variety})</SelectItem>)}
+                  {distinctPlantTypes.map(pt => (
+                    <SelectItem key={pt.id} value={pt.id}>
+                      {pt.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -184,12 +205,12 @@ const HarvestsReportPage: React.FC = () => {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {harvestsReport.map(item => {
+        {harvestsReport.map((item, index) => {
           const isPositive = item.variance >= 0;
           const avgQuality = item.qualities.length > 0 ? item.qualities[0] : "fair";
           
           return (
-            <Card key={item.plantTypeId} className="hover:shadow-md transition-shadow">
+            <Card key={`${item.plantTypeId}_${item.variety}_${index}`} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
