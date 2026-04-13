@@ -145,7 +145,8 @@ const ReservationsPage: React.FC = () => {
   
   const getReservedQuantity = (plantingId: string): number => {
     return reservations
-      .filter(r => r.planting_id === plantingId && r.status === "pending")
+      // Include all reservations that are not cancelled or completed (since completed ones should be permanently deducted via harvest/completion action)
+      .filter(r => r.planting_id === plantingId && (r.status === "pending" || r.status === "active"))
       .reduce((sum, r) => sum + r.quantity_reserved, 0);
   };
 
@@ -824,8 +825,8 @@ const ReservationsPage: React.FC = () => {
                           <Label>Select Planting Batch *</Label>
                           <Select 
                             name="planting_id" 
-                            value={selectedPlantingId}
-                            onValueChange={handlePlantingChange}
+                            value={selection.planting_id}
+                            onValueChange={(value) => handleBatchSelectionChange(selection.id, "planting_id", value)}
                             required 
                             disabled={isViewer || !!editingReservation}
                           >
@@ -840,30 +841,33 @@ const ReservationsPage: React.FC = () => {
                               ) : (
                                 batchFilteredPlantings.map(p => {
                                   const daysInfo = calculateDaysRemaining(p);
-                                  const availableQty = getAvailableQuantity(p.id);
-                                  const harvestable = getHarvestableQuantity(p.id);
-                                  const reserved = reservedQuantities[p.id] || 0;
+                                  const remainingInBatch = p.remaining_quantity ?? p.quantity;
+                                  const reserved = getReservedQuantity(p.id);
+                                  const forSale = getAvailableQuantity(p.id);
                                   
                                   return (
-                                    <SelectItem key={p.id} value={p.id} disabled={availableQty <= 0}>
-                                      Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - For Sale: {formatNumber(harvestable)}
+                                    <SelectItem key={p.id} value={p.id} disabled={forSale <= 0}>
+                                      Batch #{p.batch_number} - {p.plant_types?.name}{p.variety ? ` (${p.variety})` : ""} - For Sale: {formatNumber(forSale)}
                                       {reserved > 0 && ` (${formatNumber(reserved)} reserved)`}
-                                      - Available: {formatNumber(availableQty)}{daysInfo ? ` - ${daysInfo}` : ""}
                                     </SelectItem>
                                   );
                                 })
                               )}
                             </SelectContent>
                           </Select>
-                          {selectedPlantingId && (
+                          {selection.planting_id && (
                             <Alert className="mt-2">
                               <AlertCircle className="h-4 w-4" />
                               <AlertDescription>
                                 <div className="space-y-1 text-sm">
-                                  <div><strong>Remaining in Batch:</strong> {formatNumber(getAvailableQuantity(selectedPlantingId))}</div>
-                                  <div><strong>Currently Reserved:</strong> {formatNumber(reservedQuantities[selectedPlantingId] || 0)}</div>
+                                  <div>
+                                    <strong>Remaining in Batch:</strong> {
+                                      formatNumber(plantings.find(p => p.id === selection.planting_id)?.remaining_quantity ?? plantings.find(p => p.id === selection.planting_id)?.quantity ?? 0)
+                                    }
+                                  </div>
+                                  <div><strong>Currently Reserved:</strong> {formatNumber(getReservedQuantity(selection.planting_id))}</div>
                                   <div className="text-green-600 font-semibold">
-                                    <strong>Available For Sale:</strong> {formatNumber(getHarvestableQuantity(selectedPlantingId))} seedlings
+                                    <strong>Available For Sale:</strong> {formatNumber(getAvailableQuantity(selection.planting_id))} seedlings
                                   </div>
                                 </div>
                               </AlertDescription>
@@ -1181,7 +1185,7 @@ const ReservationsPage: React.FC = () => {
                                     <Button 
                                       size="sm" 
                                       variant="ghost" 
-                                      className="text-red-600 hover:text-red-700" 
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                       onClick={() => handleOpenStatusDialog(r, "cancelled")} 
                                       title="Cancel reservation"
                                     >
