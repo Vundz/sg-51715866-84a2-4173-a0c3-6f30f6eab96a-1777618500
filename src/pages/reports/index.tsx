@@ -134,6 +134,18 @@ export default function ReportsPage() {
       count: stats.totalTreatments,
       countLabel: "Total Treatments",
       href: "/reports/treatments"
+    },
+    {
+      id: "movement-analysis",
+      title: "Movement Analysis",
+      description: "Production velocity and turnover rates",
+      icon: TrendingUp,
+      iconBg: "bg-indigo-100 dark:bg-indigo-900",
+      iconColor: "text-indigo-600 dark:text-indigo-400",
+      borderColor: "border-l-indigo-500",
+      count: stats.activePlantings,
+      countLabel: "Batches Tracked",
+      href: "/reports/movement-analysis"
     }
   ];
 
