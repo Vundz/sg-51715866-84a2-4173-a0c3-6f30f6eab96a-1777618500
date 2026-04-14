@@ -16,6 +16,7 @@ import "chart.js/auto";
 import { Bar } from "react-chartjs-2";
 import type { Database } from "@/integrations/supabase/types";
 import { formatNumber } from "@/lib/format";
+import * as XLSX from "xlsx";
 
 type HarvestData = Awaited<ReturnType<typeof harvestService.getHarvests>>[0];
 type PlantingData = Database["public"]["Tables"]["plantings"]["Row"];
@@ -31,6 +32,7 @@ const HarvestsReportPage: React.FC = () => {
   const [endDate, setEndDate] = useState<string>("");
   const [plantTypeFilter, setPlantTypeFilter] = useState<string>("all");
   const [varietyFilter, setVarietyFilter] = useState<string>("all");
+  const [germinationRatingFilter, setGerminationRatingFilter] = useState<string>("all");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -96,6 +98,20 @@ const HarvestsReportPage: React.FC = () => {
       const variancePercent = totalPlanted > 0 ? ((variance / totalPlanted) * 100).toFixed(1) : "0";
       const germinationPercent = totalPlanted > 0 ? ((totalHarvested / totalPlanted) * 100).toFixed(1) : "0";
       
+      // Calculate germination rating
+      const germinationRate = parseFloat(germinationPercent);
+      let germinationRating: string;
+      
+      if (germinationRate >= 90) {
+        germinationRating = "excellent";
+      } else if (germinationRate >= 80) {
+        germinationRating = "good";
+      } else if (germinationRate >= 70) {
+        germinationRating = "fair";
+      } else {
+        germinationRating = "poor";
+      }
+      
       // Get latest harvest
       const sortedHarvests = plantingHarvests.sort((a, b) => 
         new Date(b.harvest_date).getTime() - new Date(a.harvest_date).getTime()
@@ -120,10 +136,19 @@ const HarvestsReportPage: React.FC = () => {
         variance,
         variancePercent,
         germinationPercent,
+        germinationRating,
         datePlanted: planting.date_planted
       };
     }).sort((a, b) => a.plantType.localeCompare(b.plantType) || a.variety.localeCompare(b.variety));
   }, [harvests, plantings, plantTypes, startDate, endDate, plantTypeFilter, varietyFilter]);
+
+  // Apply germination rating filter
+  const filteredHarvestsReport = useMemo(() => {
+    if (germinationRatingFilter === "all") {
+      return harvestsReport;
+    }
+    return harvestsReport.filter(item => item.germinationRating === germinationRatingFilter);
+  }, [harvestsReport, germinationRatingFilter]);
 
   // Get distinct plant types for the filter dropdown (by name, not ID)
   const distinctPlantTypes = useMemo(() => {
@@ -172,7 +197,59 @@ const HarvestsReportPage: React.FC = () => {
   }, [plantTypeFilter]);
 
   const exportToCSV = () => console.log("Exporting to CSV...");
-  const exportToExcel = () => console.log("Exporting to Excel...");
+  
+  const exportToExcel = () => {
+    // Prepare data for Excel export
+    const exportData = filteredHarvestsReport.map(item => ({
+      "Batch Number": item.batchNumber,
+      "Plant Type": item.plantType,
+      "Variety": item.variety,
+      "Date Planted": new Date(item.datePlanted).toLocaleDateString(),
+      "Latest Harvest": new Date(item.latestHarvestDate).toLocaleDateString(),
+      "Harvest Count": item.harvestCount,
+      "Total Planted": item.totalPlanted,
+      "Total Harvested": item.totalHarvested,
+      "Germination %": `${item.germinationPercent}%`,
+      "Germination Rating": item.germinationRating.charAt(0).toUpperCase() + item.germinationRating.slice(1),
+      "Variance": item.variance,
+      "Variance %": `${item.variancePercent}%`,
+      "Qualities": item.qualities.join(", "),
+      "Notes": item.notes.join(" • ")
+    }));
+
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    
+    // Set column widths
+    ws["!cols"] = [
+      { wch: 15 }, // Batch Number
+      { wch: 15 }, // Plant Type
+      { wch: 20 }, // Variety
+      { wch: 15 }, // Date Planted
+      { wch: 15 }, // Latest Harvest
+      { wch: 12 }, // Harvest Count
+      { wch: 15 }, // Total Planted
+      { wch: 15 }, // Total Harvested
+      { wch: 15 }, // Germination %
+      { wch: 18 }, // Germination Rating
+      { wch: 12 }, // Variance
+      { wch: 12 }, // Variance %
+      { wch: 20 }, // Qualities
+      { wch: 40 }  // Notes
+    ];
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Harvest Analysis");
+
+    // Generate filename with current date
+    const date = new Date().toISOString().split("T")[0];
+    const filename = `harvest-analysis-${date}.xlsx`;
+
+    // Save file
+    XLSX.writeFile(wb, filename);
+  };
+  
   const exportToPDF = () => window.print();
   
   if (loading) return <div>Loading report...</div>
@@ -242,6 +319,22 @@ const HarvestsReportPage: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label>Germination Rating</Label>
+              <Select value={germinationRatingFilter} onValueChange={setGerminationRatingFilter}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="All Ratings" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Ratings</SelectItem>
+                  <SelectItem value="excellent">Excellent (90-100%)</SelectItem>
+                  <SelectItem value="good">Good (80-90%)</SelectItem>
+                  <SelectItem value="fair">Fair (70-80%)</SelectItem>
+                  <SelectItem value="poor">Poor (&lt;70%)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="flex items-center justify-between mt-4">
             <p className="text-sm text-gray-600 dark:text-gray-400">Showing {harvestsReport.length} harvest(s)</p>
@@ -251,25 +344,24 @@ const HarvestsReportPage: React.FC = () => {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {harvestsReport.map(item => {
+        {filteredHarvestsReport.map(item => {
           const isPositive = item.variance >= 0;
-          const germinationRate = parseFloat(item.germinationPercent);
           
-          // Determine germination rating based on percentage
-          let germinationRating: string;
+          // Determine badge display based on germination rating
+          let germinationLabel: string;
           let badgeColor: string;
           
-          if (germinationRate >= 90) {
-            germinationRating = "Excellent";
+          if (item.germinationRating === "excellent") {
+            germinationLabel = "Excellent";
             badgeColor = "bg-green-100 text-green-800";
-          } else if (germinationRate >= 80) {
-            germinationRating = "Good";
+          } else if (item.germinationRating === "good") {
+            germinationLabel = "Good";
             badgeColor = "bg-orange-100 text-orange-800";
-          } else if (germinationRate >= 70) {
-            germinationRating = "Fair";
+          } else if (item.germinationRating === "fair") {
+            germinationLabel = "Fair";
             badgeColor = "bg-yellow-100 text-yellow-800";
           } else {
-            germinationRating = "Poor";
+            germinationLabel = "Poor";
             badgeColor = "bg-red-100 text-red-800";
           }
           
@@ -282,7 +374,7 @@ const HarvestsReportPage: React.FC = () => {
                     <CardDescription className="text-sm mt-1">{item.variety}</CardDescription>
                     <div className="text-xs text-gray-500 mt-1 font-mono">Batch: {item.batchNumber}</div>
                   </div>
-                  <Badge className={badgeColor}>{germinationRating}</Badge>
+                  <Badge className={badgeColor}>{germinationLabel}</Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
@@ -347,7 +439,7 @@ const HarvestsReportPage: React.FC = () => {
             </Card>
           );
         })}
-        {harvestsReport.length === 0 && (
+        {filteredHarvestsReport.length === 0 && (
           <div className="col-span-full text-center py-12 text-gray-500">
             No harvests found matching filters
           </div>
