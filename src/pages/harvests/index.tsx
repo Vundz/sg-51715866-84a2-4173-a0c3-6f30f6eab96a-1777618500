@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Package, Printer, LayoutGrid, Table as TableIcon, AlertTriangle, ShieldAlert, ArrowUp, ArrowDown, Pencil, Search, X } from "lucide-react";
+import { Plus, Edit, Trash2, Package, Printer, LayoutGrid, Table as TableIcon, AlertTriangle, ShieldAlert, ArrowUp, ArrowDown, Pencil, Search, X, Calendar, MapPin } from "lucide-react";
 import { harvestService, HarvestWithDetails } from "@/services/harvestService";
 import { plantingService, PlantingWithDetails } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
@@ -24,7 +24,7 @@ export default function HarvestsPage() {
   const permissions = usePermissions("harvests");
   const [harvests, setHarvests] = useState<HarvestWithDetails[]>([]);
   const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
-  const [selectedHarvest, setSelectedHarvest] = useState<Harvest | null>(null);
+  const [selectedHarvest, setSelectedHarvest] = useState<HarvestWithDetails | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingHarvest, setEditingHarvest] = useState<HarvestWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
