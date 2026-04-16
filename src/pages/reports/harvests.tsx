@@ -139,7 +139,12 @@ const HarvestsReportPage: React.FC = () => {
         germinationRating,
         datePlanted: planting.date_planted
       };
-    }).sort((a, b) => a.plantType.localeCompare(b.plantType) || a.variety.localeCompare(b.variety));
+    }).sort((a, b) => {
+      // Sort by latest harvest date (newest first)
+      const dateA = new Date(a.latestHarvestDate).getTime();
+      const dateB = new Date(b.latestHarvestDate).getTime();
+      return dateB - dateA;
+    });
   }, [harvests, plantings, plantTypes, startDate, endDate, plantTypeFilter, varietyFilter]);
 
   // Apply germination rating filter
