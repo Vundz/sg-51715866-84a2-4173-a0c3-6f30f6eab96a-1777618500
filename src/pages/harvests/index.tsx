@@ -885,7 +885,7 @@ export default function HarvestsPage() {
                     className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                     onClick={toggleSortOrder}>
                     
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1" style={{ backgroundImage: "none", backgroundColor: "transparent" }}>
                         Harvest Date
                         {sortOrder === "desc" ?
                       <ArrowDown className="h-4 w-4" /> :
@@ -917,7 +917,7 @@ export default function HarvestsPage() {
                             <span className="text-xs text-gray-500">{details?.plant_types?.variety}</span>
                           </TableCell>
                           <TableCell className="font-mono text-sm">{details?.batch_number || "N/A"}</TableCell>
-                          <TableCell>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
+                          <TableCell style={{ textAlign: "center" }}>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
                           <TableCell className="text-right" style={{ textAlign: "center", textDecoration: "none" }}>{formatNumber(h.quantity_harvested)}</TableCell>
                           <TableCell>
                             <Badge variant={h.status === 'sold' ? 'default' : 'secondary'}>{h.status}</Badge>
