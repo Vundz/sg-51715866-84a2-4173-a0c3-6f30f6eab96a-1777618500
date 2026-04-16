@@ -36,7 +36,7 @@ export default function HarvestsPage() {
     variety: "__all__",
     date_from: "",
     date_to: "",
-    status: "__all__",
+    status: "__all__"
   });
   const [selectedPlantingId, setSelectedPlantingId] = useState<string>("");
   const [harvestQuantity, setHarvestQuantity] = useState<number>(0);
@@ -61,25 +61,25 @@ export default function HarvestsPage() {
     try {
       setLoading(true);
       const [harvestsData, plantingsData] = await Promise.all([
-        harvestService.getHarvests(),
-        plantingService.getPlantingsWithDetails()
-      ]);
+      harvestService.getHarvests(),
+      plantingService.getPlantingsWithDetails()]
+      );
       setHarvests(harvestsData);
       setPlantings(plantingsData);
 
       // Calculate total harvested quantity for each planting
       const quantities: Record<string, number> = {};
-      
+
       for (const p of plantingsData) {
-        const totalHarvested = harvestsData
-          .filter(h => h.planting_id === p.id)
-          .reduce((sum, h) => sum + h.quantity_harvested, 0);
+        const totalHarvested = harvestsData.
+        filter((h) => h.planting_id === p.id).
+        reduce((sum, h) => sum + h.quantity_harvested, 0);
         quantities[p.id] = totalHarvested;
       }
       setHarvestedQuantities(quantities);
-      
+
       // OPTIMIZED: Get ALL reserved quantities in ONE batch query instead of N queries
-      const plantingIds = plantingsData.map(p => p.id);
+      const plantingIds = plantingsData.map((p) => p.id);
       const reserved = await harvestService.getBatchReservedQuantities(plantingIds);
       setReservedQuantities(reserved);
 
@@ -98,9 +98,9 @@ export default function HarvestsPage() {
   // Filter harvests based on status
   const filteredHarvests = useMemo(() => {
     let filtered = harvests;
-    
+
     if (filterStatus !== "all") {
-      filtered = filtered.filter(h => h.status === filterStatus);
+      filtered = filtered.filter((h) => h.status === filterStatus);
     }
 
     // Sort by harvest date
@@ -117,9 +117,9 @@ export default function HarvestsPage() {
   // Get unique varieties for filter
   const uniqueVarieties = Array.from(
     new Set(
-      harvests
-        .map(h => h.plantings?.plant_types?.variety)
-        .filter(Boolean)
+      harvests.
+      map((h) => h.plantings?.plant_types?.variety).
+      filter(Boolean)
     )
   ).sort();
 
@@ -128,7 +128,7 @@ export default function HarvestsPage() {
   };
 
   const getAvailableQuantity = (plantingId: string): number => {
-    const planting = plantings.find(p => p.id === plantingId);
+    const planting = plantings.find((p) => p.id === plantingId);
     if (!planting) return 0;
     return planting.remaining_quantity ?? planting.quantity;
   };
@@ -144,27 +144,27 @@ export default function HarvestsPage() {
       setQuantityError("Please select a planting first");
       return false;
     }
-    
+
     if (quantity <= 0) {
       setQuantityError("Quantity must be greater than 0");
       return false;
     }
-    
+
     // Call backend validation
     try {
       const validation = await harvestService.validateHarvest(plantingId, quantity);
-      
+
       if (!validation.valid) {
         setQuantityError(validation.error || "Invalid quantity");
-        
+
         // If reservation conflict, show special handling
         if (validation.reservationConflict) {
           setReservationConflict(validation);
         }
-        
+
         return false;
       }
-      
+
       setQuantityError("");
       setReservationConflict(null);
       return true;
@@ -363,7 +363,7 @@ export default function HarvestsPage() {
     printWindow.document.write(printContent);
     printWindow.document.close();
     printWindow.focus();
-    
+
     setTimeout(() => {
       printWindow.print();
       printWindow.close();
@@ -373,10 +373,10 @@ export default function HarvestsPage() {
   const handleSaveHarvest = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
+
     const plantingId = formData.get("planting_id") as string;
     const quantity = parseInt(formData.get("quantity_harvested") as string);
-    
+
     // Validate before saving (unless overriding)
     if (!overrideReservations) {
       const isValid = await validateHarvestQuantity(quantity, plantingId);
@@ -384,10 +384,10 @@ export default function HarvestsPage() {
         if (reservationConflict) {
           handleShowReservationConflict();
         } else {
-          toast({ 
-            title: "Validation Error", 
+          toast({
+            title: "Validation Error",
             description: quantityError,
-            variant: "destructive" 
+            variant: "destructive"
           });
         }
         return;
@@ -399,9 +399,9 @@ export default function HarvestsPage() {
       quantity_harvested: quantity,
       harvest_date: formData.get("harvest_date") as string,
       status: formData.get("status") as string,
-      notes: (formData.get("notes") as string) || null,
+      notes: formData.get("notes") as string || null,
       quality: formData.get("quality") as string,
-      is_closed: formData.get("is_closed") === 'on',
+      is_closed: formData.get("is_closed") === 'on'
     };
 
     try {
@@ -415,12 +415,12 @@ export default function HarvestsPage() {
         await harvestService.createHarvest(harvestData, overrideReservations);
         toast({
           title: "Success",
-          description: overrideReservations 
-            ? "Harvest created (reservations overridden)" 
-            : "Harvest created successfully"
+          description: overrideReservations ?
+          "Harvest created (reservations overridden)" :
+          "Harvest created successfully"
         });
       }
-      
+
       await loadInitialData();
       setIsDialogOpen(false);
       setEditingHarvest(null);
@@ -441,7 +441,7 @@ export default function HarvestsPage() {
 
   const handleDeleteHarvest = async (id: string) => {
     if (!confirm("Are you sure you want to delete this harvest record?")) return;
-    
+
     try {
       await harvestService.deleteHarvest(id);
       toast({
@@ -467,7 +467,7 @@ export default function HarvestsPage() {
   };
 
   const toggleSortOrder = () => {
-    setSortOrder(prev => prev === "desc" ? "asc" : "desc");
+    setSortOrder((prev) => prev === "desc" ? "asc" : "desc");
   };
 
   if (loading) {
@@ -477,8 +477,8 @@ export default function HarvestsPage() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading harvests...</p>
         </div>
-      </div>
-    );
+      </div>);
+
   }
 
   return (
@@ -488,25 +488,25 @@ export default function HarvestsPage() {
           <h1 className="text-4xl font-bold flex items-center gap-3"><Package className="w-10 h-10 text-blue-600" />Harvests</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">Record and manage harvests from your plantings.</p>
         </div>
-        {permissions.canCreate && (
-          <div className="flex items-center gap-2">
+        {permissions.canCreate &&
+        <div className="flex items-center gap-2">
             {/* View Mode Toggle */}
             <div className="flex border rounded-lg overflow-hidden">
               <Button
-                onClick={() => setViewMode("table")}
-                variant={viewMode === "table" ? "default" : "ghost"}
-                size="sm"
-                className="rounded-none gap-1"
-              >
+              onClick={() => setViewMode("table")}
+              variant={viewMode === "table" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none gap-1">
+              
                 <TableIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Table</span>
               </Button>
               <Button
-                onClick={() => setViewMode("cards")}
-                variant={viewMode === "cards" ? "default" : "ghost"}
-                size="sm"
-                className="rounded-none gap-1"
-              >
+              onClick={() => setViewMode("cards")}
+              variant={viewMode === "cards" ? "default" : "ghost"}
+              size="sm"
+              className="rounded-none gap-1">
+              
                 <LayoutGrid className="w-4 h-4" />
                 <span className="hidden sm:inline">Cards</span>
               </Button>
@@ -520,7 +520,7 @@ export default function HarvestsPage() {
               Add Harvest
             </Button>
           </div>
-        )}
+        }
       </div>
 
       {/* Harvest Dialog */}
@@ -529,38 +529,38 @@ export default function HarvestsPage() {
           <DialogHeader>
             <DialogTitle>{editingHarvest ? "Edit Harvest" : "Add New Harvest"}</DialogTitle>
             <DialogDescription>
-              {isViewer ? "Viewing harvest details. No changes can be made." : (editingHarvest ? "Update harvest details." : "Log a new harvest record.")}
+              {isViewer ? "Viewing harvest details. No changes can be made." : editingHarvest ? "Update harvest details." : "Log a new harvest record."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveHarvest} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="planting_id">Planting Batch</Label>
-                <Select 
-                  name="planting_id" 
+                <Select
+                  name="planting_id"
                   defaultValue={editingHarvest?.planting_id}
                   onValueChange={handlePlantingChange}
                   required
-                  disabled={isViewer || !!editingHarvest}
-                >
+                  disabled={isViewer || !!editingHarvest}>
+                  
                   <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
                   <SelectContent>
-                    {plantings.filter(p => p.status === "active").map(p => {
+                    {plantings.filter((p) => p.status === "active").map((p) => {
                       const available = getAvailableQuantity(p.id);
                       const harvestable = getHarvestableQuantity(p.id);
                       const reserved = reservedQuantities[p.id] || 0;
-                      
+
                       return (
                         <SelectItem key={p.id} value={p.id} disabled={available <= 0}>
                           {p.plant_types?.name} ({p.batch_number || p.plant_types?.variety}) - For Sale: {formatNumber(harvestable)}
                           {reserved > 0 && ` (${formatNumber(reserved)} reserved)`}
-                        </SelectItem>
-                      );
+                        </SelectItem>);
+
                     })}
                   </SelectContent>
                 </Select>
-                {selectedPlantingId && (
-                  <Alert className="mt-2">
+                {selectedPlantingId &&
+                <Alert className="mt-2">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
                       <div className="space-y-1 text-sm">
@@ -572,46 +572,46 @@ export default function HarvestsPage() {
                       </div>
                     </AlertDescription>
                   </Alert>
-                )}
+                }
               </div>
               <div className="space-y-2">
                 <Label htmlFor="harvest_date">Harvest Date</Label>
-                <Input id="harvest_date" name="harvest_date" type="date" defaultValue={editingHarvest?.harvest_date.split('T')[0]} required disabled={isViewer}/>
+                <Input id="harvest_date" name="harvest_date" type="date" defaultValue={editingHarvest?.harvest_date.split('T')[0]} required disabled={isViewer} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="quantity_harvested">Quantity Harvested</Label>
-                <Input 
-                  id="quantity_harvested" 
-                  name="quantity_harvested" 
-                  type="number" 
+                <Input
+                  id="quantity_harvested"
+                  name="quantity_harvested"
+                  type="number"
                   defaultValue={editingHarvest?.quantity_harvested}
                   value={harvestQuantity || ""}
                   onChange={(e) => handleQuantityChange(e.target.value)}
                   className={quantityError ? "border-red-500 focus-visible:ring-red-500" : ""}
-                  required 
-                  disabled={isViewer}
-                />
-                {quantityError && (
-                  <Alert variant="destructive">
+                  required
+                  disabled={isViewer} />
+                
+                {quantityError &&
+                <Alert variant="destructive">
                     <AlertCircle className="w-4 h-4" />
                     <AlertDescription className="flex items-start gap-2">
                       <div className="flex-1">{quantityError}</div>
-                      {reservationConflict && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={handleShowReservationConflict}
-                          className="shrink-0"
-                        >
+                      {reservationConflict &&
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleShowReservationConflict}
+                      className="shrink-0">
+                      
                           View Details
                         </Button>
-                      )}
+                    }
                     </AlertDescription>
                   </Alert>
-                )}
+                }
               </div>
               <div className="space-y-2">
                 <Label htmlFor="quality">Quality</Label>
@@ -642,32 +642,32 @@ export default function HarvestsPage() {
               </div>
             <div className="space-y-2">
               <Label htmlFor="notes">Notes</Label>
-              <Textarea id="notes" name="notes" defaultValue={editingHarvest?.notes ?? ""} disabled={isViewer}/>
+              <Textarea id="notes" name="notes" defaultValue={editingHarvest?.notes ?? ""} disabled={isViewer} />
             </div>
-            {(permissions.canCreate || permissions.canUpdate) ? (
-              <div className="flex justify-end gap-2 pt-4">
+            {permissions.canCreate || permissions.canUpdate ?
+            <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => {
-                  setIsDialogOpen(false);
-                  setSelectedPlantingId("");
-                  setHarvestQuantity(0);
-                  setQuantityError("");
-                  setReservationConflict(null);
-                  setOverrideReservations(false);
-                }}>Cancel</Button>
-                <Button 
-                  type="submit" 
-                  className="bg-blue-600 hover:bg-blue-700"
-                  disabled={(!overrideReservations && !!quantityError) || harvestQuantity === 0}
-                >
+                setIsDialogOpen(false);
+                setSelectedPlantingId("");
+                setHarvestQuantity(0);
+                setQuantityError("");
+                setReservationConflict(null);
+                setOverrideReservations(false);
+              }}>Cancel</Button>
+                <Button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={!overrideReservations && !!quantityError || harvestQuantity === 0}>
+                
                   {overrideReservations && <ShieldAlert className="w-4 h-4 mr-2" />}
                   {overrideReservations ? "Override & Save" : "Save Harvest"}
                 </Button>
-              </div>
-            ) : (
-              <div className="flex justify-end pt-4">
+              </div> :
+
+            <div className="flex justify-end pt-4">
                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Close</Button>
               </div>
-            )}
+            }
           </form>
         </DialogContent>
       </Dialog>
@@ -685,8 +685,8 @@ export default function HarvestsPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {reservationConflict && (
-            <div className="space-y-4">
+          {reservationConflict &&
+          <div className="space-y-4">
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Cannot Proceed Without Override</AlertTitle>
@@ -701,8 +701,8 @@ export default function HarvestsPage() {
                 </AlertDescription>
               </Alert>
 
-              {reservationConflict.conflictingReservations && reservationConflict.conflictingReservations.length > 0 && (
-                <Card>
+              {reservationConflict.conflictingReservations && reservationConflict.conflictingReservations.length > 0 &&
+            <Card>
                   <CardHeader>
                     <CardTitle className="text-base">Pending Reservations</CardTitle>
                     <CardDescription>These customers have reserved seedlings from this planting</CardDescription>
@@ -717,18 +717,18 @@ export default function HarvestsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {reservationConflict.conflictingReservations.map((res: any) => (
-                          <TableRow key={res.id}>
+                        {reservationConflict.conflictingReservations.map((res: any) =>
+                    <TableRow key={res.id}>
                             <TableCell className="font-medium">{res.customer_name}</TableCell>
                             <TableCell>{new Date(res.reserved_date).toLocaleDateString()}</TableCell>
                             <TableCell className="text-right">{formatNumber(res.quantity_reserved)}</TableCell>
                           </TableRow>
-                        ))}
+                    )}
                       </TableBody>
                     </Table>
                   </CardContent>
                 </Card>
-              )}
+            }
 
               <Alert className="border-orange-500">
                 <ShieldAlert className="h-4 w-4 text-orange-600" />
@@ -742,7 +742,7 @@ export default function HarvestsPage() {
                 </AlertDescription>
               </Alert>
             </div>
-          )}
+          }
 
           <DialogFooter className="gap-2">
             <Button
@@ -750,8 +750,8 @@ export default function HarvestsPage() {
               onClick={() => {
                 setShowReservationDialog(false);
                 setOverrideReservations(false);
-              }}
-            >
+              }}>
+              
               Cancel
             </Button>
             <Link href="/reservations">
@@ -769,8 +769,8 @@ export default function HarvestsPage() {
                   description: "You can now save the harvest. Please ensure you communicate with affected customers.",
                   variant: "default"
                 });
-              }}
-            >
+              }}>
+              
               <ShieldAlert className="w-4 h-4 mr-2" />
               Override Reservations
             </Button>
@@ -789,48 +789,48 @@ export default function HarvestsPage() {
               placeholder="Search by plant name, variety, or batch number..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="max-w-md"
-            />
+              className="max-w-md" />
+            
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-              <Select 
-                value={filters.planting_id} 
-                onValueChange={(value) => setFilters({ ...filters, planting_id: value })}
-              >
+              <Select
+                value={filters.planting_id}
+                onValueChange={(value) => setFilters({ ...filters, planting_id: value })}>
+                
                 <SelectTrigger>
                   <SelectValue placeholder="All Plantings" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">All Plantings</SelectItem>
-                  {plantings.filter(p => p.status === "active" && p.batch_number && p.batch_number.trim() !== "").map(p => (
-                    <SelectItem key={p.id} value={p.id}>
+                  {plantings.filter((p) => p.status === "active" && p.batch_number && p.batch_number.trim() !== "").map((p) =>
+                  <SelectItem key={p.id} value={p.id}>
                       {p.plant_types?.name} ({p.batch_number})
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
 
-              <Select 
-                value={filters.variety} 
-                onValueChange={(value) => setFilters({ ...filters, variety: value })}
-              >
+              <Select
+                value={filters.variety}
+                onValueChange={(value) => setFilters({ ...filters, variety: value })}>
+                
                 <SelectTrigger>
                   <SelectValue placeholder="All Varieties" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">All Varieties</SelectItem>
-                  {uniqueVarieties.map(variety => (
-                    <SelectItem key={variety} value={variety}>
+                  {uniqueVarieties.map((variety) =>
+                  <SelectItem key={variety} value={variety}>
                       {variety}
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
 
-              <Select 
-                value={filters.status} 
-                onValueChange={(value) => setFilters({ ...filters, status: value })}
-              >
+              <Select
+                value={filters.status}
+                onValueChange={(value) => setFilters({ ...filters, status: value })}>
+                
                 <SelectTrigger>
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
@@ -847,127 +847,127 @@ export default function HarvestsPage() {
                 type="date"
                 placeholder="From Date"
                 value={filters.date_from}
-                onChange={(e) => setFilters({ ...filters, date_from: e.target.value })}
-              />
+                onChange={(e) => setFilters({ ...filters, date_from: e.target.value })} />
+              
 
               <Input
                 type="date"
                 placeholder="To Date"
                 value={filters.date_to}
-                onChange={(e) => setFilters({ ...filters, date_to: e.target.value })}
-              />
+                onChange={(e) => setFilters({ ...filters, date_to: e.target.value })} />
+              
             </div>
 
-            {(filters.planting_id !== "__all__" || filters.variety !== "__all__" || filters.status !== "__all__" || filters.date_from || filters.date_to || searchQuery) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setFilters({ planting_id: "__all__", variety: "__all__", date_from: "", date_to: "", status: "__all__" });
-                  setSearchQuery("");
-                }}
-              >
+            {(filters.planting_id !== "__all__" || filters.variety !== "__all__" || filters.status !== "__all__" || filters.date_from || filters.date_to || searchQuery) &&
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setFilters({ planting_id: "__all__", variety: "__all__", date_from: "", date_to: "", status: "__all__" });
+                setSearchQuery("");
+              }}>
+              
                 Clear All Filters
               </Button>
-            )}
+            }
           </div>
         </CardHeader>
         <CardContent>
           {viewMode === "table" ? (
-            /* TABLE VIEW */
-            <div className="overflow-x-auto">
+          /* TABLE VIEW */
+          <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Planting</TableHead>
                     <TableHead>Batch Number</TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
-                      onClick={toggleSortOrder}
-                    >
+                    <TableHead
+                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                    onClick={toggleSortOrder}>
+                    
                       <div className="flex items-center gap-1">
                         Harvest Date
-                        {sortOrder === "desc" ? (
-                          <ArrowDown className="h-4 w-4" />
-                        ) : (
-                          <ArrowUp className="h-4 w-4" />
-                        )}
+                        {sortOrder === "desc" ?
+                      <ArrowDown className="h-4 w-4" /> :
+
+                      <ArrowUp className="h-4 w-4" />
+                      }
                       </div>
                     </TableHead>
-                    <TableHead className="text-right">Quantity</TableHead>
+                    <TableHead className="text-right" style={{ textAlign: "center" }}>Quantity</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredHarvests.length === 0 ? (
-                    <TableRow>
+                  {filteredHarvests.length === 0 ?
+                <TableRow>
                       <TableCell colSpan={6} className="text-center h-24">
                         No harvests found matching your filters.
                       </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredHarvests.map(h => {
-                      const details = h.plantings;
-                      return (
-                        <TableRow key={h.id}>
+                    </TableRow> :
+
+                filteredHarvests.map((h) => {
+                  const details = h.plantings;
+                  return (
+                    <TableRow key={h.id}>
                           <TableCell className="font-medium">
                             {details?.plant_types?.name || "N/A"}
-                            <br/>
+                            <br />
                             <span className="text-xs text-gray-500">{details?.plant_types?.variety}</span>
                           </TableCell>
                           <TableCell className="font-mono text-sm">{details?.batch_number || "N/A"}</TableCell>
                           <TableCell>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
-                          <TableCell className="text-right">{formatNumber(h.quantity_harvested)}</TableCell>
+                          <TableCell className="text-right" style={{ textAlign: "center", textDecoration: "none" }}>{formatNumber(h.quantity_harvested)}</TableCell>
                           <TableCell>
                             <Badge variant={h.status === 'sold' ? 'default' : 'secondary'}>{h.status}</Badge>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-1 justify-end">
-                              <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                onClick={() => handlePrintDispatchSlip(h)} 
-                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50" 
-                                title="Print Dispatch Slip"
-                              >
+                              <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handlePrintDispatchSlip(h)}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            title="Print Dispatch Slip">
+                            
                                 <Printer className="w-4 h-4" />
                               </Button>
-                              {permissions.canUpdate && (
-                                <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(h)} title="Edit harvest">
+                              {permissions.canUpdate &&
+                          <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(h)} title="Edit harvest">
                                   <Edit className="w-4 h-4" />
                                 </Button>
-                              )}
-                              {permissions.canDelete && (
-                                <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteHarvest(h.id)} title="Delete harvest">
+                          }
+                              {permissions.canDelete &&
+                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteHarvest(h.id)} title="Delete harvest">
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
-                              )}
-                              {!permissions.canUpdate && !permissions.canDelete && (
-                                <span className="text-xs text-gray-400 italic ml-2">View only</span>
-                              )}
+                          }
+                              {!permissions.canUpdate && !permissions.canDelete &&
+                          <span className="text-xs text-gray-400 italic ml-2">View only</span>
+                          }
                             </div>
                           </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
+                        </TableRow>);
+
+                })
+                }
                 </TableBody>
               </Table>
-            </div>
-          ) : (
-            /* CARD VIEW */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredHarvests.length === 0 ? (
-                <div className="col-span-full text-center py-12">
+            </div>) : (
+
+          /* CARD VIEW */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredHarvests.length === 0 ?
+            <div className="col-span-full text-center py-12">
                   <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-500">No harvests found matching your filters.</p>
-                </div>
-              ) : (
-                filteredHarvests.map(h => {
-                  const details = h.plantings;
-                  return (
-                    <Card key={h.id} className="border-2 hover:border-blue-500 transition-colors">
+                </div> :
+
+            filteredHarvests.map((h) => {
+              const details = h.plantings;
+              return (
+                <Card key={h.id} className="border-2 hover:border-blue-500 transition-colors">
                       <CardContent className="pt-6">
                         <div className="space-y-3">
                           {/* Plant Type & Variety */}
@@ -1008,63 +1008,63 @@ export default function HarvestsPage() {
                                 {h.status}
                               </Badge>
                             </div>
-                            {h.quality && (
-                              <div className="flex justify-between text-sm">
+                            {h.quality &&
+                        <div className="flex justify-between text-sm">
                                 <span className="text-gray-600 dark:text-gray-400">Quality:</span>
                                 <span className="font-medium capitalize">{h.quality}</span>
                               </div>
-                            )}
-                            {h.notes && (
-                              <div className="pt-2 border-t">
+                        }
+                            {h.notes &&
+                        <div className="pt-2 border-t">
                                 <p className="text-xs text-gray-500 italic">{h.notes}</p>
                               </div>
-                            )}
+                        }
                           </div>
 
                           {/* Action Buttons */}
                           <div className="flex gap-2 pt-3 border-t">
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handlePrintDispatchSlip(h)} 
-                              className="flex-1 gap-1"
-                            >
+                            <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handlePrintDispatchSlip(h)}
+                          className="flex-1 gap-1">
+                          
                               <Printer className="w-4 h-4" />
                               Print
                             </Button>
-                            {permissions.canUpdate && (
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => handleOpenDialog(h)}
-                                className="gap-1"
-                              >
+                            {permissions.canUpdate &&
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenDialog(h)}
+                          className="gap-1">
+                          
                                 <Edit className="w-4 h-4" />
                               </Button>
-                            )}
-                            {permissions.canDelete && (
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                className="text-red-600 hover:bg-red-50"
-                                onClick={() => handleDeleteHarvest(h.id)}
-                              >
+                        }
+                            {permissions.canDelete &&
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:bg-red-50"
+                          onClick={() => handleDeleteHarvest(h.id)}>
+                          
                                 <Trash2 className="w-4 h-4" />
                               </Button>
-                            )}
+                        }
                           </div>
                         </div>
                       </CardContent>
-                    </Card>
-                  );
-                })
-              )}
-            </div>
-          )}
+                    </Card>);
+
+            })
+            }
+            </div>)
+          }
 
           {/* Total Harvested Summary */}
-          {filteredHarvests.length > 0 && (
-            <div className="mt-4 flex justify-end">
+          {filteredHarvests.length > 0 &&
+          <div className="mt-4 flex justify-end">
               <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-6 py-3">
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
@@ -1082,9 +1082,9 @@ export default function HarvestsPage() {
                 </p>
               </div>
             </div>
-          )}
+          }
         </CardContent>
       </Card>
-    </div>
-  );
+    </div>);
+
 }
