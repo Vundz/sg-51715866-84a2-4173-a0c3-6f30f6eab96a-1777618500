@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Package, Printer, LayoutGrid, Table as TableIcon, AlertTriangle, ShieldAlert } from "lucide-react";
+import { Plus, Edit, Trash2, Package, Printer, LayoutGrid, Table as TableIcon, AlertTriangle, ShieldAlert, ArrowUp, ArrowDown, Pencil, Search, X } from "lucide-react";
 import { harvestService, HarvestWithDetails } from "@/services/harvestService";
 import { plantingService, PlantingWithDetails } from "@/services/plantingService";
 import { useToast } from "@/hooks/use-toast";
@@ -24,13 +24,13 @@ export default function HarvestsPage() {
   const permissions = usePermissions("harvests");
   const [harvests, setHarvests] = useState<HarvestWithDetails[]>([]);
   const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
+  const [selectedHarvest, setSelectedHarvest] = useState<Harvest | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingHarvest, setEditingHarvest] = useState<HarvestWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [harvestedQuantities, setHarvestedQuantities] = useState<Record<string, number>>({});
   const [reservedQuantities, setReservedQuantities] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredHarvests, setFilteredHarvests] = useState<HarvestWithDetails[]>([]);
   const [filters, setFilters] = useState({
     planting_id: "__all__",
     variety: "__all__",
@@ -44,6 +44,8 @@ export default function HarvestsPage() {
   const [reservationConflict, setReservationConflict] = useState<any>(null);
   const [showReservationDialog, setShowReservationDialog] = useState(false);
   const [overrideReservations, setOverrideReservations] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc"); // Default to newest first
   const { toast } = useToast();
 
   // Add view mode state
@@ -93,43 +95,21 @@ export default function HarvestsPage() {
     }
   };
 
-  useEffect(() => {
+  // Filter harvests based on status
+  const filteredHarvests = useMemo(() => {
     let filtered = harvests;
     
-    // Search filter
-    if (searchQuery) {
-      filtered = filtered.filter(h => 
-        h.plantings?.plant_types?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        h.plantings?.plant_types?.variety.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        h.plantings?.batch_number?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+    if (filterStatus !== "all") {
+      filtered = filtered.filter(h => h.status === filterStatus);
     }
-    
-    // Planting filter
-    if (filters.planting_id && filters.planting_id !== "__all__") {
-      filtered = filtered.filter(h => h.planting_id === filters.planting_id);
-    }
-    
-    // Variety filter
-    if (filters.variety && filters.variety !== "__all__") {
-      filtered = filtered.filter(h => h.plantings?.plant_types?.variety === filters.variety);
-    }
-    
-    // Date range filters
-    if (filters.date_from) {
-      filtered = filtered.filter(h => new Date(h.harvest_date) >= new Date(filters.date_from));
-    }
-    if (filters.date_to) {
-      filtered = filtered.filter(h => new Date(h.harvest_date) <= new Date(filters.date_to));
-    }
-    
-    // Status filter
-    if (filters.status && filters.status !== "__all__") {
-      filtered = filtered.filter(h => h.status === filters.status);
-    }
-    
-    setFilteredHarvests(filtered);
-  }, [harvests, searchQuery, filters]);
+
+    // Sort by harvest date
+    return filtered.sort((a, b) => {
+      const dateA = new Date(a.harvest_date).getTime();
+      const dateB = new Date(b.harvest_date).getTime();
+      return sortOrder === "desc" ? dateB - dateA : dateA - dateB;
+    });
+  }, [harvests, filterStatus, sortOrder]);
 
   // Calculate total harvested based on filters
   const totalHarvested = filteredHarvests.reduce((sum, h) => sum + h.quantity_harvested, 0);
@@ -484,6 +464,10 @@ export default function HarvestsPage() {
     setIsDialogOpen(true);
     setOverrideReservations(false);
     setReservationConflict(null);
+  };
+
+  const toggleSortOrder = () => {
+    setSortOrder(prev => prev === "desc" ? "asc" : "desc");
   };
 
   if (loading) {
@@ -896,9 +880,21 @@ export default function HarvestsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Planting</TableHead>
-                    <TableHead>Batch Number</TableHead>
-                    <TableHead>Qty Harvested</TableHead>
-                    <TableHead>Harvest Date</TableHead>
+                    <TableHead>Variety</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                      onClick={toggleSortOrder}
+                    >
+                      <div className="flex items-center gap-1">
+                        Harvest Date
+                        {sortOrder === "desc" ? (
+                          <ArrowDown className="h-4 w-4" />
+                        ) : (
+                          <ArrowUp className="h-4 w-4" />
+                        )}
+                      </div>
+                    </TableHead>
+                    <TableHead className="text-right">Quantity</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
