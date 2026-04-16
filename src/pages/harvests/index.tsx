@@ -895,7 +895,7 @@ export default function HarvestsPage() {
                       </div>
                     </TableHead>
                     <TableHead className="text-right" style={{ textAlign: "center" }}>Quantity</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead style={{ textAlign: "center" }}>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -920,7 +920,7 @@ export default function HarvestsPage() {
                           <TableCell style={{ textAlign: "center" }}>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
                           <TableCell className="text-right" style={{ textAlign: "center", textDecoration: "none" }}>{formatNumber(h.quantity_harvested)}</TableCell>
                           <TableCell>
-                            <Badge variant={h.status === 'sold' ? 'default' : 'secondary'}>{h.status}</Badge>
+                            <Badge variant={h.status === 'sold' ? 'default' : 'secondary'} style={{ textAlign: "center" }}>{h.status}</Badge>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-1 justify-end">
