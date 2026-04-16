@@ -880,7 +880,7 @@ export default function HarvestsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Planting</TableHead>
-                    <TableHead>Batch Number</TableHead>
+                    <TableHead style={{ textAlign: "center" }}>Batch Number</TableHead>
                     <TableHead
                     className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
                     onClick={toggleSortOrder}>
@@ -916,7 +916,7 @@ export default function HarvestsPage() {
                             <br />
                             <span className="text-xs text-gray-500">{details?.plant_types?.variety}</span>
                           </TableCell>
-                          <TableCell className="font-mono text-sm">{details?.batch_number || "N/A"}</TableCell>
+                          <TableCell className="font-mono text-sm" style={{ textAlign: "center" }}>{details?.batch_number || "N/A"}</TableCell>
                           <TableCell style={{ textAlign: "center" }}>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
                           <TableCell className="text-right" style={{ textAlign: "center", textDecoration: "none" }}>{formatNumber(h.quantity_harvested)}</TableCell>
                           <TableCell>
