@@ -100,9 +100,9 @@ export default function PlantingsPage() {
     const fetchData = async () => {
       try {
         const [plantingsData, plantTypesData, locationsData] = await Promise.all([
-          plantingService.getAllPlantings(),
-          plantTypeService.getAllPlantTypes(),
-          locationService.getAllLocations()
+          plantingService.getPlantingsWithDetails(),
+          plantTypeService.getPlantTypes(),
+          locationService.getLocations()
         ]);
         setPlantings(plantingsData as PlantingWithDetails[]);
         setPlantTypes(plantTypesData);
@@ -112,7 +112,7 @@ export default function PlantingsPage() {
       } finally {
         setLoading(false);
       }
-    });
+    };
     fetchData();
   }, [user]);
 

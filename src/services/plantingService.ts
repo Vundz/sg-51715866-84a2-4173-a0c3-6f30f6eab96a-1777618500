@@ -22,6 +22,10 @@ export const plantingService = {
     return data;
   },
 
+  async getPlantings() {
+    return this.getAllPlantings();
+  },
+
   async getPlantingsWithDetails() {
     const { data, error } = await supabase
       .from("plantings")
