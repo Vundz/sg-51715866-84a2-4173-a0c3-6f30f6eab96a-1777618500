@@ -1658,6 +1658,9 @@ export default function PlantingsPage() {
                             <TableCell className="font-medium">
                               {formatNumber(totalPlanted)}
                             </TableCell>
+                            <TableCell>
+                              {p.locations?.name || 'N/A'}
+                            </TableCell>
                             <TableCell className="font-medium text-amber-600">
                               {formatNumber(harvested)}
                             </TableCell>
