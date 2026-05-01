@@ -8,27 +8,32 @@ export type PlantingWithDetails = Planting & {
 };
 
 export const plantingService = {
-  async getPlantings() {
-    const { data, error } = await supabase
-      .from("plantings")
-      .select("*")
-      .order("date_planted", { ascending: false });
-    if (error) throw error;
-    return data;
-  },
-
-  async getPlantingsWithDetails(): Promise<PlantingWithDetails[]> {
+  async getAllPlantings() {
     const { data, error } = await supabase
       .from("plantings")
       .select(`
         *,
-        plant_types (*),
-        locations (*)
+        plant_types(*),
+        locations(*)
       `)
       .order("date_planted", { ascending: false });
 
     if (error) throw error;
-    return data as PlantingWithDetails[];
+    return data;
+  },
+
+  async getPlantingsWithDetails() {
+    const { data, error } = await supabase
+      .from("plantings")
+      .select(`
+        *,
+        plant_types(*),
+        locations(*)
+      `)
+      .order("date_planted", { ascending: false });
+
+    if (error) throw error;
+    return data;
   },
 
   async getPlanting(id: string) {
