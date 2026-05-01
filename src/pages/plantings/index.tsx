@@ -22,9 +22,10 @@ import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/format";
 
-type Planting = Database["public"]["Tables"]["plantings"]["Row"] & { 
-  plant_types: Database["public"]["Tables"]["plant_types"]["Row"] | null,
-  locations: Database["public"]["Tables"]["locations"]["Row"] | null
+type PlantingWithDetails = Database["public"]["Tables"]["plantings"]["Row"] & {
+  plant_types: Database["public"]["Tables"]["plant_types"]["Row"] | null;
+  locations: Database["public"]["Tables"]["locations"]["Row"] | null;
+  treatments?: Database["public"]["Tables"]["planting_treatments"]["Row"][];
 };
 type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
 type Location = Database["public"]["Tables"]["locations"]["Row"];
@@ -45,12 +46,12 @@ export default function PlantingsPage() {
   const { user, profile } = useAuth();
   const permissions = usePermissions("plantings");
   const { toast } = useToast();
-  const [plantings, setPlantings] = useState<Planting[]>([]);
+  const [plantings, setPlantings] = useState<PlantingWithDetails[]>([]);
   const [plantTypes, setPlantTypes] = useState<PlantType[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingPlanting, setEditingPlanting] = useState<Planting | null>(null);
+  const [editingPlanting, setEditingPlanting] = useState<PlantingWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   
   const isViewer = profile?.role === "viewer";
@@ -96,7 +97,23 @@ export default function PlantingsPage() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   
   useEffect(() => {
-    loadData();
+    const fetchData = async () => {
+      try {
+        const [plantingsData, plantTypesData, locationsData] = await Promise.all([
+          plantingService.getAllPlantings(),
+          plantTypeService.getAllPlantTypes(),
+          locationService.getAllLocations()
+        ]);
+        setPlantings(plantingsData as PlantingWithDetails[]);
+        setPlantTypes(plantTypesData);
+        setLocations(locationsData);
+      } catch (error) {
+        console.error("Error loading data:", error);
+      } finally {
+        setLoading(false);
+      }
+    });
+    fetchData();
   }, [user]);
 
   const loadData = async () => {
@@ -112,7 +129,7 @@ export default function PlantingsPage() {
         inventoryService.getInventoryItemsByCategory("Seed")
       ]);
       
-      setPlantings(plantingsData as Planting[]);
+      setPlantings(plantingsData as PlantingWithDetails[]);
       setPlantTypes(plantTypesData);
       setLocations(locationsData);
       setReservations(reservationsData as Reservation[]);
@@ -130,7 +147,7 @@ export default function PlantingsPage() {
     return activeReservations.reduce((sum, r) => sum + (r.quantity_reserved || 0), 0);
   };
   
-  const getAvailableQuantity = (planting: Planting): number => {
+  const getAvailableQuantity = (planting: PlantingWithDetails): number => {
     const reserved = getReservedQuantity(planting.id);
     const remaining = planting.remaining_quantity ?? planting.quantity;
     return Math.max(0, remaining - reserved);
@@ -451,7 +468,7 @@ export default function PlantingsPage() {
     }
   };
 
-  const handleOpenDialog = (planting: Planting | null = null) => {
+  const handleOpenDialog = (planting: PlantingWithDetails | null = null) => {
     setEditingPlanting(planting);
     if (planting) {
       setSelectedPlantTypeName(planting.plant_types?.name || "");
@@ -486,7 +503,7 @@ export default function PlantingsPage() {
     setSelectedVariety(""); // Reset variety when plant type changes
   };
   
-  const getExpectedHarvestDate = (planting: Planting) => {
+  const getExpectedHarvestDate = (planting: PlantingWithDetails) => {
     if (!planting.expected_harvest_date) return "N/A";
     return new Date(planting.expected_harvest_date).toLocaleDateString();
   };
@@ -1592,6 +1609,7 @@ export default function PlantingsPage() {
                       <TableHead className="min-w-[120px]">Batch #</TableHead>
                       <TableHead className="min-w-[150px]">Plant</TableHead>
                       <TableHead className="min-w-[100px]">Total Planted</TableHead>
+                      <TableHead className="min-w-[100px]">Location</TableHead>
                       <TableHead className="min-w-[100px]">Harvested</TableHead>
                       <TableHead className="min-w-[100px]">Reserved</TableHead>
                       <TableHead className="min-w-[100px]">For Sale</TableHead>
@@ -1606,10 +1624,8 @@ export default function PlantingsPage() {
                   <TableBody>
                     {filteredPlantings.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={13} className="text-center h-24 px-4 py-2">
-                          {searchQuery || filterType !== "all" 
-                            ? "No plantings match your search or filter criteria." 
-                            : "No plantings recorded yet."}
+                        <TableCell colSpan={10} className="text-center h-24">
+                          No plantings found matching your filters.
                         </TableCell>
                       </TableRow>
                     ) : (
