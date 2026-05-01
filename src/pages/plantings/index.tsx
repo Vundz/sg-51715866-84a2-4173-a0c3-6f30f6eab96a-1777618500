@@ -468,12 +468,13 @@ export default function PlantingsPage() {
     }
   };
 
-  const handleOpenDialog = (planting: PlantingWithDetails | null = null) => {
-    setEditingPlanting(planting);
+  const handleOpenDialog = (planting?: PlantingWithDetails) => {
     if (planting) {
+      setEditingPlanting(planting);
       setSelectedPlantTypeName(planting.plant_types?.name || "");
       setSelectedVariety(planting.plant_types?.variety || "");
     } else {
+      setEditingPlanting(null);
       setSelectedPlantTypeName("");
       setSelectedVariety("");
     }
