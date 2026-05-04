@@ -1,0 +1,2087 @@
+From 0287362e846643632c8779850b5c62cad36614da Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 1 May 2026 09:53:08 +0000
+Subject: [PATCH 1/3] Add dispatch slip feature to harvests module
+
+- New dispatchSlipService.ts handles create/update/fulfill/cancel
+- Auto-creates harvest when stock is available on slip creation
+- Saves as pending when stock is insufficient
+- Harvest page now has Harvest Log / Dispatch Slips tabs
+- Pending slips can be edited, fulfilled manually, or cancelled
+- Fulfilled slips support printable dispatch slip (shared print template)
+- Badge on tab shows count of pending slips
+
+https://claude.ai/code/session_01GMSykJV4BCD69eJ2zhqGSM
+---
+ src/pages/harvests/index.tsx        | 1455 ++++++++++++++-------------
+ src/services/dispatchSlipService.ts |  161 +++
+ 2 files changed, 934 insertions(+), 682 deletions(-)
+ create mode 100644 src/services/dispatchSlipService.ts
+
+diff --git a/src/pages/harvests/index.tsx b/src/pages/harvests/index.tsx
+index 943e74e..23951da 100644
+--- a/src/pages/harvests/index.tsx
++++ b/src/pages/harvests/index.tsx
+@@ -8,12 +8,18 @@ import { Textarea } from "@/components/ui/textarea";
+ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+ import { Badge } from "@/components/ui/badge";
+-import { Plus, Edit, Trash2, Package, Printer, LayoutGrid, Table as TableIcon, AlertTriangle, ShieldAlert, ArrowUp, ArrowDown, Pencil, Search, X, Calendar, MapPin } from "lucide-react";
++import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
++import {
++  Plus, Edit, Trash2, Package, Printer, LayoutGrid, Table as TableIcon,
++  AlertTriangle, ShieldAlert, ArrowUp, ArrowDown, Search,
++  ClipboardList, CheckCircle, Clock, XCircle,
++} from "lucide-react";
+ import { harvestService, HarvestWithDetails } from "@/services/harvestService";
+ import { plantingService, PlantingWithDetails } from "@/services/plantingService";
++import { dispatchSlipService, DispatchSlipWithDetails, CreateDispatchSlipInput } from "@/services/dispatchSlipService";
+ import { useToast } from "@/hooks/use-toast";
+ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+-import { AlertCircle, CheckCircle2 } from "lucide-react";
++import { AlertCircle } from "lucide-react";
+ import Link from "next/link";
+ import { formatNumber } from "@/lib/format";
+ import { useAuth } from "@/contexts/AuthContext";
+@@ -36,7 +42,7 @@ export default function HarvestsPage() {
+     variety: "__all__",
+     date_from: "",
+     date_to: "",
+-    status: "__all__"
++    status: "__all__",
+   });
+   const [selectedPlantingId, setSelectedPlantingId] = useState<string>("");
+   const [harvestQuantity, setHarvestQuantity] = useState<number>(0);
+@@ -45,12 +51,18 @@ export default function HarvestsPage() {
+   const [showReservationDialog, setShowReservationDialog] = useState(false);
+   const [overrideReservations, setOverrideReservations] = useState(false);
+   const [filterStatus, setFilterStatus] = useState<string>("all");
+-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc"); // Default to newest first
+-  const { toast } = useToast();
+-
+-  // Add view mode state
++  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
++  const [activeTab, setActiveTab] = useState<"harvest-log" | "dispatch-slips">("harvest-log");
+ 
++  // Dispatch slip state
++  const [dispatchSlips, setDispatchSlips] = useState<DispatchSlipWithDetails[]>([]);
++  const [isDispatchDialogOpen, setIsDispatchDialogOpen] = useState(false);
++  const [editingSlip, setEditingSlip] = useState<DispatchSlipWithDetails | null>(null);
++  const [dispatchLoading, setDispatchLoading] = useState(false);
++  const [dispatchPlantingId, setDispatchPlantingId] = useState<string>("");
++
++  const { toast } = useToast();
+   const isViewer = profile?.role === "viewer";
+ 
+   useEffect(() => {
+@@ -60,50 +72,44 @@ export default function HarvestsPage() {
+   const loadInitialData = async () => {
+     try {
+       setLoading(true);
+-      const [harvestsData, plantingsData] = await Promise.all([
+-      harvestService.getHarvests(),
+-      plantingService.getPlantingsWithDetails()]
+-      );
++      const [harvestsData, plantingsData, slipsData] = await Promise.all([
++        harvestService.getHarvests(),
++        plantingService.getPlantingsWithDetails(),
++        dispatchSlipService.getDispatchSlips(),
++      ]);
+       setHarvests(harvestsData);
+       setPlantings(plantingsData);
++      setDispatchSlips(slipsData);
+ 
+-      // Calculate total harvested quantity for each planting
+       const quantities: Record<string, number> = {};
+-
+       for (const p of plantingsData) {
+-        const totalHarvested = harvestsData.
+-        filter((h) => h.planting_id === p.id).
+-        reduce((sum, h) => sum + h.quantity_harvested, 0);
++        const totalHarvested = harvestsData
++          .filter((h) => h.planting_id === p.id)
++          .reduce((sum, h) => sum + h.quantity_harvested, 0);
+         quantities[p.id] = totalHarvested;
+       }
+       setHarvestedQuantities(quantities);
+ 
+-      // OPTIMIZED: Get ALL reserved quantities in ONE batch query instead of N queries
+       const plantingIds = plantingsData.map((p) => p.id);
+       const reserved = await harvestService.getBatchReservedQuantities(plantingIds);
+       setReservedQuantities(reserved);
+-
+     } catch (error) {
+       console.error("Error loading data:", error);
+       toast({
+         title: "Error",
+         description: "Failed to load data. Please try again.",
+-        variant: "destructive"
++        variant: "destructive",
+       });
+     } finally {
+       setLoading(false);
+     }
+   };
+ 
+-  // Filter harvests based on status
+   const filteredHarvests = useMemo(() => {
+     let filtered = harvests;
+-
+     if (filterStatus !== "all") {
+       filtered = filtered.filter((h) => h.status === filterStatus);
+     }
+-
+-    // Sort by harvest date
+     return filtered.sort((a, b) => {
+       const dateA = new Date(a.harvest_date).getTime();
+       const dateB = new Date(b.harvest_date).getTime();
+@@ -111,22 +117,12 @@ export default function HarvestsPage() {
+     });
+   }, [harvests, filterStatus, sortOrder]);
+ 
+-  // Calculate total harvested based on filters
+   const totalHarvested = filteredHarvests.reduce((sum, h) => sum + h.quantity_harvested, 0);
+ 
+-  // Get unique varieties for filter
+   const uniqueVarieties = Array.from(
+-    new Set(
+-      harvests.
+-      map((h) => h.plantings?.plant_types?.variety).
+-      filter(Boolean)
+-    )
++    new Set(harvests.map((h) => h.plantings?.plant_types?.variety).filter(Boolean))
+   ).sort();
+ 
+-  const getRemainingQuantity = (planting: PlantingWithDetails) => {
+-    return planting.remaining_quantity ?? planting.quantity;
+-  };
+-
+   const getAvailableQuantity = (plantingId: string): number => {
+     const planting = plantings.find((p) => p.id === plantingId);
+     if (!planting) return 0;
+@@ -140,31 +136,15 @@ export default function HarvestsPage() {
+   };
+ 
+   const validateHarvestQuantity = async (quantity: number, plantingId: string): Promise<boolean> => {
+-    if (!plantingId) {
+-      setQuantityError("Please select a planting first");
+-      return false;
+-    }
+-
+-    if (quantity <= 0) {
+-      setQuantityError("Quantity must be greater than 0");
+-      return false;
+-    }
+-
+-    // Call backend validation
++    if (!plantingId) { setQuantityError("Please select a planting first"); return false; }
++    if (quantity <= 0) { setQuantityError("Quantity must be greater than 0"); return false; }
+     try {
+       const validation = await harvestService.validateHarvest(plantingId, quantity);
+-
+       if (!validation.valid) {
+         setQuantityError(validation.error || "Invalid quantity");
+-
+-        // If reservation conflict, show special handling
+-        if (validation.reservationConflict) {
+-          setReservationConflict(validation);
+-        }
+-
++        if (validation.reservationConflict) setReservationConflict(validation);
+         return false;
+       }
+-
+       setQuantityError("");
+       setReservationConflict(null);
+       return true;
+@@ -185,211 +165,62 @@ export default function HarvestsPage() {
+   const handleQuantityChange = (value: string) => {
+     const qty = parseInt(value) || 0;
+     setHarvestQuantity(qty);
+-    if (selectedPlantingId) {
+-      validateHarvestQuantity(qty, selectedPlantingId);
+-    }
++    if (selectedPlantingId) validateHarvestQuantity(qty, selectedPlantingId);
+   };
+ 
+-  const handleShowReservationConflict = () => {
+-    setShowReservationDialog(true);
+-  };
++  const handleShowReservationConflict = () => setShowReservationDialog(true);
+ 
+   const handlePrintDispatchSlip = (harvest: HarvestWithDetails) => {
+     const details = harvest.plantings;
+     if (!details) return;
+-
+     const printWindow = window.open("", "_blank");
+-    if (!printWindow) {
+-      alert("Please allow pop-ups to print dispatch slips");
+-      return;
+-    }
+-
+-    const printContent = `
+-      <!DOCTYPE html>
+-      <html>
+-      <head>
+-        <meta charset="utf-8">
+-        <title>Dispatch Slip - ${harvest.id}</title>
+-        <style>
+-          @media print {
+-            @page {
+-              size: 80mm auto;
+-              margin: 0;
+-            }
+-            body {
+-              margin: 0;
+-              padding: 0;
+-              -webkit-print-color-adjust: exact !important;
+-              print-color-adjust: exact !important;
+-            }
+-          }
+-          
+-          * {
+-            -webkit-print-color-adjust: exact !important;
+-            print-color-adjust: exact !important;
+-          }
+-          
+-          body { 
+-            font-family: 'Courier New', monospace; 
+-            font-size: 12px; 
+-            line-height: 1.4; 
+-            padding: 10mm; 
+-            max-width: 80mm; 
+-            margin: 0 auto; 
+-            color: #000 !important;
+-          }
+-          .header { 
+-            text-align: center; 
+-            border-bottom: 2px dashed #000; 
+-            padding-bottom: 8px; 
+-            margin-bottom: 12px; 
+-          }
+-          .header h1 { 
+-            margin: 0; 
+-            font-size: 18px; 
+-            font-weight: bold; 
+-            color: #000 !important;
+-          }
+-          .header h2 { 
+-            margin: 4px 0 0 0; 
+-            font-size: 14px; 
+-            font-weight: normal; 
+-            color: #000 !important;
+-          }
+-          .section { 
+-            margin-bottom: 12px; 
+-          }
+-          .section-title { 
+-            font-weight: bold; 
+-            font-size: 14px; 
+-            margin-bottom: 4px; 
+-            text-transform: uppercase; 
+-            color: #000 !important;
+-          }
+-          .info-row { 
+-            display: flex; 
+-            justify-content: space-between; 
+-            margin-bottom: 3px; 
+-            color: #000 !important;
+-          }
+-          .label { 
+-            font-weight: bold; 
+-            color: #000 !important;
+-          }
+-          .value { 
+-            text-align: right; 
+-            color: #000 !important;
+-            font-weight: bold !important;
+-          }
+-          .footer { 
+-            border-top: 2px dashed #000; 
+-            padding-top: 8px; 
+-            margin-top: 12px; 
+-            text-align: center; 
+-            font-size: 10px; 
+-            color: #000 !important;
+-          }
+-          .notes { 
+-            border: 1px solid #000; 
+-            padding: 6px; 
+-            margin-top: 8px; 
+-            min-height: 40px; 
+-            color: #000 !important;
+-            font-weight: bold !important;
+-          }
+-          table { 
+-            width: 100%; 
+-            border-collapse: collapse; 
+-            margin: 8px 0;
+-            -webkit-print-color-adjust: exact !important;
+-            print-color-adjust: exact !important;
+-          }
+-          th, td { 
+-            text-align: left; 
+-            padding: 8px 4px; 
+-            border-bottom: 2px solid #000 !important;
+-            font-size: 16px !important;
+-            color: #000 !important;
+-            font-weight: bold !important;
+-          }
+-          th { 
+-            font-weight: 900 !important;
+-            background: #f0f0f0 !important;
+-            color: #000 !important;
+-            font-size: 18px !important;
+-            -webkit-print-color-adjust: exact !important;
+-            print-color-adjust: exact !important;
+-          }
+-          td {
+-            font-weight: 700 !important;
+-            color: #000 !important;
+-          }
+-        </style>
+-      </head>
+-      <body>
+-        <div class="header">
+-          <h1>DISPATCH SLIP</h1>
+-          <h2>Seedlings Nursery</h2>
+-        </div>
+-        <div class="section">
+-          <div class="section-title">Order Details</div>
+-          <div class="info-row"><span class="label">Dispatch ID:</span><span class="value">${harvest.id.slice(0, 8)}</span></div>
+-          <div class="info-row"><span class="label">Date:</span><span class="value">${new Date(harvest.harvest_date).toLocaleDateString()}</span></div>
+-          <div class="info-row"><span class="label">Time:</span><span class="value">${new Date().toLocaleTimeString()}</span></div>
+-        </div>
+-        <div class="section">
+-          <div class="section-title">Product Information</div>
+-          <table>
+-            <tr>
+-              <th>Variety</th>
+-              <th>Batch</th>
+-              <th>Qty</th>
+-              <th>Location</th>
+-            </tr>
+-            <tr>
+-              <td>${details.plant_types?.variety || 'N/A'}</td>
+-              <td>${details.batch_number || 'N/A'}</td>
+-              <td>${formatNumber(harvest.quantity_harvested)}</td>
+-              <td>${details.locations?.name || 'N/A'}</td>
+-            </tr>
+-          </table>
+-        </div>
+-        ${harvest.notes ? `<div class="section"><div class="notes">${harvest.notes}</div></div>` : '<div class="section"><div class="notes"></div></div>'}
+-        <div class="footer"><p>Packed by: _________________</p><p>Checked by: _________________</p><p style="margin-top: 8px;">Thank you for your business!</p></div>
+-      </body>
+-      </html>
+-    `;
+-
+-    printWindow.document.write(printContent);
++    if (!printWindow) { alert("Please allow pop-ups to print dispatch slips"); return; }
++    printWindow.document.write(buildPrintHtml({
++      id: harvest.id,
++      date: harvest.harvest_date,
++      variety: details.plant_types?.variety || "N/A",
++      batch: details.batch_number || "N/A",
++      quantity: harvest.quantity_harvested,
++      location: details.locations?.name || "N/A",
++      notes: harvest.notes,
++    }));
+     printWindow.document.close();
+     printWindow.focus();
++    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
++  };
+ 
+-    setTimeout(() => {
+-      printWindow.print();
+-      printWindow.close();
+-    }, 250);
++  const handlePrintSlip = (slip: DispatchSlipWithDetails) => {
++    const details = slip.plantings;
++    if (!details) return;
++    const printWindow = window.open("", "_blank");
++    if (!printWindow) { alert("Please allow pop-ups to print dispatch slips"); return; }
++    printWindow.document.write(buildPrintHtml({
++      id: slip.id,
++      date: slip.dispatch_date,
++      variety: details.plant_types?.variety || "N/A",
++      batch: details.batch_number || "N/A",
++      quantity: slip.quantity_requested,
++      location: details.locations?.name || "N/A",
++      notes: slip.notes,
++      customerName: slip.customer_name,
++      destination: slip.destination,
++    }));
++    printWindow.document.close();
++    printWindow.focus();
++    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+   };
+ 
+   const handleSaveHarvest = async (e: React.FormEvent<HTMLFormElement>) => {
+     e.preventDefault();
+     const formData = new FormData(e.currentTarget);
+-
+     const plantingId = formData.get("planting_id") as string;
+     const quantity = parseInt(formData.get("quantity_harvested") as string);
+ 
+-    // Validate before saving (unless overriding)
+     if (!overrideReservations) {
+       const isValid = await validateHarvestQuantity(quantity, plantingId);
+       if (!isValid) {
+-        if (reservationConflict) {
+-          handleShowReservationConflict();
+-        } else {
+-          toast({
+-            title: "Validation Error",
+-            description: quantityError,
+-            variant: "destructive"
+-          });
+-        }
++        if (reservationConflict) handleShowReservationConflict();
++        else toast({ title: "Validation Error", description: quantityError, variant: "destructive" });
+         return;
+       }
+     }
+@@ -401,26 +232,20 @@ export default function HarvestsPage() {
+       status: formData.get("status") as string,
+       notes: formData.get("notes") as string || null,
+       quality: formData.get("quality") as string,
+-      is_closed: formData.get("is_closed") === 'on'
++      is_closed: formData.get("is_closed") === "on",
+     };
+ 
+     try {
+       if (editingHarvest) {
+         await harvestService.updateHarvest(editingHarvest.id, harvestData);
+-        toast({
+-          title: "Success",
+-          description: "Harvest updated successfully"
+-        });
++        toast({ title: "Success", description: "Harvest updated successfully" });
+       } else {
+         await harvestService.createHarvest(harvestData, overrideReservations);
+         toast({
+           title: "Success",
+-          description: overrideReservations ?
+-          "Harvest created (reservations overridden)" :
+-          "Harvest created successfully"
++          description: overrideReservations ? "Harvest created (reservations overridden)" : "Harvest created successfully",
+         });
+       }
+-
+       await loadInitialData();
+       setIsDialogOpen(false);
+       setEditingHarvest(null);
+@@ -431,31 +256,19 @@ export default function HarvestsPage() {
+       setOverrideReservations(false);
+     } catch (error: any) {
+       console.error("Error saving harvest:", error);
+-      toast({
+-        title: "Error",
+-        description: error.message || "Failed to save harvest",
+-        variant: "destructive"
+-      });
++      toast({ title: "Error", description: error.message || "Failed to save harvest", variant: "destructive" });
+     }
+   };
+ 
+   const handleDeleteHarvest = async (id: string) => {
+     if (!confirm("Are you sure you want to delete this harvest record?")) return;
+-
+     try {
+       await harvestService.deleteHarvest(id);
+-      toast({
+-        title: "Success",
+-        description: "Harvest deleted successfully"
+-      });
++      toast({ title: "Success", description: "Harvest deleted successfully" });
+       await loadInitialData();
+     } catch (error) {
+       console.error("Error deleting harvest:", error);
+-      toast({
+-        title: "Error",
+-        description: "Failed to delete harvest",
+-        variant: "destructive"
+-      });
++      toast({ title: "Error", description: "Failed to delete harvest", variant: "destructive" });
+     }
+   };
+ 
+@@ -466,10 +279,76 @@ export default function HarvestsPage() {
+     setReservationConflict(null);
+   };
+ 
+-  const toggleSortOrder = () => {
+-    setSortOrder((prev) => prev === "desc" ? "asc" : "desc");
++  const toggleSortOrder = () => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
++
++  // ── Dispatch slip handlers ──────────────────────────────────────────────────
++
++  const handleOpenDispatchDialog = (slip: DispatchSlipWithDetails | null = null) => {
++    setEditingSlip(slip);
++    setDispatchPlantingId(slip?.planting_id ?? "");
++    setIsDispatchDialogOpen(true);
+   };
+ 
++  const handleSaveDispatchSlip = async (e: React.FormEvent<HTMLFormElement>) => {
++    e.preventDefault();
++    const formData = new FormData(e.currentTarget);
++    const input: CreateDispatchSlipInput = {
++      planting_id: formData.get("planting_id") as string,
++      quantity_requested: parseInt(formData.get("quantity_requested") as string),
++      dispatch_date: formData.get("dispatch_date") as string,
++      customer_name: (formData.get("customer_name") as string) || null,
++      destination: (formData.get("destination") as string) || null,
++      notes: (formData.get("notes") as string) || null,
++    };
++
++    setDispatchLoading(true);
++    try {
++      if (editingSlip) {
++        await dispatchSlipService.updateDispatchSlip(editingSlip.id, input);
++        toast({ title: "Updated", description: "Dispatch slip updated." });
++      } else {
++        const result = await dispatchSlipService.createDispatchSlip(input);
++        toast({
++          title: result.autoFulfilled ? "Fulfilled Automatically" : "Dispatch Slip Created",
++          description: result.autoFulfilled
++            ? "Stock was available. A harvest has been created and the slip is fulfilled."
++            : "Insufficient stock. Dispatch slip saved as pending — edit it when stock is available.",
++        });
++      }
++      await loadInitialData();
++      setIsDispatchDialogOpen(false);
++      setEditingSlip(null);
++      setDispatchPlantingId("");
++    } catch (error: any) {
++      toast({ title: "Error", description: error.message || "Failed to save dispatch slip", variant: "destructive" });
++    } finally {
++      setDispatchLoading(false);
++    }
++  };
++
++  const handleFulfillSlip = async (slip: DispatchSlipWithDetails) => {
++    try {
++      await dispatchSlipService.fulfillDispatchSlip(slip.id);
++      toast({ title: "Fulfilled", description: "Dispatch slip fulfilled and harvest created." });
++      await loadInitialData();
++    } catch (error: any) {
++      toast({ title: "Error", description: error.message || "Failed to fulfill dispatch slip", variant: "destructive" });
++    }
++  };
++
++  const handleCancelSlip = async (id: string) => {
++    if (!confirm("Cancel this dispatch slip?")) return;
++    try {
++      await dispatchSlipService.cancelDispatchSlip(id);
++      toast({ title: "Cancelled", description: "Dispatch slip cancelled." });
++      await loadInitialData();
++    } catch (error: any) {
++      toast({ title: "Error", description: error.message || "Failed to cancel dispatch slip", variant: "destructive" });
++    }
++  };
++
++  const pendingSlipsCount = dispatchSlips.filter((s) => s.status === "pending").length;
++
+   if (loading) {
+     return (
+       <div className="flex items-center justify-center min-h-screen">
+@@ -477,59 +356,79 @@ export default function HarvestsPage() {
+           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+           <p className="mt-4 text-gray-600">Loading harvests...</p>
+         </div>
+-      </div>);
+-
++      </div>
++    );
+   }
+ 
+   return (
+     <div className="max-w-7xl mx-auto space-y-8">
++      {/* Header */}
+       <div className="flex items-center justify-between">
+         <div>
+-          <h1 className="text-4xl font-bold flex items-center gap-3"><Package className="w-10 h-10 text-blue-600" />Harvests</h1>
+-          <p className="text-gray-600 dark:text-gray-400 mt-2">Record and manage harvests from your plantings.</p>
++          <h1 className="text-4xl font-bold flex items-center gap-3">
++            <Package className="w-10 h-10 text-blue-600" />
++            Harvests
++          </h1>
++          <p className="text-gray-600 dark:text-gray-400 mt-2">
++            Record and manage harvests and dispatch slips.
++          </p>
+         </div>
+-        {permissions.canCreate &&
+-        <div className="flex items-center gap-2">
+-            {/* View Mode Toggle */}
+-            <div className="flex border rounded-lg overflow-hidden">
+-              <Button
+-              onClick={() => setViewMode("table")}
+-              variant={viewMode === "table" ? "default" : "ghost"}
+-              size="sm"
+-              className="rounded-none gap-1">
+-              
+-                <TableIcon className="w-4 h-4" />
+-                <span className="hidden sm:inline">Table</span>
+-              </Button>
++        {permissions.canCreate && (
++          <div className="flex items-center gap-2">
++            {activeTab === "harvest-log" ? (
++              <>
++                <div className="flex border rounded-lg overflow-hidden">
++                  <Button
++                    onClick={() => setViewMode("table")}
++                    variant={viewMode === "table" ? "default" : "ghost"}
++                    size="sm"
++                    className="rounded-none gap-1"
++                  >
++                    <TableIcon className="w-4 h-4" />
++                    <span className="hidden sm:inline">Table</span>
++                  </Button>
++                  <Button
++                    onClick={() => setViewMode("cards")}
++                    variant={viewMode === "cards" ? "default" : "ghost"}
++                    size="sm"
++                    className="rounded-none gap-1"
++                  >
++                    <LayoutGrid className="w-4 h-4" />
++                    <span className="hidden sm:inline">Cards</span>
++                  </Button>
++                </div>
++                <Link href="/harvests/bulk">
++                  <Button variant="outline">Bulk Harvest</Button>
++                </Link>
++                <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
++                  <Plus className="w-4 h-4 mr-2" />
++                  Add Harvest
++                </Button>
++              </>
++            ) : (
+               <Button
+-              onClick={() => setViewMode("cards")}
+-              variant={viewMode === "cards" ? "default" : "ghost"}
+-              size="sm"
+-              className="rounded-none gap-1">
+-              
+-                <LayoutGrid className="w-4 h-4" />
+-                <span className="hidden sm:inline">Cards</span>
++                onClick={() => handleOpenDispatchDialog()}
++                className="bg-blue-600 hover:bg-blue-700"
++              >
++                <Plus className="w-4 h-4 mr-2" />
++                New Dispatch Slip
+               </Button>
+-            </div>
+-
+-            <Link href="/harvests/bulk">
+-              <Button variant="outline">Bulk Harvest</Button>
+-            </Link>
+-            <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
+-              <Plus className="w-4 h-4 mr-2" />
+-              Add Harvest
+-            </Button>
++            )}
+           </div>
+-        }
++        )}
+       </div>
+ 
+-      {/* Harvest Dialog */}
++      {/* ── Harvest Dialog ─────────────────────────────────────────────────── */}
+       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+         <DialogContent className="max-w-xl">
+           <DialogHeader>
+             <DialogTitle>{editingHarvest ? "Edit Harvest" : "Add New Harvest"}</DialogTitle>
+             <DialogDescription>
+-              {isViewer ? "Viewing harvest details. No changes can be made." : editingHarvest ? "Update harvest details." : "Log a new harvest record."}
++              {isViewer
++                ? "Viewing harvest details. No changes can be made."
++                : editingHarvest
++                ? "Update harvest details."
++                : "Log a new harvest record."}
+             </DialogDescription>
+           </DialogHeader>
+           <form onSubmit={handleSaveHarvest} className="space-y-4">
+@@ -541,26 +440,25 @@ export default function HarvestsPage() {
+                   defaultValue={editingHarvest?.planting_id}
+                   onValueChange={handlePlantingChange}
+                   required
+-                  disabled={isViewer || !!editingHarvest}>
+-                  
++                  disabled={isViewer || !!editingHarvest}
++                >
+                   <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
+                   <SelectContent>
+                     {plantings.filter((p) => p.status === "active").map((p) => {
+                       const available = getAvailableQuantity(p.id);
+                       const harvestable = getHarvestableQuantity(p.id);
+                       const reserved = reservedQuantities[p.id] || 0;
+-
+                       return (
+                         <SelectItem key={p.id} value={p.id} disabled={available <= 0}>
+                           {p.plant_types?.name} ({p.batch_number || p.plant_types?.variety}) - For Sale: {formatNumber(harvestable)}
+                           {reserved > 0 && ` (${formatNumber(reserved)} reserved)`}
+-                        </SelectItem>);
+-
++                        </SelectItem>
++                      );
+                     })}
+                   </SelectContent>
+                 </Select>
+-                {selectedPlantingId &&
+-                <Alert className="mt-2">
++                {selectedPlantingId && (
++                  <Alert className="mt-2">
+                     <AlertCircle className="h-4 w-4" />
+                     <AlertDescription>
+                       <div className="space-y-1 text-sm">
+@@ -572,11 +470,11 @@ export default function HarvestsPage() {
+                       </div>
+                     </AlertDescription>
+                   </Alert>
+-                }
++                )}
+               </div>
+               <div className="space-y-2">
+                 <Label htmlFor="harvest_date">Harvest Date</Label>
+-                <Input id="harvest_date" name="harvest_date" type="date" defaultValue={editingHarvest?.harvest_date.split('T')[0]} required disabled={isViewer} />
++                <Input id="harvest_date" name="harvest_date" type="date" defaultValue={editingHarvest?.harvest_date.split("T")[0]} required disabled={isViewer} />
+               </div>
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+@@ -591,31 +489,25 @@ export default function HarvestsPage() {
+                   onChange={(e) => handleQuantityChange(e.target.value)}
+                   className={quantityError ? "border-red-500 focus-visible:ring-red-500" : ""}
+                   required
+-                  disabled={isViewer} />
+-                
+-                {quantityError &&
+-                <Alert variant="destructive">
++                  disabled={isViewer}
++                />
++                {quantityError && (
++                  <Alert variant="destructive">
+                     <AlertCircle className="w-4 h-4" />
+                     <AlertDescription className="flex items-start gap-2">
+                       <div className="flex-1">{quantityError}</div>
+-                      {reservationConflict &&
+-                    <Button
+-                      type="button"
+-                      size="sm"
+-                      variant="outline"
+-                      onClick={handleShowReservationConflict}
+-                      className="shrink-0">
+-                      
++                      {reservationConflict && (
++                        <Button type="button" size="sm" variant="outline" onClick={handleShowReservationConflict} className="shrink-0">
+                           View Details
+                         </Button>
+-                    }
++                      )}
+                     </AlertDescription>
+                   </Alert>
+-                }
++                )}
+               </div>
+               <div className="space-y-2">
+                 <Label htmlFor="quality">Quality</Label>
+-                <Select name="quality" defaultValue={editingHarvest?.quality ?? 'good'} disabled={isViewer}>
++                <Select name="quality" defaultValue={editingHarvest?.quality ?? "good"} disabled={isViewer}>
+                   <SelectTrigger><SelectValue placeholder="Select quality" /></SelectTrigger>
+                   <SelectContent>
+                     <SelectItem value="excellent">Excellent</SelectItem>
+@@ -626,53 +518,57 @@ export default function HarvestsPage() {
+                 </Select>
+               </div>
+             </div>
+-             <div className="space-y-2">
+-                <Label htmlFor="status">Status</Label>
+-                <Select name="status" defaultValue={editingHarvest?.status ?? 'harvested'} disabled={isViewer}>
+-                  <SelectTrigger>
+-                    <SelectValue placeholder="Select status" />
+-                  </SelectTrigger>
+-                  <SelectContent>
+-                    <SelectItem value="harvested">Harvested</SelectItem>
+-                    <SelectItem value="sold">Sold</SelectItem>
+-                    <SelectItem value="processed">Processed</SelectItem>
+-                    <SelectItem value="waste">Waste</SelectItem>
+-                  </SelectContent>
+-                </Select>
+-              </div>
++            <div className="space-y-2">
++              <Label htmlFor="status">Status</Label>
++              <Select name="status" defaultValue={editingHarvest?.status ?? "harvested"} disabled={isViewer}>
++                <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
++                <SelectContent>
++                  <SelectItem value="harvested">Harvested</SelectItem>
++                  <SelectItem value="sold">Sold</SelectItem>
++                  <SelectItem value="processed">Processed</SelectItem>
++                  <SelectItem value="waste">Waste</SelectItem>
++                </SelectContent>
++              </Select>
++            </div>
+             <div className="space-y-2">
+               <Label htmlFor="notes">Notes</Label>
+               <Textarea id="notes" name="notes" defaultValue={editingHarvest?.notes ?? ""} disabled={isViewer} />
+             </div>
+-            {permissions.canCreate || permissions.canUpdate ?
+-            <div className="flex justify-end gap-2 pt-4">
+-                <Button type="button" variant="outline" onClick={() => {
+-                setIsDialogOpen(false);
+-                setSelectedPlantingId("");
+-                setHarvestQuantity(0);
+-                setQuantityError("");
+-                setReservationConflict(null);
+-                setOverrideReservations(false);
+-              }}>Cancel</Button>
++            {permissions.canCreate || permissions.canUpdate ? (
++              <div className="flex justify-end gap-2 pt-4">
+                 <Button
+-                type="submit"
+-                className="bg-blue-600 hover:bg-blue-700"
+-                disabled={!overrideReservations && !!quantityError || harvestQuantity === 0}>
+-                
++                  type="button"
++                  variant="outline"
++                  onClick={() => {
++                    setIsDialogOpen(false);
++                    setSelectedPlantingId("");
++                    setHarvestQuantity(0);
++                    setQuantityError("");
++                    setReservationConflict(null);
++                    setOverrideReservations(false);
++                  }}
++                >
++                  Cancel
++                </Button>
++                <Button
++                  type="submit"
++                  className="bg-blue-600 hover:bg-blue-700"
++                  disabled={(!overrideReservations && !!quantityError) || harvestQuantity === 0}
++                >
+                   {overrideReservations && <ShieldAlert className="w-4 h-4 mr-2" />}
+                   {overrideReservations ? "Override & Save" : "Save Harvest"}
+                 </Button>
+-              </div> :
+-
+-            <div className="flex justify-end pt-4">
+-                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Close</Button>
+               </div>
+-            }
++            ) : (
++              <div className="flex justify-end pt-4">
++                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Close</Button>
++              </div>
++            )}
+           </form>
+         </DialogContent>
+       </Dialog>
+ 
+-      {/* Reservation Conflict Dialog */}
++      {/* ── Reservation Conflict Dialog ─────────────────────────────────────── */}
+       <Dialog open={showReservationDialog} onOpenChange={setShowReservationDialog}>
+         <DialogContent className="max-w-2xl">
+           <DialogHeader>
+@@ -684,9 +580,8 @@ export default function HarvestsPage() {
+               This harvest would exceed the harvestable quantity due to pending reservations.
+             </DialogDescription>
+           </DialogHeader>
+-
+-          {reservationConflict &&
+-          <div className="space-y-4">
++          {reservationConflict && (
++            <div className="space-y-4">
+               <Alert variant="destructive">
+                 <AlertCircle className="h-4 w-4" />
+                 <AlertTitle>Cannot Proceed Without Override</AlertTitle>
+@@ -700,9 +595,8 @@ export default function HarvestsPage() {
+                   </div>
+                 </AlertDescription>
+               </Alert>
+-
+-              {reservationConflict.conflictingReservations && reservationConflict.conflictingReservations.length > 0 &&
+-            <Card>
++              {reservationConflict.conflictingReservations?.length > 0 && (
++                <Card>
+                   <CardHeader>
+                     <CardTitle className="text-base">Pending Reservations</CardTitle>
+                     <CardDescription>These customers have reserved seedlings from this planting</CardDescription>
+@@ -717,19 +611,18 @@ export default function HarvestsPage() {
+                         </TableRow>
+                       </TableHeader>
+                       <TableBody>
+-                        {reservationConflict.conflictingReservations.map((res: any) =>
+-                    <TableRow key={res.id}>
++                        {reservationConflict.conflictingReservations.map((res: any) => (
++                          <TableRow key={res.id}>
+                             <TableCell className="font-medium">{res.customer_name}</TableCell>
+                             <TableCell>{new Date(res.reserved_date).toLocaleDateString()}</TableCell>
+                             <TableCell className="text-right">{formatNumber(res.quantity_reserved)}</TableCell>
+                           </TableRow>
+-                    )}
++                        ))}
+                       </TableBody>
+                     </Table>
+                   </CardContent>
+                 </Card>
+-            }
+-
++              )}
+               <Alert className="border-orange-500">
+                 <ShieldAlert className="h-4 w-4 text-orange-600" />
+                 <AlertTitle>Options to Proceed</AlertTitle>
+@@ -737,27 +630,18 @@ export default function HarvestsPage() {
+                   <ol className="list-decimal list-inside space-y-2 mt-2">
+                     <li>Reduce harvest quantity to {reservationConflict.harvestable} or less</li>
+                     <li>Cancel or modify the conflicting reservations in the Reservations module</li>
+-                    <li>Override reservations (not recommended - may break customer commitments)</li>
++                    <li>Override reservations (not recommended — may break customer commitments)</li>
+                   </ol>
+                 </AlertDescription>
+               </Alert>
+             </div>
+-          }
+-
++          )}
+           <DialogFooter className="gap-2">
+-            <Button
+-              variant="outline"
+-              onClick={() => {
+-                setShowReservationDialog(false);
+-                setOverrideReservations(false);
+-              }}>
+-              
++            <Button variant="outline" onClick={() => { setShowReservationDialog(false); setOverrideReservations(false); }}>
+               Cancel
+             </Button>
+             <Link href="/reservations">
+-              <Button variant="secondary">
+-                Go to Reservations
+-              </Button>
++              <Button variant="secondary">Go to Reservations</Button>
+             </Link>
+             <Button
+               variant="destructive"
+@@ -767,10 +651,9 @@ export default function HarvestsPage() {
+                 toast({
+                   title: "Override Enabled",
+                   description: "You can now save the harvest. Please ensure you communicate with affected customers.",
+-                  variant: "default"
+                 });
+-              }}>
+-              
++              }}
++            >
+               <ShieldAlert className="w-4 h-4 mr-2" />
+               Override Reservations
+             </Button>
+@@ -778,313 +661,521 @@ export default function HarvestsPage() {
+         </DialogContent>
+       </Dialog>
+ 
+-      <Card>
+-        <CardHeader>
+-          <CardTitle>Harvest Log</CardTitle>
+-          <CardDescription>A complete history of all recorded harvests with dispatch slip printing.</CardDescription>
+-          
+-          {/* Search and Filters */}
+-          <div className="space-y-4 pt-4">
+-            <Input
+-              placeholder="Search by plant name, variety, or batch number..."
+-              value={searchQuery}
+-              onChange={(e) => setSearchQuery(e.target.value)}
+-              className="max-w-md" />
+-            
+-            
+-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+-              <Select
+-                value={filters.planting_id}
+-                onValueChange={(value) => setFilters({ ...filters, planting_id: value })}>
+-                
+-                <SelectTrigger>
+-                  <SelectValue placeholder="All Plantings" />
+-                </SelectTrigger>
+-                <SelectContent>
+-                  <SelectItem value="__all__">All Plantings</SelectItem>
+-                  {plantings.filter((p) => p.status === "active" && p.batch_number && p.batch_number.trim() !== "").map((p) =>
+-                  <SelectItem key={p.id} value={p.id}>
+-                      {p.plant_types?.name} ({p.batch_number})
+-                    </SelectItem>
+-                  )}
+-                </SelectContent>
+-              </Select>
+-
+-              <Select
+-                value={filters.variety}
+-                onValueChange={(value) => setFilters({ ...filters, variety: value })}>
+-                
+-                <SelectTrigger>
+-                  <SelectValue placeholder="All Varieties" />
+-                </SelectTrigger>
+-                <SelectContent>
+-                  <SelectItem value="__all__">All Varieties</SelectItem>
+-                  {uniqueVarieties.map((variety) =>
+-                  <SelectItem key={variety} value={variety}>
+-                      {variety}
+-                    </SelectItem>
+-                  )}
+-                </SelectContent>
+-              </Select>
+-
+-              <Select
+-                value={filters.status}
+-                onValueChange={(value) => setFilters({ ...filters, status: value })}>
+-                
+-                <SelectTrigger>
+-                  <SelectValue placeholder="All Status" />
+-                </SelectTrigger>
+-                <SelectContent>
+-                  <SelectItem value="__all__">All Status</SelectItem>
+-                  <SelectItem value="harvested">Harvested</SelectItem>
+-                  <SelectItem value="sold">Sold</SelectItem>
+-                  <SelectItem value="processed">Processed</SelectItem>
+-                  <SelectItem value="waste">Waste</SelectItem>
+-                </SelectContent>
+-              </Select>
+-
+-              <Input
+-                type="date"
+-                placeholder="From Date"
+-                value={filters.date_from}
+-                onChange={(e) => setFilters({ ...filters, date_from: e.target.value })} />
+-              
+-
+-              <Input
+-                type="date"
+-                placeholder="To Date"
+-                value={filters.date_to}
+-                onChange={(e) => setFilters({ ...filters, date_to: e.target.value })} />
+-              
++      {/* ── Dispatch Slip Dialog ────────────────────────────────────────────── */}
++      <Dialog open={isDispatchDialogOpen} onOpenChange={(open) => { setIsDispatchDialogOpen(open); if (!open) { setEditingSlip(null); setDispatchPlantingId(""); } }}>
++        <DialogContent className="max-w-xl">
++          <DialogHeader>
++            <DialogTitle>{editingSlip ? "Edit Dispatch Slip" : "New Dispatch Slip"}</DialogTitle>
++            <DialogDescription>
++              {editingSlip
++                ? "Update the pending dispatch slip details."
++                : "Create a dispatch slip. If stock is available a harvest will be created automatically."}
++            </DialogDescription>
++          </DialogHeader>
++          <form onSubmit={handleSaveDispatchSlip} className="space-y-4">
++            <div className="grid grid-cols-2 gap-4">
++              <div className="space-y-2">
++                <Label>Planting Batch</Label>
++                <Select
++                  name="planting_id"
++                  defaultValue={editingSlip?.planting_id}
++                  onValueChange={setDispatchPlantingId}
++                  required
++                  disabled={!!editingSlip}
++                >
++                  <SelectTrigger><SelectValue placeholder="Select a planting" /></SelectTrigger>
++                  <SelectContent>
++                    {plantings.filter((p) => p.status === "active").map((p) => {
++                      const harvestable = getHarvestableQuantity(p.id);
++                      const reserved = reservedQuantities[p.id] || 0;
++                      return (
++                        <SelectItem key={p.id} value={p.id}>
++                          {p.plant_types?.name} ({p.batch_number || p.plant_types?.variety}) — {formatNumber(harvestable)} available
++                          {reserved > 0 && ` (${formatNumber(reserved)} reserved)`}
++                        </SelectItem>
++                      );
++                    })}
++                  </SelectContent>
++                </Select>
++                {dispatchPlantingId && (
++                  <Alert className="mt-2">
++                    <AlertCircle className="h-4 w-4" />
++                    <AlertDescription>
++                      <div className="space-y-1 text-sm">
++                        <div><strong>Remaining in Batch:</strong> {formatNumber(getAvailableQuantity(dispatchPlantingId))}</div>
++                        <div><strong>Reserved:</strong> {formatNumber(reservedQuantities[dispatchPlantingId] || 0)}</div>
++                        <div className="text-green-600 font-semibold">
++                          <strong>Available for Dispatch:</strong> {formatNumber(getHarvestableQuantity(dispatchPlantingId))} seedlings
++                        </div>
++                      </div>
++                    </AlertDescription>
++                  </Alert>
++                )}
++              </div>
++              <div className="space-y-2">
++                <Label>Dispatch Date</Label>
++                <Input
++                  name="dispatch_date"
++                  type="date"
++                  defaultValue={editingSlip?.dispatch_date?.split("T")[0] ?? new Date().toISOString().split("T")[0]}
++                  required
++                />
++              </div>
+             </div>
+-
+-            {(filters.planting_id !== "__all__" || filters.variety !== "__all__" || filters.status !== "__all__" || filters.date_from || filters.date_to || searchQuery) &&
+-            <Button
+-              variant="outline"
+-              size="sm"
+-              onClick={() => {
+-                setFilters({ planting_id: "__all__", variety: "__all__", date_from: "", date_to: "", status: "__all__" });
+-                setSearchQuery("");
+-              }}>
+-              
+-                Clear All Filters
++            <div className="grid grid-cols-2 gap-4">
++              <div className="space-y-2">
++                <Label>Quantity Requested</Label>
++                <Input
++                  name="quantity_requested"
++                  type="number"
++                  min={1}
++                  defaultValue={editingSlip?.quantity_requested}
++                  required
++                />
++              </div>
++              <div className="space-y-2">
++                <Label>Customer Name</Label>
++                <Input name="customer_name" defaultValue={editingSlip?.customer_name ?? ""} placeholder="Optional" />
++              </div>
++            </div>
++            <div className="space-y-2">
++              <Label>Destination</Label>
++              <Input name="destination" defaultValue={editingSlip?.destination ?? ""} placeholder="Optional — delivery address or pickup" />
++            </div>
++            <div className="space-y-2">
++              <Label>Notes</Label>
++              <Textarea name="notes" defaultValue={editingSlip?.notes ?? ""} />
++            </div>
++            <div className="flex justify-end gap-2 pt-4">
++              <Button type="button" variant="outline" onClick={() => { setIsDispatchDialogOpen(false); setEditingSlip(null); setDispatchPlantingId(""); }}>
++                Cancel
+               </Button>
+-            }
+-          </div>
+-        </CardHeader>
+-        <CardContent>
+-          {viewMode === "table" ? (
+-          /* TABLE VIEW */
+-          <div className="overflow-x-auto">
+-              <Table>
+-                <TableHeader>
+-                  <TableRow>
+-                    <TableHead>Planting</TableHead>
+-                    <TableHead style={{ textAlign: "center" }}>Batch Number</TableHead>
+-                    <TableHead
+-                    className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+-                    onClick={toggleSortOrder}>
+-                    
+-                      <div className="flex items-center gap-1" style={{ backgroundImage: "none", backgroundColor: "transparent" }}>
+-                        Harvest Date
+-                        {sortOrder === "desc" ?
+-                      <ArrowDown className="h-4 w-4" /> :
+-
+-                      <ArrowUp className="h-4 w-4" />
+-                      }
+-                      </div>
+-                    </TableHead>
+-                    <TableHead className="text-right" style={{ textAlign: "center" }}>Quantity</TableHead>
+-                    <TableHead style={{ textAlign: "center" }}>Status</TableHead>
+-                    <TableHead className="text-right">Actions</TableHead>
+-                  </TableRow>
+-                </TableHeader>
+-                <TableBody>
+-                  {filteredHarvests.length === 0 ?
+-                <TableRow>
+-                      <TableCell colSpan={6} className="text-center h-24">
+-                        No harvests found matching your filters.
+-                      </TableCell>
+-                    </TableRow> :
++              <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={dispatchLoading}>
++                {dispatchLoading ? "Saving…" : editingSlip ? "Update Slip" : "Create Dispatch Slip"}
++              </Button>
++            </div>
++          </form>
++        </DialogContent>
++      </Dialog>
+ 
+-                filteredHarvests.map((h) => {
+-                  const details = h.plantings;
+-                  return (
+-                    <TableRow key={h.id}>
+-                          <TableCell className="font-medium">
+-                            {details?.plant_types?.name || "N/A"}
+-                            <br />
+-                            <span className="text-xs text-gray-500">{details?.plant_types?.variety}</span>
++      {/* ── Tabs ───────────────────────────────────────────────────────────── */}
++      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "harvest-log" | "dispatch-slips")}>
++        <TabsList>
++          <TabsTrigger value="harvest-log" className="gap-2">
++            <Package className="w-4 h-4" />
++            Harvest Log
++          </TabsTrigger>
++          <TabsTrigger value="dispatch-slips" className="gap-2">
++            <ClipboardList className="w-4 h-4" />
++            Dispatch Slips
++            {pendingSlipsCount > 0 && (
++              <Badge variant="secondary" className="ml-1 text-xs">
++                {pendingSlipsCount}
++              </Badge>
++            )}
++          </TabsTrigger>
++        </TabsList>
++
++        {/* ── Harvest Log Tab ─────────────────────────────────────────────── */}
++        <TabsContent value="harvest-log">
++          <Card>
++            <CardHeader>
++              <CardTitle>Harvest Log</CardTitle>
++              <CardDescription>A complete history of all recorded harvests with dispatch slip printing.</CardDescription>
++              <div className="space-y-4 pt-4">
++                <Input
++                  placeholder="Search by plant name, variety, or batch number..."
++                  value={searchQuery}
++                  onChange={(e) => setSearchQuery(e.target.value)}
++                  className="max-w-md"
++                />
++                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
++                  <Select value={filters.planting_id} onValueChange={(value) => setFilters({ ...filters, planting_id: value })}>
++                    <SelectTrigger><SelectValue placeholder="All Plantings" /></SelectTrigger>
++                    <SelectContent>
++                      <SelectItem value="__all__">All Plantings</SelectItem>
++                      {plantings.filter((p) => p.status === "active" && p.batch_number && p.batch_number.trim() !== "").map((p) => (
++                        <SelectItem key={p.id} value={p.id}>{p.plant_types?.name} ({p.batch_number})</SelectItem>
++                      ))}
++                    </SelectContent>
++                  </Select>
++                  <Select value={filters.variety} onValueChange={(value) => setFilters({ ...filters, variety: value })}>
++                    <SelectTrigger><SelectValue placeholder="All Varieties" /></SelectTrigger>
++                    <SelectContent>
++                      <SelectItem value="__all__">All Varieties</SelectItem>
++                      {uniqueVarieties.map((variety) => (
++                        <SelectItem key={variety} value={variety}>{variety}</SelectItem>
++                      ))}
++                    </SelectContent>
++                  </Select>
++                  <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
++                    <SelectTrigger><SelectValue placeholder="All Status" /></SelectTrigger>
++                    <SelectContent>
++                      <SelectItem value="__all__">All Status</SelectItem>
++                      <SelectItem value="harvested">Harvested</SelectItem>
++                      <SelectItem value="sold">Sold</SelectItem>
++                      <SelectItem value="processed">Processed</SelectItem>
++                      <SelectItem value="waste">Waste</SelectItem>
++                    </SelectContent>
++                  </Select>
++                  <Input type="date" placeholder="From Date" value={filters.date_from} onChange={(e) => setFilters({ ...filters, date_from: e.target.value })} />
++                  <Input type="date" placeholder="To Date" value={filters.date_to} onChange={(e) => setFilters({ ...filters, date_to: e.target.value })} />
++                </div>
++                {(filters.planting_id !== "__all__" || filters.variety !== "__all__" || filters.status !== "__all__" || filters.date_from || filters.date_to || searchQuery) && (
++                  <Button variant="outline" size="sm" onClick={() => { setFilters({ planting_id: "__all__", variety: "__all__", date_from: "", date_to: "", status: "__all__" }); setSearchQuery(""); }}>
++                    Clear All Filters
++                  </Button>
++                )}
++              </div>
++            </CardHeader>
++            <CardContent>
++              {viewMode === "table" ? (
++                <div className="overflow-x-auto">
++                  <Table>
++                    <TableHeader>
++                      <TableRow>
++                        <TableHead>Planting</TableHead>
++                        <TableHead style={{ textAlign: "center" }}>Batch Number</TableHead>
++                        <TableHead className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800" onClick={toggleSortOrder}>
++                          <div className="flex items-center gap-1">
++                            Harvest Date
++                            {sortOrder === "desc" ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
++                          </div>
++                        </TableHead>
++                        <TableHead style={{ textAlign: "center" }}>Quantity</TableHead>
++                        <TableHead style={{ textAlign: "center" }}>Status</TableHead>
++                        <TableHead className="text-right">Actions</TableHead>
++                      </TableRow>
++                    </TableHeader>
++                    <TableBody>
++                      {filteredHarvests.length === 0 ? (
++                        <TableRow>
++                          <TableCell colSpan={6} className="text-center h-24">No harvests found matching your filters.</TableCell>
++                        </TableRow>
++                      ) : (
++                        filteredHarvests.map((h) => {
++                          const details = h.plantings;
++                          return (
++                            <TableRow key={h.id}>
++                              <TableCell className="font-medium">
++                                {details?.plant_types?.name || "N/A"}
++                                <br />
++                                <span className="text-xs text-gray-500">{details?.plant_types?.variety}</span>
++                              </TableCell>
++                              <TableCell className="font-mono text-sm" style={{ textAlign: "center" }}>{details?.batch_number || "N/A"}</TableCell>
++                              <TableCell style={{ textAlign: "center" }}>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
++                              <TableCell style={{ textAlign: "center" }}>{formatNumber(h.quantity_harvested)}</TableCell>
++                              <TableCell>
++                                <Badge variant={h.status === "sold" ? "default" : "secondary"} style={{ textAlign: "center" }}>{h.status}</Badge>
++                              </TableCell>
++                              <TableCell className="text-right">
++                                <div className="flex gap-1 justify-end">
++                                  <Button size="sm" variant="ghost" onClick={() => handlePrintDispatchSlip(h)} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Print Dispatch Slip">
++                                    <Printer className="w-4 h-4" />
++                                  </Button>
++                                  {permissions.canUpdate && (
++                                    <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(h)} title="Edit harvest">
++                                      <Edit className="w-4 h-4" />
++                                    </Button>
++                                  )}
++                                  {permissions.canDelete && (
++                                    <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteHarvest(h.id)} title="Delete harvest">
++                                      <Trash2 className="w-4 h-4" />
++                                    </Button>
++                                  )}
++                                  {!permissions.canUpdate && !permissions.canDelete && (
++                                    <span className="text-xs text-gray-400 italic ml-2">View only</span>
++                                  )}
++                                </div>
++                              </TableCell>
++                            </TableRow>
++                          );
++                        })
++                      )}
++                    </TableBody>
++                  </Table>
++                </div>
++              ) : (
++                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
++                  {filteredHarvests.length === 0 ? (
++                    <div className="col-span-full text-center py-12">
++                      <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
++                      <p className="text-gray-500">No harvests found matching your filters.</p>
++                    </div>
++                  ) : (
++                    filteredHarvests.map((h) => {
++                      const details = h.plantings;
++                      return (
++                        <Card key={h.id} className="border-2 hover:border-blue-500 transition-colors">
++                          <CardContent className="pt-6">
++                            <div className="space-y-3">
++                              <div>
++                                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{details?.plant_types?.name || "N/A"}</h3>
++                                <p className="text-sm text-gray-600 dark:text-gray-400">{details?.plant_types?.variety}</p>
++                              </div>
++                              <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3 text-center">
++                                <div className="text-3xl font-bold text-blue-600">{formatNumber(h.quantity_harvested)}</div>
++                                <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">seedlings harvested</div>
++                              </div>
++                              <div className="space-y-2 pt-2 border-t">
++                                <div className="flex justify-between text-sm">
++                                  <span className="text-gray-600 dark:text-gray-400">Batch:</span>
++                                  <span className="font-mono font-medium">{details?.batch_number || "N/A"}</span>
++                                </div>
++                                <div className="flex justify-between text-sm">
++                                  <span className="text-gray-600 dark:text-gray-400">Harvest Date:</span>
++                                  <span className="font-medium">{new Date(h.harvest_date).toLocaleDateString()}</span>
++                                </div>
++                                <div className="flex justify-between text-sm">
++                                  <span className="text-gray-600 dark:text-gray-400">Status:</span>
++                                  <Badge variant={h.status === "sold" ? "default" : "secondary"}>{h.status}</Badge>
++                                </div>
++                                {h.quality && (
++                                  <div className="flex justify-between text-sm">
++                                    <span className="text-gray-600 dark:text-gray-400">Quality:</span>
++                                    <span className="font-medium capitalize">{h.quality}</span>
++                                  </div>
++                                )}
++                                {h.notes && (
++                                  <div className="pt-2 border-t">
++                                    <p className="text-xs text-gray-500 italic">{h.notes}</p>
++                                  </div>
++                                )}
++                              </div>
++                              <div className="flex gap-2 pt-3 border-t">
++                                <Button size="sm" variant="outline" onClick={() => handlePrintDispatchSlip(h)} className="flex-1 gap-1">
++                                  <Printer className="w-4 h-4" />
++                                  Print
++                                </Button>
++                                {permissions.canUpdate && (
++                                  <Button size="sm" variant="outline" onClick={() => handleOpenDialog(h)} className="gap-1">
++                                    <Edit className="w-4 h-4" />
++                                  </Button>
++                                )}
++                                {permissions.canDelete && (
++                                  <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => handleDeleteHarvest(h.id)}>
++                                    <Trash2 className="w-4 h-4" />
++                                  </Button>
++                                )}
++                              </div>
++                            </div>
++                          </CardContent>
++                        </Card>
++                      );
++                    })
++                  )}
++                </div>
++              )}
++              {filteredHarvests.length > 0 && (
++                <div className="mt-4 flex justify-end">
++                  <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-6 py-3">
++                    <div className="flex items-center gap-3">
++                      <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Total Harvested:</span>
++                      <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatNumber(totalHarvested)}</span>
++                      <span className="text-sm text-blue-600 dark:text-blue-400">seedlings</span>
++                    </div>
++                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 text-right">
++                      {filteredHarvests.length} harvest record{filteredHarvests.length !== 1 ? "s" : ""}
++                    </p>
++                  </div>
++                </div>
++              )}
++            </CardContent>
++          </Card>
++        </TabsContent>
++
++        {/* ── Dispatch Slips Tab ──────────────────────────────────────────── */}
++        <TabsContent value="dispatch-slips">
++          <Card>
++            <CardHeader>
++              <CardTitle>Dispatch Slips</CardTitle>
++              <CardDescription>
++                Manage dispatch requests for the dispatch team. If stock is available a harvest is created automatically; otherwise the slip is saved as pending.
++              </CardDescription>
++            </CardHeader>
++            <CardContent>
++              <div className="overflow-x-auto">
++                <Table>
++                  <TableHeader>
++                    <TableRow>
++                      <TableHead>Customer</TableHead>
++                      <TableHead>Plant / Batch</TableHead>
++                      <TableHead className="text-center">Qty Requested</TableHead>
++                      <TableHead className="text-center">Dispatch Date</TableHead>
++                      <TableHead className="text-center">Status</TableHead>
++                      <TableHead className="text-right">Actions</TableHead>
++                    </TableRow>
++                  </TableHeader>
++                  <TableBody>
++                    {dispatchSlips.length === 0 ? (
++                      <TableRow>
++                        <TableCell colSpan={6} className="text-center h-24 text-gray-500">
++                          No dispatch slips yet. Click "New Dispatch Slip" to create one.
++                        </TableCell>
++                      </TableRow>
++                    ) : (
++                      dispatchSlips.map((slip) => (
++                        <TableRow key={slip.id}>
++                          <TableCell>
++                            <div className="font-medium">{slip.customer_name || <span className="text-gray-400 italic">No customer</span>}</div>
++                            {slip.destination && <div className="text-xs text-gray-500">{slip.destination}</div>}
+                           </TableCell>
+-                          <TableCell className="font-mono text-sm" style={{ textAlign: "center" }}>{details?.batch_number || "N/A"}</TableCell>
+-                          <TableCell style={{ textAlign: "center" }}>{new Date(h.harvest_date).toLocaleDateString()}</TableCell>
+-                          <TableCell className="text-right" style={{ textAlign: "center", textDecoration: "none" }}>{formatNumber(h.quantity_harvested)}</TableCell>
+                           <TableCell>
+-                            <Badge variant={h.status === 'sold' ? 'default' : 'secondary'} style={{ textAlign: "center" }}>{h.status}</Badge>
++                            <div className="font-medium">{slip.plantings?.plant_types?.name || "N/A"}</div>
++                            <div className="text-xs text-gray-500 font-mono">
++                              {slip.plantings?.batch_number || slip.plantings?.plant_types?.variety || "—"}
++                            </div>
++                          </TableCell>
++                          <TableCell className="text-center font-mono">{formatNumber(slip.quantity_requested)}</TableCell>
++                          <TableCell className="text-center">{new Date(slip.dispatch_date).toLocaleDateString()}</TableCell>
++                          <TableCell className="text-center">
++                            {slip.status === "pending" && (
++                              <Badge variant="outline" className="border-amber-500 text-amber-600 gap-1">
++                                <Clock className="w-3 h-3" /> Pending
++                              </Badge>
++                            )}
++                            {slip.status === "fulfilled" && (
++                              <Badge variant="outline" className="border-green-500 text-green-600 gap-1">
++                                <CheckCircle className="w-3 h-3" /> Fulfilled
++                              </Badge>
++                            )}
++                            {slip.status === "cancelled" && (
++                              <Badge variant="outline" className="text-gray-400 border-gray-300 gap-1">
++                                <XCircle className="w-3 h-3" /> Cancelled
++                              </Badge>
++                            )}
+                           </TableCell>
+                           <TableCell className="text-right">
+                             <div className="flex gap-1 justify-end">
+-                              <Button
+-                            size="sm"
+-                            variant="ghost"
+-                            onClick={() => handlePrintDispatchSlip(h)}
+-                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+-                            title="Print Dispatch Slip">
+-                            
+-                                <Printer className="w-4 h-4" />
+-                              </Button>
+-                              {permissions.canUpdate &&
+-                          <Button size="sm" variant="ghost" onClick={() => handleOpenDialog(h)} title="Edit harvest">
+-                                  <Edit className="w-4 h-4" />
++                              {slip.status === "pending" && (
++                                <>
++                                  <Button size="sm" variant="ghost" onClick={() => handleOpenDispatchDialog(slip)} title="Edit slip">
++                                    <Edit className="w-4 h-4" />
++                                  </Button>
++                                  <Button
++                                    size="sm"
++                                    variant="ghost"
++                                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
++                                    onClick={() => handleFulfillSlip(slip)}
++                                    title="Fulfill now"
++                                  >
++                                    <CheckCircle className="w-4 h-4" />
++                                  </Button>
++                                  <Button
++                                    size="sm"
++                                    variant="ghost"
++                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
++                                    onClick={() => handleCancelSlip(slip.id)}
++                                    title="Cancel slip"
++                                  >
++                                    <XCircle className="w-4 h-4" />
++                                  </Button>
++                                </>
++                              )}
++                              {slip.status === "fulfilled" && (
++                                <Button
++                                  size="sm"
++                                  variant="ghost"
++                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
++                                  onClick={() => handlePrintSlip(slip)}
++                                  title="Print dispatch slip"
++                                >
++                                  <Printer className="w-4 h-4" />
+                                 </Button>
+-                          }
+-                              {permissions.canDelete &&
+-                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => handleDeleteHarvest(h.id)} title="Delete harvest">
+-                                  <Trash2 className="w-4 h-4" />
+-                                </Button>
+-                          }
+-                              {!permissions.canUpdate && !permissions.canDelete &&
+-                          <span className="text-xs text-gray-400 italic ml-2">View only</span>
+-                          }
++                              )}
+                             </div>
+                           </TableCell>
+-                        </TableRow>);
+-
+-                })
+-                }
+-                </TableBody>
+-              </Table>
+-            </div>) : (
+-
+-          /* CARD VIEW */
+-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+-              {filteredHarvests.length === 0 ?
+-            <div className="col-span-full text-center py-12">
+-                  <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+-                  <p className="text-gray-500">No harvests found matching your filters.</p>
+-                </div> :
+-
+-            filteredHarvests.map((h) => {
+-              const details = h.plantings;
+-              return (
+-                <Card key={h.id} className="border-2 hover:border-blue-500 transition-colors">
+-                      <CardContent className="pt-6">
+-                        <div className="space-y-3">
+-                          {/* Plant Type & Variety */}
+-                          <div>
+-                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+-                              {details?.plant_types?.name || "N/A"}
+-                            </h3>
+-                            <p className="text-sm text-gray-600 dark:text-gray-400">
+-                              {details?.plant_types?.variety}
+-                            </p>
+-                          </div>
+-
+-                          {/* Quantity - Prominent */}
+-                          <div className="bg-blue-50 dark:bg-blue-950 rounded-lg p-3 text-center">
+-                            <div className="text-3xl font-bold text-blue-600">
+-                              {formatNumber(h.quantity_harvested)}
+-                            </div>
+-                            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+-                              seedlings harvested
+-                            </div>
+-                          </div>
+-
+-                          {/* Details Grid */}
+-                          <div className="space-y-2 pt-2 border-t">
+-                            <div className="flex justify-between text-sm">
+-                              <span className="text-gray-600 dark:text-gray-400">Batch:</span>
+-                              <span className="font-mono font-medium">{details?.batch_number || "N/A"}</span>
+-                            </div>
+-                            <div className="flex justify-between text-sm">
+-                              <span className="text-gray-600 dark:text-gray-400">Harvest Date:</span>
+-                              <span className="font-medium">
+-                                {new Date(h.harvest_date).toLocaleDateString()}
+-                              </span>
+-                            </div>
+-                            <div className="flex justify-between text-sm">
+-                              <span className="text-gray-600 dark:text-gray-400">Status:</span>
+-                              <Badge variant={h.status === 'sold' ? 'default' : 'secondary'}>
+-                                {h.status}
+-                              </Badge>
+-                            </div>
+-                            {h.quality &&
+-                        <div className="flex justify-between text-sm">
+-                                <span className="text-gray-600 dark:text-gray-400">Quality:</span>
+-                                <span className="font-medium capitalize">{h.quality}</span>
+-                              </div>
+-                        }
+-                            {h.notes &&
+-                        <div className="pt-2 border-t">
+-                                <p className="text-xs text-gray-500 italic">{h.notes}</p>
+-                              </div>
+-                        }
+-                          </div>
+-
+-                          {/* Action Buttons */}
+-                          <div className="flex gap-2 pt-3 border-t">
+-                            <Button
+-                          size="sm"
+-                          variant="outline"
+-                          onClick={() => handlePrintDispatchSlip(h)}
+-                          className="flex-1 gap-1">
+-                          
+-                              <Printer className="w-4 h-4" />
+-                              Print
+-                            </Button>
+-                            {permissions.canUpdate &&
+-                        <Button
+-                          size="sm"
+-                          variant="outline"
+-                          onClick={() => handleOpenDialog(h)}
+-                          className="gap-1">
+-                          
+-                                <Edit className="w-4 h-4" />
+-                              </Button>
+-                        }
+-                            {permissions.canDelete &&
+-                        <Button
+-                          size="sm"
+-                          variant="outline"
+-                          className="text-red-600 hover:bg-red-50"
+-                          onClick={() => handleDeleteHarvest(h.id)}>
+-                          
+-                                <Trash2 className="w-4 h-4" />
+-                              </Button>
+-                        }
+-                          </div>
+-                        </div>
+-                      </CardContent>
+-                    </Card>);
+-
+-            })
+-            }
+-            </div>)
+-          }
+-
+-          {/* Total Harvested Summary */}
+-          {filteredHarvests.length > 0 &&
+-          <div className="mt-4 flex justify-end">
+-              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-6 py-3">
+-                <div className="flex items-center gap-3">
+-                  <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+-                    Total Harvested:
+-                  </span>
+-                  <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+-                    {formatNumber(totalHarvested)}
+-                  </span>
+-                  <span className="text-sm text-blue-600 dark:text-blue-400">
+-                    seedlings
+-                  </span>
+-                </div>
+-                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 text-right">
+-                  {filteredHarvests.length} harvest record{filteredHarvests.length !== 1 ? "s" : ""}
+-                </p>
++                        </TableRow>
++                      ))
++                    )}
++                  </TableBody>
++                </Table>
+               </div>
+-            </div>
+-          }
+-        </CardContent>
+-      </Card>
+-    </div>);
+-
+-}
+\ No newline at end of file
++              {dispatchSlips.length > 0 && (
++                <div className="mt-4 flex gap-4 justify-end text-sm text-gray-500">
++                  <span>{dispatchSlips.filter((s) => s.status === "pending").length} pending</span>
++                  <span>{dispatchSlips.filter((s) => s.status === "fulfilled").length} fulfilled</span>
++                  <span>{dispatchSlips.filter((s) => s.status === "cancelled").length} cancelled</span>
++                </div>
++              )}
++            </CardContent>
++          </Card>
++        </TabsContent>
++      </Tabs>
++    </div>
++  );
++}
++
++// ── Shared print template ─────────────────────────────────────────────────────
++function buildPrintHtml(opts: {
++  id: string;
++  date: string;
++  variety: string;
++  batch: string;
++  quantity: number;
++  location: string;
++  notes?: string | null;
++  customerName?: string | null;
++  destination?: string | null;
++}) {
++  return `<!DOCTYPE html>
++<html>
++<head>
++  <meta charset="utf-8">
++  <title>Dispatch Slip</title>
++  <style>
++    @media print {
++      @page { size: 80mm auto; margin: 0; }
++      body { margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
++    }
++    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
++    body { font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.4; padding: 10mm; max-width: 80mm; margin: 0 auto; color: #000 !important; }
++    .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 12px; }
++    .header h1 { margin: 0; font-size: 18px; font-weight: bold; }
++    .header h2 { margin: 4px 0 0 0; font-size: 14px; font-weight: normal; }
++    .section { margin-bottom: 12px; }
++    .section-title { font-weight: bold; font-size: 14px; margin-bottom: 4px; text-transform: uppercase; }
++    .info-row { display: flex; justify-content: space-between; margin-bottom: 3px; }
++    .label { font-weight: bold; }
++    .value { text-align: right; font-weight: bold; }
++    .footer { border-top: 2px dashed #000; padding-top: 8px; margin-top: 12px; text-align: center; font-size: 10px; }
++    .notes { border: 1px solid #000; padding: 6px; margin-top: 8px; min-height: 40px; font-weight: bold; }
++    table { width: 100%; border-collapse: collapse; margin: 8px 0; }
++    th, td { text-align: left; padding: 8px 4px; border-bottom: 2px solid #000; font-size: 16px; color: #000; font-weight: bold; }
++    th { font-weight: 900; background: #f0f0f0 !important; font-size: 18px; }
++  </style>
++</head>
++<body>
++  <div class="header">
++    <h1>DISPATCH SLIP</h1>
++    <h2>Seedlings Nursery</h2>
++  </div>
++  <div class="section">
++    <div class="section-title">Order Details</div>
++    <div class="info-row"><span class="label">Dispatch ID:</span><span class="value">${opts.id.slice(0, 8)}</span></div>
++    <div class="info-row"><span class="label">Date:</span><span class="value">${new Date(opts.date).toLocaleDateString()}</span></div>
++    <div class="info-row"><span class="label">Time:</span><span class="value">${new Date().toLocaleTimeString()}</span></div>
++    ${opts.customerName ? `<div class="info-row"><span class="label">Customer:</span><span class="value">${opts.customerName}</span></div>` : ""}
++    ${opts.destination ? `<div class="info-row"><span class="label">Destination:</span><span class="value">${opts.destination}</span></div>` : ""}
++  </div>
++  <div class="section">
++    <div class="section-title">Product Information</div>
++    <table>
++      <tr><th>Variety</th><th>Batch</th><th>Qty</th><th>Location</th></tr>
++      <tr>
++        <td>${opts.variety}</td>
++        <td>${opts.batch}</td>
++        <td>${opts.quantity.toLocaleString()}</td>
++        <td>${opts.location}</td>
++      </tr>
++    </table>
++  </div>
++  ${opts.notes ? `<div class="section"><div class="notes">${opts.notes}</div></div>` : '<div class="section"><div class="notes"></div></div>'}
++  <div class="footer">
++    <p>Packed by: _________________</p>
++    <p>Checked by: _________________</p>
++    <p style="margin-top: 8px;">Thank you for your business!</p>
++  </div>
++</body>
++</html>`;
++}
+diff --git a/src/services/dispatchSlipService.ts b/src/services/dispatchSlipService.ts
+new file mode 100644
+index 0000000..c2f89df
+--- /dev/null
++++ b/src/services/dispatchSlipService.ts
+@@ -0,0 +1,161 @@
++import { supabase } from "@/integrations/supabase/client";
++import { harvestService } from "./harvestService";
++
++export type DispatchSlipStatus = "pending" | "fulfilled" | "cancelled";
++
++export type DispatchSlip = {
++  id: string;
++  planting_id: string;
++  quantity_requested: number;
++  dispatch_date: string;
++  customer_name: string | null;
++  destination: string | null;
++  notes: string | null;
++  status: DispatchSlipStatus;
++  harvest_id: string | null;
++  created_at: string | null;
++  updated_at: string | null;
++};
++
++export type DispatchSlipWithDetails = DispatchSlip & {
++  plantings: {
++    id: string;
++    batch_number: string | null;
++    remaining_quantity: number | null;
++    quantity: number;
++    plant_types: { name: string; variety: string | null } | null;
++    locations: { name: string } | null;
++  } | null;
++  harvests: { id: string; quantity_harvested: number } | null;
++};
++
++export type CreateDispatchSlipInput = {
++  planting_id: string;
++  quantity_requested: number;
++  dispatch_date: string;
++  customer_name?: string | null;
++  destination?: string | null;
++  notes?: string | null;
++};
++
++const SLIP_SELECT = `
++  *,
++  plantings (
++    id,
++    batch_number,
++    remaining_quantity,
++    quantity,
++    plant_types (name, variety),
++    locations (name)
++  ),
++  harvests (id, quantity_harvested)
++`;
++
++export const dispatchSlipService = {
++  async getDispatchSlips(): Promise<DispatchSlipWithDetails[]> {
++    const { data, error } = await supabase
++      .from("dispatch_slips")
++      .select(SLIP_SELECT)
++      .order("created_at", { ascending: false });
++    if (error) throw error;
++    return data as DispatchSlipWithDetails[];
++  },
++
++  async createDispatchSlip(
++    input: CreateDispatchSlipInput
++  ): Promise<{ slip: DispatchSlipWithDetails; autoFulfilled: boolean }> {
++    const validation = await harvestService.validateHarvest(
++      input.planting_id,
++      input.quantity_requested
++    );
++
++    if (validation.valid) {
++      const harvest = await harvestService.createHarvest({
++        planting_id: input.planting_id,
++        quantity_harvested: input.quantity_requested,
++        harvest_date: input.dispatch_date,
++        status: "harvested",
++        notes: input.notes || null,
++        quality: "good",
++        is_closed: false,
++      });
++
++      const { data, error } = await supabase
++        .from("dispatch_slips")
++        .insert([{ ...input, status: "fulfilled", harvest_id: harvest.id }])
++        .select(SLIP_SELECT)
++        .single();
++      if (error) throw error;
++      return { slip: data as DispatchSlipWithDetails, autoFulfilled: true };
++    } else {
++      const { data, error } = await supabase
++        .from("dispatch_slips")
++        .insert([{ ...input, status: "pending", harvest_id: null }])
++        .select(SLIP_SELECT)
++        .single();
++      if (error) throw error;
++      return { slip: data as DispatchSlipWithDetails, autoFulfilled: false };
++    }
++  },
++
++  async updateDispatchSlip(
++    id: string,
++    updates: Partial<CreateDispatchSlipInput>
++  ): Promise<DispatchSlipWithDetails> {
++    const { data, error } = await supabase
++      .from("dispatch_slips")
++      .update({ ...updates, updated_at: new Date().toISOString() })
++      .eq("id", id)
++      .select(SLIP_SELECT)
++      .single();
++    if (error) throw error;
++    return data as DispatchSlipWithDetails;
++  },
++
++  async fulfillDispatchSlip(id: string): Promise<DispatchSlipWithDetails> {
++    const { data: slip, error: slipError } = await supabase
++      .from("dispatch_slips")
++      .select("*")
++      .eq("id", id)
++      .single();
++    if (slipError || !slip) throw new Error("Dispatch slip not found");
++
++    const validation = await harvestService.validateHarvest(
++      slip.planting_id,
++      slip.quantity_requested
++    );
++    if (!validation.valid)
++      throw new Error(validation.error || "Insufficient stock to fulfill this dispatch slip");
++
++    const harvest = await harvestService.createHarvest({
++      planting_id: slip.planting_id,
++      quantity_harvested: slip.quantity_requested,
++      harvest_date: slip.dispatch_date,
++      status: "harvested",
++      notes: slip.notes || null,
++      quality: "good",
++      is_closed: false,
++    });
++
++    const { data, error } = await supabase
++      .from("dispatch_slips")
++      .update({
++        status: "fulfilled",
++        harvest_id: harvest.id,
++        updated_at: new Date().toISOString(),
++      })
++      .eq("id", id)
++      .select(SLIP_SELECT)
++      .single();
++    if (error) throw error;
++    return data as DispatchSlipWithDetails;
++  },
++
++  async cancelDispatchSlip(id: string): Promise<void> {
++    const { error } = await supabase
++      .from("dispatch_slips")
++      .update({ status: "cancelled", updated_at: new Date().toISOString() })
++      .eq("id", id);
++    if (error) throw error;
++  },
++};
+-- 
+2.43.0
+
+
+From b7f121154211973d3fda71a602fe28fa425e11b8 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 1 May 2026 10:02:02 +0000
+Subject: [PATCH 2/3] Add database migration script for dispatch_slips table
+
+Run with: npm run migrate
+
+https://claude.ai/code/session_01GMSykJV4BCD69eJ2zhqGSM
+---
+ package.json       |  3 ++-
+ scripts/migrate.js | 51 ++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 53 insertions(+), 1 deletion(-)
+ create mode 100644 scripts/migrate.js
+
+diff --git a/package.json b/package.json
+index cd735f8..7693360 100644
+--- a/package.json
++++ b/package.json
+@@ -6,7 +6,8 @@
+     "dev": "next dev --turbopack",
+     "build": "next build",
+     "start": "next start",
+-    "lint": "next lint"
++    "lint": "next lint",
++    "migrate": "node scripts/migrate.js"
+   },
+   "dependencies": {
+     "@dnd-kit/core": "^6.3.1",
+diff --git a/scripts/migrate.js b/scripts/migrate.js
+new file mode 100644
+index 0000000..280fd65
+--- /dev/null
++++ b/scripts/migrate.js
+@@ -0,0 +1,51 @@
++#!/usr/bin/env node
++
++const PROJECT_REF = "dixtwbcdprbhiwhtgdfb";
++const SERVICE_ROLE_KEY =
++  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRpeHR3YmNkcHJiaGl3aHRnZGZiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MjgzOTA4MSwiZXhwIjoyMDc4NDE1MDgxfQ.HjqhgPFb5Ar6v-B0TKcWo81GkGGgm7t5oMCTfEmtKiA";
++
++const SQL = `
++CREATE TABLE IF NOT EXISTS dispatch_slips (
++  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
++  planting_id UUID NOT NULL REFERENCES plantings(id) ON DELETE CASCADE,
++  quantity_requested INTEGER NOT NULL CHECK (quantity_requested > 0),
++  dispatch_date DATE NOT NULL,
++  customer_name TEXT,
++  destination TEXT,
++  notes TEXT,
++  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'fulfilled', 'cancelled')),
++  harvest_id UUID REFERENCES harvests(id),
++  created_at TIMESTAMPTZ DEFAULT NOW(),
++  updated_at TIMESTAMPTZ DEFAULT NOW()
++);
++`;
++
++async function migrate() {
++  console.log("Running dispatch_slips migration...\n");
++
++  const res = await fetch(
++    `https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`,
++    {
++      method: "POST",
++      headers: {
++        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
++        "Content-Type": "application/json",
++      },
++      body: JSON.stringify({ query: SQL }),
++    }
++  );
++
++  const data = await res.json();
++
++  if (res.ok) {
++    console.log("✓ Migration successful! dispatch_slips table is ready.");
++  } else {
++    console.error("✗ Migration failed:", JSON.stringify(data, null, 2));
++    process.exit(1);
++  }
++}
++
++migrate().catch((err) => {
++  console.error("Unexpected error:", err.message);
++  process.exit(1);
++});
+-- 
+2.43.0
+
+
+From 300d2392cba0314e7a1602192e69d412ffab0926 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 1 May 2026 10:11:37 +0000
+Subject: [PATCH 3/3] Add Supabase MCP server configuration
+
+https://claude.ai/code/session_01GMSykJV4BCD69eJ2zhqGSM
+---
+ .mcp.json | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+ create mode 100644 .mcp.json
+
+diff --git a/.mcp.json b/.mcp.json
+new file mode 100644
+index 0000000..fe99b65
+--- /dev/null
++++ b/.mcp.json
+@@ -0,0 +1,8 @@
++{
++  "mcpServers": {
++    "supabase": {
++      "type": "http",
++      "url": "https://mcp.supabase.com/mcp?project_ref=dixtwbcdprbhiwhtgdfb"
++    }
++  }
++}
+\ No newline at end of file
+-- 
+2.43.0
+
