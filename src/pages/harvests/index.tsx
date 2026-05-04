@@ -1047,6 +1047,15 @@ export default function HarvestsPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-1 justify-end">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                onClick={() => handlePrintSlip(slip)}
+                                title="Print dispatch slip"
+                              >
+                                <Printer className="w-4 h-4" />
+                              </Button>
                               {slip.status === "pending" && (
                                 <>
                                   <Button size="sm" variant="ghost" onClick={() => handleOpenDispatchDialog(slip)} title="Edit slip">
@@ -1071,17 +1080,6 @@ export default function HarvestsPage() {
                                     <XCircle className="w-4 h-4" />
                                   </Button>
                                 </>
-                              )}
-                              {slip.status === "fulfilled" && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                  onClick={() => handlePrintSlip(slip)}
-                                  title="Print dispatch slip"
-                                >
-                                  <Printer className="w-4 h-4" />
-                                </Button>
                               )}
                             </div>
                           </TableCell>
