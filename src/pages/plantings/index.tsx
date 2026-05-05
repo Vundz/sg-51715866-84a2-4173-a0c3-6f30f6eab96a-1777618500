@@ -99,14 +99,20 @@ export default function PlantingsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [plantingsData, plantTypesData, locationsData] = await Promise.all([
+        const [plantingsData, plantTypesData, locationsData, inventoryData] = await Promise.all([
           plantingService.getPlantingsWithDetails(),
           plantTypeService.getPlantTypes(),
-          locationService.getLocations()
+          locationService.getLocations(),
+          inventoryService.getAvailableInventoryItems()
         ]);
+        
+        console.log("Inventory items loaded:", inventoryData);
+        console.log("Inventory items count:", inventoryData?.length || 0);
+        
         setPlantings(plantingsData as PlantingWithDetails[]);
         setPlantTypes(plantTypesData);
         setLocations(locationsData);
+        setInventoryItems(inventoryData || []);
       } catch (error) {
         console.error("Error loading data:", error);
       } finally {
@@ -1037,111 +1043,58 @@ export default function PlantingsPage() {
               </div>
             </div>
 
-            {/* Inventory Tracking Section - Only show for new plantings */}
+            {/* Inventory Deduction Section - Only for new plantings */}
             {!editingPlanting && (
-              <div className="space-y-4 p-4 border rounded-lg bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950">
+              <div className="space-y-4 pt-4 border-t">
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="trackInventory"
-                    checked={trackInventory}
-                    onCheckedChange={(checked) => {
-                      setTrackInventory(checked as boolean);
-                      if (!checked) {
-                        setSelectedSeedId("");
-                        setSeedQuantityUsed("");
-                        setSeedStockWarning("");
-                      }
-                    }}
-                    disabled={isViewer}
+                    id="deduct_inventory"
+                    checked={formData.deduct_inventory}
+                    onCheckedChange={(checked) => setFormData({ 
+                      ...formData, 
+                      deduct_inventory: checked as boolean,
+                      inventory_item_id: checked ? formData.inventory_item_id : ""
+                    })}
                   />
-                  <Label
-                    htmlFor="trackInventory"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                  >
+                  <Label htmlFor="deduct_inventory" className="text-sm font-medium cursor-pointer">
                     Track seed usage from inventory
                   </Label>
                 </div>
 
-                {trackInventory && (
-                  <div className="space-y-4 pl-6 border-l-2 border-green-300 dark:border-green-700">
-                    {seedInventory.length === 0 ? (
-                      <div className="p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
-                        <p className="text-sm text-amber-800 dark:text-amber-200">
-                          ⚠️ No seeds found in inventory. Please add seed items in the{" "}
-                          <Link href="/inventory" className="underline font-medium">
-                            Inventory module
-                          </Link>{" "}
-                          first.
-                        </p>
-                      </div>
+                {formData.deduct_inventory && (
+                  <div className="space-y-3 pl-6 border-l-2 border-lime-300">
+                    {inventoryItems.length === 0 ? (
+                      <p className="text-sm text-amber-600">
+                        ⚠️ No inventory items available. Please add items in the Inventory module first.
+                      </p>
                     ) : (
                       <>
                         <div className="space-y-2">
-                          <Label htmlFor="seedSelect">
-                            Select Seed <span className="text-red-500">*</span>
-                          </Label>
+                          <Label htmlFor="inventory_item">Select Inventory Item</Label>
                           <Select
-                            value={selectedSeedId}
-                            onValueChange={(value) => {
-                              setSelectedSeedId(value);
-                              validateSeedQuantity(value, seedQuantityUsed);
-                            }}
-                            disabled={isViewer}
+                            value={formData.inventory_item_id}
+                            onValueChange={(value) => setFormData({ ...formData, inventory_item_id: value })}
                           >
-                            <SelectTrigger id="seedSelect">
-                              <SelectValue placeholder="Choose a seed from inventory" />
+                            <SelectTrigger id="inventory_item">
+                              <SelectValue placeholder="Choose item to deduct from" />
                             </SelectTrigger>
                             <SelectContent>
-                              {seedInventory.map((seed) => (
-                                <SelectItem 
-                                  key={seed.id} 
-                                  value={seed.id}
-                                  disabled={Number(seed.current_stock) <= 0}
-                                >
-                                  <div className="flex items-center justify-between gap-4">
-                                    <span>{seed.name}</span>
-                                    <span className={`text-xs ${Number(seed.current_stock) <= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                      ({formatNumber(Number(seed.current_stock))} {seed.unit_of_measure} available)
-                                    </span>
-                                  </div>
+                              {inventoryItems.map((item) => (
+                                <SelectItem key={item.id} value={item.id}>
+                                  {item.name} - Available: {formatNumber(Number(item.current_stock))} {item.unit_of_measure}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="seedQuantity">
-                            Quantity Used <span className="text-red-500">*</span>
-                          </Label>
-                          <div className="flex gap-2">
-                            <Input
-                              id="seedQuantity"
-                              type="number"
-                              step="0.01"
-                              min="0.01"
-                              placeholder="0.00"
-                              value={seedQuantityUsed}
-                              onChange={(e) => {
-                                setSeedQuantityUsed(e.target.value);
-                                validateSeedQuantity(selectedSeedId, e.target.value);
-                              }}
-                              disabled={isViewer || !selectedSeedId}
-                            />
-                            <span className="flex items-center text-sm text-gray-600 dark:text-gray-400 min-w-[60px]">
-                              {selectedSeedId && seedInventory.find(s => s.id === selectedSeedId)?.unit_of_measure}
-                            </span>
-                          </div>
-                          {seedStockWarning && (
-                            <p className={`text-xs ${
-                              seedStockWarning.startsWith('❌') ? 'text-red-600 dark:text-red-400' :
-                              seedStockWarning.startsWith('⚠️') ? 'text-amber-600 dark:text-amber-400' :
-                              'text-green-600 dark:text-green-400'
-                            }`}>
-                              {seedStockWarning}
+                        
+                        {formData.inventory_item_id && formData.quantity > 0 && (
+                          <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg text-sm">
+                            <p className="text-blue-800 dark:text-blue-200">
+                              <strong>{formData.quantity}</strong> units will be deducted from selected inventory
                             </p>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
