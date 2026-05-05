@@ -87,12 +87,19 @@ export default function PlantingsPage() {
   const [invalidRows, setInvalidRows] = useState<any[]>([]);
   
   // Inventory tracking states
-  const [seedInventory, setSeedInventory] = useState<InventoryItemWithLowStock[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItemWithLowStock[]>([]);
   const [trackInventory, setTrackInventory] = useState(false);
   const [selectedSeedId, setSelectedSeedId] = useState<string>("");
   const [seedQuantityUsed, setSeedQuantityUsed] = useState<string>("");
   const [seedStockWarning, setSeedStockWarning] = useState<string>("");
 
+  // Deduct Inventory Dialog state
+  const [formData, setFormData] = useState({
+    deduct_inventory: false,
+    inventory_item_id: "",
+    quantity: 0,
+  } as const);
+  
   // Add view mode state here
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   
@@ -132,14 +139,18 @@ export default function PlantingsPage() {
         plantTypeService.getPlantTypes(),
         locationService.getLocations(),
         reservationService.getReservations(),
-        inventoryService.getInventoryItemsByCategory("Seed")
+        inventoryService.getAvailableInventoryItems()
       ]);
+      
+      console.log("Loaded plantings data:", plantingsData);
+      console.log("Loaded plant types:", plantTypesData);
+      console.log("Loaded locations:", locationsData);
       
       setPlantings(plantingsData as PlantingWithDetails[]);
       setPlantTypes(plantTypesData);
       setLocations(locationsData);
       setReservations(reservationsData as Reservation[]);
-      setSeedInventory(inventoryData);
+      setInventoryItems(inventoryData || []);
     } catch (error) {
       console.error("Error loading data:", error);
       toast({ title: "Error", description: "Failed to load data. Please try refreshing the page.", variant: "destructive" });
@@ -165,16 +176,16 @@ export default function PlantingsPage() {
 
   // Validate seed quantity and show warnings
   const validateSeedQuantity = (seedId: string, quantityUsed: string) => {
-    const seed = seedInventory.find(s => s.id === seedId);
+    const item = inventoryItems.find(s => s.id === seedId);
     const qty = parseFloat(quantityUsed);
 
-    if (!seed || isNaN(qty) || qty <= 0) {
-      setSeedStockWarning("Please enter a valid seed quantity");
+    if (!item || isNaN(qty) || qty <= 0) {
+      setSeedStockWarning("Please enter a valid quantity");
       return;
     }
 
-    if (qty > Number(seed.current_stock)) {
-      setSeedStockWarning(`Only ${formatNumber(Number(seed.current_stock))} ${seed.unit_of_measure} available`);
+    if (qty > Number(item.current_stock)) {
+      setSeedStockWarning(`Only ${formatNumber(Number(item.current_stock))} ${item.unit_of_measure} available`);
     } else {
       setSeedStockWarning("");
     }
@@ -366,22 +377,22 @@ export default function PlantingsPage() {
     // Validate inventory deduction if enabled
     if (trackInventory && !editingPlanting) {
       if (!selectedSeedId) {
-        toast({ title: "Error", description: "Please select a seed from inventory", variant: "destructive" });
+        toast({ title: "Error", description: "Please select an item from inventory", variant: "destructive" });
         return;
       }
 
-      const seed = seedInventory.find(s => s.id === selectedSeedId);
+      const item = inventoryItems.find(s => s.id === selectedSeedId);
       const qtyUsed = parseFloat(seedQuantityUsed);
 
-      if (!seed || isNaN(qtyUsed) || qtyUsed <= 0) {
-        toast({ title: "Error", description: "Please enter a valid seed quantity", variant: "destructive" });
+      if (!item || isNaN(qtyUsed) || qtyUsed <= 0) {
+        toast({ title: "Error", description: "Please enter a valid quantity to deduct", variant: "destructive" });
         return;
       }
 
-      if (qtyUsed > Number(seed.current_stock)) {
+      if (qtyUsed > Number(item.current_stock)) {
         toast({ 
           title: "Insufficient Stock", 
-          description: `Only ${formatNumber(Number(seed.current_stock))} ${seed.unit_of_measure} available`, 
+          description: `Only ${formatNumber(Number(item.current_stock))} ${item.unit_of_measure} available`, 
           variant: "destructive" 
         });
         return;
@@ -426,22 +437,15 @@ export default function PlantingsPage() {
         
         // Create inventory transaction if tracking is enabled
         if (trackInventory && selectedSeedId && seedQuantityUsed) {
-          const seed = seedInventory.find(s => s.id === selectedSeedId);
+          const item = inventoryItems.find(s => s.id === selectedSeedId);
           const qtyUsed = parseFloat(seedQuantityUsed);
           
-          if (seed && !isNaN(qtyUsed) && qtyUsed > 0) {
-            const location = locations.find(l => l.id === plantingData.location_id);
-            const notes = `Used for planting: ${selectedPlantTypeName} (${selectedVariety}) at ${location?.name || 'Unknown Location'}`;
-            
-            await inventoryService.createStockTransaction({
-              item_id: selectedSeedId,
-              transaction_type: "usage",
-              quantity: -Math.abs(qtyUsed), // Negative for usage
-              reference_id: createdPlanting.id,
-              reference_type: "planting",
-              notes: notes,
-              transaction_date: plantingData.date_planted,
-            });
+          if (item && !isNaN(qtyUsed) && qtyUsed > 0) {
+            await plantingService.deductInventory(
+              createdPlanting.id,
+              selectedSeedId,
+              qtyUsed
+            );
           }
         }
         
@@ -1043,64 +1047,73 @@ export default function PlantingsPage() {
               </div>
             </div>
 
-            {/* Inventory Deduction Section - Only for new plantings */}
-            {!editingPlanting && (
-              <div className="space-y-4 pt-4 border-t">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="deduct_inventory"
-                    checked={formData.deduct_inventory}
-                    onCheckedChange={(checked) => setFormData({ 
-                      ...formData, 
-                      deduct_inventory: checked as boolean,
-                      inventory_item_id: checked ? formData.inventory_item_id : ""
-                    })}
-                  />
-                  <Label htmlFor="deduct_inventory" className="text-sm font-medium cursor-pointer">
-                    Track seed usage from inventory
-                  </Label>
-                </div>
+                {/* Inventory Deduction Section - Only for new plantings */}
+                {!editingPlanting && (
+                  <div className="space-y-4 pt-4 border-t">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="deduct_inventory"
+                        checked={trackInventory}
+                        onCheckedChange={(checked) => setTrackInventory(checked as boolean)}
+                      />
+                      <Label htmlFor="deduct_inventory" className="text-sm font-medium cursor-pointer">
+                        Track seed usage from inventory
+                      </Label>
+                    </div>
 
-                {formData.deduct_inventory && (
-                  <div className="space-y-3 pl-6 border-l-2 border-lime-300">
-                    {inventoryItems.length === 0 ? (
-                      <p className="text-sm text-amber-600">
-                        ⚠️ No inventory items available. Please add items in the Inventory module first.
-                      </p>
-                    ) : (
-                      <>
-                        <div className="space-y-2">
-                          <Label htmlFor="inventory_item">Select Inventory Item</Label>
-                          <Select
-                            value={formData.inventory_item_id}
-                            onValueChange={(value) => setFormData({ ...formData, inventory_item_id: value })}
-                          >
-                            <SelectTrigger id="inventory_item">
-                              <SelectValue placeholder="Choose item to deduct from" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {inventoryItems.map((item) => (
-                                <SelectItem key={item.id} value={item.id}>
-                                  {item.name} - Available: {formatNumber(Number(item.current_stock))} {item.unit_of_measure}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        {formData.inventory_item_id && formData.quantity > 0 && (
-                          <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg text-sm">
-                            <p className="text-blue-800 dark:text-blue-200">
-                              <strong>{formData.quantity}</strong> units will be deducted from selected inventory
-                            </p>
-                          </div>
+                    {trackInventory && (
+                      <div className="space-y-3 pl-6 border-l-2 border-lime-300">
+                        {inventoryItems.length === 0 ? (
+                          <p className="text-sm text-amber-600">
+                            ⚠️ No items found in inventory. Please add items in the Inventory module first.
+                          </p>
+                        ) : (
+                          <>
+                            <div className="space-y-2">
+                              <Label htmlFor="inventory_item">Select Inventory Item</Label>
+                              <Select
+                                value={selectedSeedId}
+                                onValueChange={setSelectedSeedId}
+                              >
+                                <SelectTrigger id="inventory_item">
+                                  <SelectValue placeholder="Choose item to deduct from" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {inventoryItems.map((item) => (
+                                    <SelectItem key={item.id} value={item.id}>
+                                      {item.name} - Available: {formatNumber(Number(item.current_stock))} {item.unit_of_measure}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label htmlFor="seedQuantityUsed">Quantity to Deduct</Label>
+                              <Input 
+                                id="seedQuantityUsed" 
+                                type="number" 
+                                step="0.01"
+                                min="0.01"
+                                value={seedQuantityUsed} 
+                                onChange={(e) => setSeedQuantityUsed(e.target.value)} 
+                                placeholder="E.g. 50"
+                              />
+                            </div>
+                            
+                            {selectedSeedId && seedQuantityUsed && (
+                              <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg text-sm">
+                                <p className="text-blue-800 dark:text-blue-200">
+                                  <strong>{seedQuantityUsed}</strong> units will be deducted from selected inventory
+                                </p>
+                              </div>
+                            )}
+                          </>
                         )}
-                      </>
+                      </div>
                     )}
                   </div>
                 )}
-              </div>
-            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -1647,11 +1660,22 @@ export default function PlantingsPage() {
                             <TableCell>{new Date(p.date_planted).toLocaleDateString()}</TableCell>
                             <TableCell>{getExpectedHarvestDate(p)}</TableCell>
                             <TableCell>
-                              <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
-                                className={p.status === 'active' ? 'bg-green-100 text-green-800' : p.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
-                              >
-                                {p.status}
-                              </Badge>
+                              <div className="flex flex-col gap-1 items-start">
+                                <Badge variant={p.status === 'active' ? 'default' : p.status === 'closed' ? 'destructive' : 'secondary'}
+                                  className={p.status === 'active' ? 'bg-green-100 text-green-800' : p.status === 'closed' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}
+                                >
+                                  {p.status}
+                                </Badge>
+                                {p.inventory_deducted ? (
+                                  <Badge variant="outline" className="text-green-600 border-green-600 text-[10px] h-5 px-1">
+                                    ✓ Inv. Deducted
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-amber-600 border-amber-600 text-[10px] h-5 px-1">
+                                    ⚠️ No Inv.
+                                  </Badge>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex gap-1 justify-end">

@@ -212,6 +212,24 @@ export const inventoryService = {
   },
 
   /**
+   * Get available inventory items (stock > 0)
+   */
+  async getAvailableInventoryItems(): Promise<InventoryItemWithLowStock[]> {
+    const { data, error } = await supabase
+      .from("inventory_items")
+      .select("*")
+      .gt("current_stock", 0)
+      .order("name", { ascending: true });
+
+    if (error) throw error;
+
+    return (data || []).map(item => ({
+      ...item,
+      isLowStock: item.current_stock <= (item.minimum_stock || 0)
+    }));
+  },
+
+  /**
    * Calculate total inventory value
    */
   async getTotalInventoryValue(): Promise<number> {
