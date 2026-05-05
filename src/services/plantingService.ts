@@ -111,7 +111,7 @@ export const plantingService = {
       .update({ 
         inventory_deducted: true,
         inventory_item_id: inventoryItemId
-      })
+      } as any)
       .eq("id", plantingId);
 
     if (updatePlantingError) throw updatePlantingError;
