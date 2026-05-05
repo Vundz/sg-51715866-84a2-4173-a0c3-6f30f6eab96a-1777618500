@@ -75,12 +75,48 @@ export const plantingService = {
   },
 
   async deletePlanting(id: string) {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("plantings")
       .delete()
       .eq("id", id);
+
     if (error) throw error;
-    return data;
+  },
+
+  async deductInventory(plantingId: string, inventoryItemId: string, quantity: number) {
+    // 1. Get current inventory quantity
+    const { data: inventoryItem, error: fetchError } = await supabase
+      .from("inventory_items")
+      .select("current_stock")
+      .eq("id", inventoryItemId)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (!inventoryItem) throw new Error("Inventory item not found");
+    if (inventoryItem.current_stock < quantity) {
+      throw new Error(`Insufficient inventory. Available: ${inventoryItem.current_stock}, Requested: ${quantity}`);
+    }
+
+    // 2. Deduct from inventory
+    const { error: updateInventoryError } = await supabase
+      .from("inventory_items")
+      .update({ current_stock: inventoryItem.current_stock - quantity })
+      .eq("id", inventoryItemId);
+
+    if (updateInventoryError) throw updateInventoryError;
+
+    // 3. Update planting record
+    const { error: updatePlantingError } = await supabase
+      .from("plantings")
+      .update({ 
+        inventory_deducted: true,
+        inventory_item_id: inventoryItemId
+      })
+      .eq("id", plantingId);
+
+    if (updatePlantingError) throw updatePlantingError;
+
+    return { success: true };
   },
   
   async getPlantingsByLocation(locationId: string) {

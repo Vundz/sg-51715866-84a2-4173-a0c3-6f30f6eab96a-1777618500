@@ -26,6 +26,8 @@ type PlantingWithDetails = Database["public"]["Tables"]["plantings"]["Row"] & {
   plant_types: Database["public"]["Tables"]["plant_types"]["Row"] | null;
   locations: Database["public"]["Tables"]["locations"]["Row"] | null;
   treatments?: Database["public"]["Tables"]["planting_treatments"]["Row"][];
+  inventory_deducted?: boolean;
+  inventory_item_id?: string | null;
 };
 type PlantType = Database["public"]["Tables"]["plant_types"]["Row"];
 type Location = Database["public"]["Tables"]["locations"]["Row"];
