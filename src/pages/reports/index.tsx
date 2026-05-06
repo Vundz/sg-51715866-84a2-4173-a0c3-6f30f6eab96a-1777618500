@@ -8,6 +8,7 @@ import { harvestService } from "@/services/harvestService";
 import { locationService } from "@/services/locationService";
 import { treatmentService } from "@/services/treatmentService";
 import { plantTypeService } from "@/services/plantTypeService";
+import { useRouter } from "next/navigation";
 
 export default function ReportsPage() {
     const [stats, setStats] = useState({
@@ -19,6 +20,7 @@ export default function ReportsPage() {
         activeLocations: 0,
     });
     const [loading, setLoading] = useState(true);
+    const router = useRouter();
 
     useEffect(() => {
         const fetchReportStats = async () => {
@@ -222,6 +224,20 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
         </Link>
+
+        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push("/reports/planting-age")}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-green-600" />
+              Planting Age & Location
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              View planting ages calculated from plant date with location details. Track maturity and plan harvests.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
