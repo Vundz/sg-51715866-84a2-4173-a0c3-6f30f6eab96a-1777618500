@@ -18,7 +18,7 @@ type PlantingData = Awaited<ReturnType<typeof plantingService.getPlantings>>[0];
 type PlantTypeData = Database["public"]["Tables"]["plant_types"]["Row"];
 type LocationData = Database["public"]["Tables"]["locations"]["Row"];
 
-type SortField = "date_planted" | "plant_type" | "variety" | "location" | "quantity" | "remaining_quantity" | "status";
+type SortField = "batch_number" | "date_planted" | "plant_type" | "variety" | "location" | "quantity" | "remaining_quantity" | "status";
 type SortDirection = "asc" | "desc";
 
 const PlantingsSummaryReportPage: React.FC = () => {
@@ -193,11 +193,12 @@ const PlantingsSummaryReportPage: React.FC = () => {
   const exportToCSV = () => {
     const headers = [
       "Batch Number",
+      "Date Planted",
       "Plant Type",
       "Variety",
       "Location",
-      "Date Planted",
-      "Quantity",
+      "Qty Planted",
+      "Remaining",
       "Expected Harvest",
       "Status",
       "Notes"
@@ -205,12 +206,13 @@ const PlantingsSummaryReportPage: React.FC = () => {
 
     const csvData = sortedAndFilteredPlantings.map(p => [
       p.batch_number || "N/A",
-      p.plant_types?.name || "N/A",
-      p.variety || "",
-      p.locations?.name || "N/A",
       p.date_planted ? new Date(p.date_planted).toLocaleDateString() : "N/A",
+      getPlantTypeDetails(p.plant_type_id)?.name || "N/A",
+      p.variety || "",
+      getLocationName(p.location_id),
       p.quantity,
-      p.expected_harvest_date ? new Date(p.expected_harvest_date).toLocaleDateString() : "N/A",
+      p.remaining_quantity ?? p.quantity,
+      getExpectedHarvestDate(p),
       p.status,
       p.notes || ""
     ]);
@@ -439,18 +441,9 @@ const PlantingsSummaryReportPage: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead 
-                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                    onClick={() => handleSort("batch_number")}
-                  >
-                    Batch Number {sortField === "batch_number" && (sortDirection === "asc" ? "↑" : "↓")}
-                  </TableHead>
-                  <TableHead 
-                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                    onClick={() => handleSort("plant_type")}
-                  >
-                    Plant Type {sortField === "plant_type" && (sortDirection === "asc" ? "↑" : "↓")}
-                  </TableHead>
+                  <SortableHeader field="batch_number">Batch Number</SortableHeader>
+                  <SortableHeader field="date_planted">Date Planted</SortableHeader>
+                  <SortableHeader field="plant_type">Plant Type</SortableHeader>
                   <SortableHeader field="variety">Variety</SortableHeader>
                   <SortableHeader field="location">Location</SortableHeader>
                   <SortableHeader field="quantity">Qty Planted</SortableHeader>
@@ -464,7 +457,7 @@ const PlantingsSummaryReportPage: React.FC = () => {
               <TableBody>
                 {sortedAndFilteredPlantings.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-12 text-gray-500">
+                    <TableCell colSpan={11} className="text-center py-12 text-gray-500">
                       No plantings found matching the selected filters
                     </TableCell>
                   </TableRow>
@@ -477,6 +470,9 @@ const PlantingsSummaryReportPage: React.FC = () => {
                     return (
                       <TableRow key={planting.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                         <TableCell className="font-medium">
+                          {planting.batch_number || "N/A"}
+                        </TableCell>
+                        <TableCell>
                           {new Date(planting.date_planted).toLocaleDateString()}
                         </TableCell>
                         <TableCell>
