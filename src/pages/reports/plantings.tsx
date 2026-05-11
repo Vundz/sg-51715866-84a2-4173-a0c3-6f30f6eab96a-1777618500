@@ -70,22 +70,42 @@ const PlantingsSummaryReportPage: React.FC = () => {
     return selectedType ? [selectedType.variety] : [];
   }, [plantTypeFilter, plantTypes]);
 
-  const filteredPlantings = useMemo(() => {
-    const filtered = plantings.filter(p => {
-      const pDate = new Date(p.date_planted);
-      const matchesDate = (!startDate || pDate >= new Date(startDate)) && (!endDate || pDate <= new Date(endDate));
-      const matchesPlantType = plantTypeFilter === "all" || p.plant_type_id === plantTypeFilter;
-      const matchesVariety = varietyFilter === "all" || p.variety === varietyFilter;
-      const matchesStatus = statusFilter === "all" || p.status === statusFilter;
-      const matchesLocation = locationFilter === "all" || p.location_id === locationFilter;
-      return matchesDate && matchesPlantType && matchesVariety && matchesStatus && matchesLocation;
-    });
+  const sortedAndFilteredPlantings = useMemo(() => {
+    let filtered = [...plantings];
 
+    // Apply filters
+    if (locationFilter !== "all") {
+      filtered = filtered.filter(p => p.location_id === locationFilter);
+    }
+
+    if (plantTypeFilter !== "all") {
+      filtered = filtered.filter(p => p.plant_type_id === plantTypeFilter);
+    }
+
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(p => p.status === statusFilter);
+    }
+
+    if (startDate) {
+      const startDateObj = new Date(startDate);
+      filtered = filtered.filter(p => new Date(p.date_planted) >= startDateObj);
+    }
+
+    if (endDate) {
+      const endDateObj = new Date(endDate);
+      filtered = filtered.filter(p => new Date(p.date_planted) <= endDateObj);
+    }
+
+    // Apply sorting
     filtered.sort((a, b) => {
       let aVal: any;
       let bVal: any;
 
       switch (sortField) {
+        case "batch_number":
+          aVal = a.batch_number || "";
+          bVal = b.batch_number || "";
+          break;
         case "date_planted":
           aVal = new Date(a.date_planted).getTime();
           bVal = new Date(b.date_planted).getTime();
@@ -124,17 +144,17 @@ const PlantingsSummaryReportPage: React.FC = () => {
     });
 
     return filtered;
-  }, [plantings, startDate, endDate, plantTypeFilter, varietyFilter, statusFilter, locationFilter, sortField, sortDirection]);
+  }, [plantings, locationFilter, plantTypeFilter, statusFilter, startDate, endDate, sortField, sortDirection]);
 
   const statistics = useMemo(() => {
-    const totalQuantity = filteredPlantings.reduce((sum, p) => sum + p.quantity, 0);
-    const totalRemaining = filteredPlantings.reduce((sum, p) => sum + (p.remaining_quantity ?? p.quantity), 0);
-    const activeCount = filteredPlantings.filter(p => p.status === "active").length;
-    const harvestedCount = filteredPlantings.filter(p => p.status === "harvested").length;
-    const closedCount = filteredPlantings.filter(p => p.status === "closed").length;
+    const totalQuantity = sortedAndFilteredPlantings.reduce((sum, p) => sum + p.quantity, 0);
+    const totalRemaining = sortedAndFilteredPlantings.reduce((sum, p) => sum + (p.remaining_quantity ?? p.quantity), 0);
+    const activeCount = sortedAndFilteredPlantings.filter(p => p.status === "active").length;
+    const harvestedCount = sortedAndFilteredPlantings.filter(p => p.status === "harvested").length;
+    const closedCount = sortedAndFilteredPlantings.filter(p => p.status === "closed").length;
     
     return {
-      totalCount: filteredPlantings.length,
+      totalCount: sortedAndFilteredPlantings.length,
       totalQuantity,
       totalRemaining,
       totalHarvested: totalQuantity - totalRemaining,
@@ -142,7 +162,7 @@ const PlantingsSummaryReportPage: React.FC = () => {
       harvestedCount,
       closedCount
     };
-  }, [filteredPlantings]);
+  }, [sortedAndFilteredPlantings]);
 
   const getExpectedHarvestDate = (planting: PlantingData) => {
     const plantType = getPlantTypeDetails(planting.plant_type_id);
@@ -171,20 +191,31 @@ const PlantingsSummaryReportPage: React.FC = () => {
   );
 
   const exportToCSV = () => {
-    const headers = ["Date Planted", "Plant Type", "Variety", "Location", "Quantity Planted", "Remaining", "Harvested", "Status", "Expected Harvest"];
-    const rows = filteredPlantings.map(p => [
-      new Date(p.date_planted).toLocaleDateString(),
-      getPlantTypeDetails(p.plant_type_id)?.name || "",
-      p.variety,
-      getLocationName(p.location_id),
+    const headers = [
+      "Batch Number",
+      "Plant Type",
+      "Variety",
+      "Location",
+      "Date Planted",
+      "Quantity",
+      "Expected Harvest",
+      "Status",
+      "Notes"
+    ];
+
+    const csvData = sortedAndFilteredPlantings.map(p => [
+      p.batch_number || "N/A",
+      p.plant_types?.name || "N/A",
+      p.variety || "",
+      p.locations?.name || "N/A",
+      p.date_planted ? new Date(p.date_planted).toLocaleDateString() : "N/A",
       p.quantity,
-      p.remaining_quantity ?? p.quantity,
-      p.quantity - (p.remaining_quantity ?? p.quantity),
+      p.expected_harvest_date ? new Date(p.expected_harvest_date).toLocaleDateString() : "N/A",
       p.status,
-      getExpectedHarvestDate(p)
+      p.notes || ""
     ]);
     
-    const csvContent = [headers, ...rows].map(row => row.join(",")).join("\n");
+    const csvContent = [headers, ...csvData].map(row => row.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -378,7 +409,7 @@ const PlantingsSummaryReportPage: React.FC = () => {
           </div>
           <div className="flex items-center justify-between mt-6 pt-4 border-t">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Showing <span className="font-semibold">{filteredPlantings.length}</span> planting{filteredPlantings.length !== 1 ? "s" : ""}
+              Showing <span className="font-semibold">{sortedAndFilteredPlantings.length}</span> planting{sortedAndFilteredPlantings.length !== 1 ? "s" : ""}
             </p>
             <Button 
               variant="outline" 
@@ -408,8 +439,18 @@ const PlantingsSummaryReportPage: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <SortableHeader field="date_planted">Date Planted</SortableHeader>
-                  <SortableHeader field="plant_type">Plant Type</SortableHeader>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                    onClick={() => handleSort("batch_number")}
+                  >
+                    Batch Number {sortField === "batch_number" && (sortDirection === "asc" ? "↑" : "↓")}
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                    onClick={() => handleSort("plant_type")}
+                  >
+                    Plant Type {sortField === "plant_type" && (sortDirection === "asc" ? "↑" : "↓")}
+                  </TableHead>
                   <SortableHeader field="variety">Variety</SortableHeader>
                   <SortableHeader field="location">Location</SortableHeader>
                   <SortableHeader field="quantity">Qty Planted</SortableHeader>
@@ -421,14 +462,14 @@ const PlantingsSummaryReportPage: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPlantings.length === 0 ? (
+                {sortedAndFilteredPlantings.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={10} className="text-center py-12 text-gray-500">
                       No plantings found matching the selected filters
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredPlantings.map(planting => {
+                  sortedAndFilteredPlantings.map(planting => {
                     const remaining = planting.remaining_quantity ?? planting.quantity;
                     const harvested = planting.quantity - remaining;
                     const harvestPercent = planting.quantity > 0 ? Math.round((harvested / planting.quantity) * 100) : 0;
