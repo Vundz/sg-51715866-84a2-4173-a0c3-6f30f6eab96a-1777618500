@@ -431,6 +431,8 @@ export default function PlantingsPage() {
         notes: formData.get("notes") as string,
         variety: selectedVariety,
         selling_price: parseFloat(formData.get("selling_price") as string) || 0,
+        inventory_item_id: trackInventory && selectedSeedId ? selectedSeedId : null,
+        inventory_deducted: false,
       };
       
       const finalPlantingData = {
@@ -772,6 +774,8 @@ export default function PlantingsPage() {
             notes: row.notes,
             variety: row.plantType.variety,
             selling_price: row.plantType.default_selling_price || 0,
+            inventory_item_id: null,
+            inventory_deducted: false,
           };
 
           await plantingService.addPlanting(plantingData);
