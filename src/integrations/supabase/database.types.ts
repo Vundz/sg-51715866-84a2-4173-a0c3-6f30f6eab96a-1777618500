@@ -743,6 +743,8 @@ export type Database = {
           date_planted: string
           expected_harvest_date: string
           id: string
+          inventory_deducted: boolean | null
+          inventory_item_id: string | null
           location_id: string
           notes: string | null
           plant_type_id: string
@@ -759,6 +761,8 @@ export type Database = {
           date_planted: string
           expected_harvest_date: string
           id?: string
+          inventory_deducted?: boolean | null
+          inventory_item_id?: string | null
           location_id: string
           notes?: string | null
           plant_type_id: string
@@ -775,6 +779,8 @@ export type Database = {
           date_planted?: string
           expected_harvest_date?: string
           id?: string
+          inventory_deducted?: boolean | null
+          inventory_item_id?: string | null
           location_id?: string
           notes?: string | null
           plant_type_id?: string
@@ -786,6 +792,13 @@ export type Database = {
           variety?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "plantings_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "plantings_location_id_fkey"
             columns: ["location_id"]

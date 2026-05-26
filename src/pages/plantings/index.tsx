@@ -62,6 +62,9 @@ export default function PlantingsPage() {
   const [selectedPlantTypeName, setSelectedPlantTypeName] = useState<string>("");
   const [selectedVariety, setSelectedVariety] = useState<string>("");
   
+  // Form submission loading state
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   // Quick-add dialogs
   const [isAddPlantTypeDialogOpen, setIsAddPlantTypeDialogOpen] = useState(false);
   const [isAddVarietyDialogOpen, setIsAddVarietyDialogOpen] = useState(false);
@@ -368,67 +371,73 @@ export default function PlantingsPage() {
 
   const handleSavePlanting = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
     
-    const plantTypeId = plantTypes.find(pt => pt.name === selectedPlantTypeName && pt.variety === selectedVariety)?.id;
-    if (!plantTypeId) {
-        toast({ title: "Error", description: "Selected plant type and variety combination not found.", variant: "destructive" });
-        return;
-    }
-
-    // Validate inventory deduction if enabled
-    if (trackInventory && !editingPlanting) {
-      if (!selectedSeedId) {
-        toast({ title: "Error", description: "Please select an item from inventory", variant: "destructive" });
-        return;
-      }
-
-      const item = inventoryItems.find(s => s.id === selectedSeedId);
-      const qtyUsed = parseFloat(seedQuantityUsed);
-
-      if (!item || isNaN(qtyUsed) || qtyUsed <= 0) {
-        toast({ title: "Error", description: "Please enter a valid quantity to deduct", variant: "destructive" });
-        return;
-      }
-
-      if (qtyUsed > Number(item.current_stock)) {
-        toast({ 
-          title: "Insufficient Stock", 
-          description: `Only ${formatNumber(Number(item.current_stock))} ${item.unit_of_measure} available`, 
-          variant: "destructive" 
-        });
-        return;
-      }
-    }
-
-    const datePlanted = new Date(formData.get("date_planted") as string);
-    const selectedPlantType = plantTypes.find(pt => pt.id === plantTypeId);
-    const expectedHarvestDate = new Date(datePlanted);
-    if (selectedPlantType?.growth_duration) {
-      expectedHarvestDate.setDate(datePlanted.getDate() + selectedPlantType.growth_duration);
-    }
+    // Prevent double submission
+    if (isSubmitting) return;
     
-    const batch_number = generateBatchNumber(selectedPlantTypeName, selectedVariety, datePlanted.toISOString().split('T')[0]);
-
-    const plantingData = {
-      plant_type_id: plantTypeId,
-      location_id: formData.get("location_id") as string,
-      quantity: parseInt(formData.get("quantity") as string),
-      date_planted: formData.get("date_planted") as string,
-      expected_harvest_date: expectedHarvestDate.toISOString().split('T')[0],
-      batch_number: batch_number,
-      status: editingPlanting ? formData.get("status") as string : "active",
-      notes: formData.get("notes") as string,
-      variety: selectedVariety,
-      selling_price: parseFloat(formData.get("selling_price") as string) || 0,
-    };
+    setIsSubmitting(true);
     
-    const finalPlantingData = {
-        ...plantingData,
-        remaining_quantity: editingPlanting?.remaining_quantity ?? plantingData.quantity,
-    }
-
     try {
+      const formData = new FormData(e.currentTarget);
+      
+      const plantTypeId = plantTypes.find(pt => pt.name === selectedPlantTypeName && pt.variety === selectedVariety)?.id;
+      if (!plantTypeId) {
+          toast({ title: "Error", description: "Selected plant type and variety combination not found.", variant: "destructive" });
+          return;
+      }
+
+      // Validate inventory deduction if enabled
+      if (trackInventory && !editingPlanting) {
+        if (!selectedSeedId) {
+          toast({ title: "Error", description: "Please select an item from inventory", variant: "destructive" });
+          return;
+        }
+
+        const item = inventoryItems.find(s => s.id === selectedSeedId);
+        const qtyUsed = parseFloat(seedQuantityUsed);
+
+        if (!item || isNaN(qtyUsed) || qtyUsed <= 0) {
+          toast({ title: "Error", description: "Please enter a valid quantity to deduct", variant: "destructive" });
+          return;
+        }
+
+        if (qtyUsed > Number(item.current_stock)) {
+          toast({ 
+            title: "Insufficient Stock", 
+            description: `Only ${formatNumber(Number(item.current_stock))} ${item.unit_of_measure} available`, 
+            variant: "destructive" 
+          });
+          return;
+        }
+      }
+
+      const datePlanted = new Date(formData.get("date_planted") as string);
+      const selectedPlantType = plantTypes.find(pt => pt.id === plantTypeId);
+      const expectedHarvestDate = new Date(datePlanted);
+      if (selectedPlantType?.growth_duration) {
+        expectedHarvestDate.setDate(datePlanted.getDate() + selectedPlantType.growth_duration);
+      }
+      
+      const batch_number = generateBatchNumber(selectedPlantTypeName, selectedVariety, datePlanted.toISOString().split('T')[0]);
+
+      const plantingData = {
+        plant_type_id: plantTypeId,
+        location_id: formData.get("location_id") as string,
+        quantity: parseInt(formData.get("quantity") as string),
+        date_planted: formData.get("date_planted") as string,
+        expected_harvest_date: expectedHarvestDate.toISOString().split('T')[0],
+        batch_number: batch_number,
+        status: editingPlanting ? formData.get("status") as string : "active",
+        notes: formData.get("notes") as string,
+        variety: selectedVariety,
+        selling_price: parseFloat(formData.get("selling_price") as string) || 0,
+      };
+      
+      const finalPlantingData = {
+          ...plantingData,
+          remaining_quantity: editingPlanting?.remaining_quantity ?? plantingData.quantity,
+      }
+
       let createdPlanting;
       
       if (editingPlanting) {
@@ -456,9 +465,21 @@ export default function PlantingsPage() {
       
       await loadData();
       handleCloseDialog();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving planting:", error);
-      toast({ title: "Error", description: "Failed to save planting. Please try again.", variant: "destructive" });
+      
+      // Handle duplicate batch number error
+      if (error?.message?.includes("duplicate") || error?.message?.includes("unique constraint") || error?.code === "23505") {
+        toast({ 
+          title: "Duplicate Batch Number", 
+          description: "A planting with this batch number already exists. Please try again with a different date or variety.", 
+          variant: "destructive" 
+        });
+      } else {
+        toast({ title: "Error", description: "Failed to save planting. Please try again.", variant: "destructive" });
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -509,6 +530,7 @@ export default function PlantingsPage() {
     setSelectedSeedId("");
     setSeedQuantityUsed("");
     setSeedStockWarning("");
+    setIsSubmitting(false);
   };
 
   const handlePlantTypeChange = (value: string) => {
@@ -1137,8 +1159,22 @@ export default function PlantingsPage() {
             </div>
             {(permissions.canCreate || permissions.canUpdate) ? (
               <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit" className="bg-lime-600 hover:bg-lime-700">Save Planting</Button>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSubmitting}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="bg-lime-600 hover:bg-lime-700" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {editingPlanting ? "Updating..." : "Creating..."}
+                    </>
+                  ) : (
+                    `Save Planting`
+                  )}
+                </Button>
               </div>
             ) : (
               <div className="flex justify-end pt-4">
