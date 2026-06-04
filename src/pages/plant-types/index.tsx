@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Edit, Trash2, Leaf } from "lucide-react";
+import { Plus, Edit, Trash2, Leaf, Download } from "lucide-react";
 import { plantTypeService } from "@/services/plantTypeService";
 import type { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
@@ -113,6 +113,40 @@ export default function PlantTypesPage() {
     setIsDialogOpen(true);
   };
 
+  const exportToCSV = () => {
+    const headers = ["Plant Name", "Variety", "Growth Duration (days)", "Germination Rate (%)", "Default Price (ZMW)", "Description"];
+    
+    const csvData = plantTypes.map(pt => [
+      pt.name,
+      pt.variety,
+      pt.growth_duration,
+      pt.germination_rate ?? "",
+      pt.default_selling_price ? Number(pt.default_selling_price).toFixed(2) : "",
+      pt.description ?? ""
+    ]);
+    
+    const csvContent = [
+      headers.join(","),
+      ...csvData.map(row => row.map(cell => {
+        const cellStr = String(cell);
+        return cellStr.includes(",") ? `"${cellStr}"` : cellStr;
+      }).join(","))
+    ].join("\n");
+    
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `plant-types-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Export Complete",
+      description: `Exported ${plantTypes.length} plant types to CSV.`
+    });
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
@@ -192,8 +226,16 @@ export default function PlantTypesPage() {
       
       <Card>
         <CardHeader>
-          <CardTitle>Plant Type List</CardTitle>
-          <CardDescription>All the plant types and varieties in your system.</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Plant Type List</CardTitle>
+              <CardDescription>All the plant types and varieties in your system.</CardDescription>
+            </div>
+            <Button onClick={exportToCSV} variant="outline" className="gap-2">
+              <Download className="w-4 h-4" />
+              Export CSV
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (

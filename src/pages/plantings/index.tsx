@@ -545,6 +545,72 @@ export default function PlantingsPage() {
     return new Date(planting.expected_harvest_date).toLocaleDateString();
   };
 
+  const exportToCSV = () => {
+    const headers = [
+      "Batch Number",
+      "Plant Type",
+      "Variety",
+      "Location",
+      "Total Planted",
+      "Harvested",
+      "Reserved",
+      "Available for Sale",
+      "Trays",
+      "Selling Price (ZMW)",
+      "Date Planted",
+      "Expected Harvest",
+      "Status",
+      "Notes"
+    ];
+    
+    const csvData = filteredPlantings.map(p => {
+      const totalPlanted = p.quantity;
+      const remaining = p.remaining_quantity ?? p.quantity;
+      const harvested = totalPlanted - remaining;
+      const reserved = getReservedQuantity(p.id);
+      const forSale = getAvailableQuantity(p);
+      const trayUsage = Math.round(remaining / 220);
+      
+      return [
+        p.batch_number || "N/A",
+        p.plant_types?.name || "N/A",
+        p.plant_types?.variety || "N/A",
+        p.locations?.name || "N/A",
+        totalPlanted,
+        harvested,
+        reserved,
+        forSale,
+        trayUsage,
+        (p.selling_price || 0).toFixed(2),
+        new Date(p.date_planted).toLocaleDateString(),
+        getExpectedHarvestDate(p),
+        p.status,
+        p.notes || ""
+      ];
+    });
+    
+    const csvContent = [
+      headers.join(","),
+      ...csvData.map(row => row.map(cell => {
+        const cellStr = String(cell);
+        return cellStr.includes(",") ? `"${cellStr}"` : cellStr;
+      }).join(","))
+    ].join("\n");
+    
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `plantings-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Export Complete",
+      description: `Exported ${filteredPlantings.length} plantings to CSV.`
+    });
+  };
+
   const handleClearFilters = () => {
     setSearchQuery("");
     setFilterType("all");
@@ -1467,15 +1533,23 @@ export default function PlantingsPage() {
       
       <Card>
         <CardHeader>
-          <CardTitle>Current Plantings</CardTitle>
-          <CardDescription>
-            An overview of all seedling batches in the nursery. 
-            {(searchQuery || filterType !== "all") && (
-              <span className="ml-2 text-lime-600 font-medium">
-                Showing {filteredPlantings.length} of {plantings.length} plantings
-              </span>
-            )}
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Current Plantings</CardTitle>
+              <CardDescription>
+                An overview of all seedling batches in the nursery. 
+                {(searchQuery || filterType !== "all") && (
+                  <span className="ml-2 text-lime-600 font-medium">
+                    Showing {filteredPlantings.length} of {plantings.length} plantings
+                  </span>
+                )}
+              </CardDescription>
+            </div>
+            <Button onClick={exportToCSV} variant="outline" className="gap-2">
+              <Download className="w-4 h-4" />
+              Export CSV
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Search and Filter Bar */}
